@@ -1,0 +1,717 @@
+{
+  "$defs": {
+    "ImageQuality": {
+      "additionalProperties": false,
+      "properties": {
+        "image_id": {
+          "title": "Image Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "question",
+            "reference",
+            "student"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "source_sha256": {
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "original_width": {
+          "title": "Original Width",
+          "type": "integer"
+        },
+        "original_height": {
+          "title": "Original Height",
+          "type": "integer"
+        },
+        "processed_width": {
+          "title": "Processed Width",
+          "type": "integer"
+        },
+        "processed_height": {
+          "title": "Processed Height",
+          "type": "integer"
+        },
+        "sharpness_reference": {
+          "title": "Sharpness Reference",
+          "type": "number"
+        },
+        "mean_brightness": {
+          "title": "Mean Brightness",
+          "type": "number"
+        },
+        "perspective_status": {
+          "title": "Perspective Status",
+          "type": "string"
+        },
+        "failure_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failure Reason"
+        },
+        "orientation_status": {
+          "title": "Orientation Status",
+          "type": "string"
+        },
+        "thin_line_retention_reference": {
+          "title": "Thin Line Retention Reference",
+          "type": "number"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "logs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Logs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "image_id",
+        "role",
+        "source_sha256",
+        "original_width",
+        "original_height",
+        "processed_width",
+        "processed_height",
+        "sharpness_reference",
+        "mean_brightness",
+        "perspective_status",
+        "failure_reason",
+        "orientation_status",
+        "thin_line_retention_reference",
+        "warnings",
+        "logs"
+      ],
+      "title": "ImageQuality",
+      "type": "object"
+    },
+    "KnowledgeAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "knowledge_id": {
+          "pattern": "^DG-[A-Z0-9-]+$",
+          "title": "Knowledge Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "evidence": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "weaknesses": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Weaknesses",
+          "type": "array"
+        },
+        "suggestions": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Suggestions",
+          "type": "array"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "掌握良好",
+            "基本掌握",
+            "需要加强",
+            "证据不足"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "knowledge_id",
+        "name",
+        "score",
+        "evidence",
+        "weaknesses",
+        "suggestions",
+        "confidence",
+        "status"
+      ],
+      "title": "KnowledgeAssessment",
+      "type": "object"
+    },
+    "KnowledgePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "knowledge_id": {
+          "pattern": "^DG-[A-Z0-9-]+$",
+          "title": "Knowledge Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "knowledge_id",
+        "name",
+        "description"
+      ],
+      "title": "KnowledgePoint",
+      "type": "object"
+    },
+    "Mistake": {
+      "additionalProperties": false,
+      "properties": {
+        "rubric_id": {
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "知识性错误",
+            "作图规范错误",
+            "图片模糊",
+            "无法识别"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "correction_steps": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Correction Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rubric_id",
+        "category",
+        "description",
+        "reason",
+        "correction_steps"
+      ],
+      "title": "Mistake",
+      "type": "object"
+    },
+    "ModelMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "is_mock": {
+          "title": "Is Mock",
+          "type": "boolean"
+        },
+        "stage_a_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage A Request Id"
+        },
+        "stage_b_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage B Request Id"
+        },
+        "stage_a_usage": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Stage A Usage",
+          "type": "object"
+        },
+        "stage_b_usage": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Stage B Usage",
+          "type": "object"
+        },
+        "input_manifest": {
+          "items": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "title": "Input Manifest",
+          "type": "array"
+        },
+        "duration_seconds": {
+          "title": "Duration Seconds",
+          "type": "number"
+        },
+        "rubric_sha256": {
+          "title": "Rubric Sha256",
+          "type": "string"
+        },
+        "teacher_confirmed_at": {
+          "format": "date-time",
+          "title": "Teacher Confirmed At",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "is_mock",
+        "stage_a_request_id",
+        "stage_b_request_id",
+        "stage_a_usage",
+        "stage_b_usage",
+        "input_manifest",
+        "duration_seconds",
+        "rubric_sha256",
+        "teacher_confirmed_at",
+        "schema_version"
+      ],
+      "title": "ModelMetadata",
+      "type": "object"
+    },
+    "QuestionAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "question_type": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Question Type",
+          "type": "string"
+        },
+        "tasks": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Tasks",
+          "type": "array"
+        },
+        "key_relationships": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Key Relationships",
+          "type": "array"
+        },
+        "construction_steps": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Construction Steps",
+          "type": "array"
+        },
+        "required_results": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Required Results",
+          "type": "array"
+        },
+        "acceptable_alternatives": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Acceptable Alternatives",
+          "type": "array"
+        },
+        "uncertainties": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Uncertainties",
+          "type": "array"
+        },
+        "teacher_rules_used": {
+          "title": "Teacher Rules Used",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "summary",
+        "question_type",
+        "tasks",
+        "key_relationships",
+        "construction_steps",
+        "required_results",
+        "acceptable_alternatives",
+        "uncertainties",
+        "teacher_rules_used"
+      ],
+      "title": "QuestionAnalysis",
+      "type": "object"
+    },
+    "RubricItem": {
+      "additionalProperties": false,
+      "properties": {
+        "rubric_id": {
+          "pattern": "^R[0-9]+$",
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "criterion": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Criterion",
+          "type": "string"
+        },
+        "max_score": {
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "multipleOf": 0.5,
+          "title": "Max Score",
+          "type": "number"
+        },
+        "knowledge_ids": {
+          "items": {
+            "pattern": "^DG-[A-Z0-9-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Knowledge Ids",
+          "type": "array"
+        },
+        "evidence_required": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Evidence Required",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rubric_id",
+        "criterion",
+        "max_score",
+        "knowledge_ids",
+        "evidence_required"
+      ],
+      "title": "RubricItem",
+      "type": "object"
+    },
+    "RubricScore": {
+      "additionalProperties": false,
+      "properties": {
+        "rubric_id": {
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 0,
+              "multipleOf": 0.5,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "max_score": {
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "multipleOf": 0.5,
+          "title": "Max Score",
+          "type": "number"
+        },
+        "evidence": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "正确",
+            "部分正确",
+            "错误",
+            "无法识别",
+            "待复核"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rubric_id",
+        "score",
+        "max_score",
+        "evidence",
+        "confidence",
+        "status"
+      ],
+      "title": "RubricScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "rubric_scores": {
+      "items": {
+        "$ref": "#/$defs/RubricScore"
+      },
+      "minItems": 1,
+      "title": "Rubric Scores",
+      "type": "array"
+    },
+    "total_score": {
+      "anyOf": [
+        {
+          "maximum": 10,
+          "minimum": 0,
+          "multipleOf": 0.5,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Total Score"
+    },
+    "correct_parts": {
+      "items": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Correct Parts",
+      "type": "array"
+    },
+    "mistakes": {
+      "items": {
+        "$ref": "#/$defs/Mistake"
+      },
+      "title": "Mistakes",
+      "type": "array"
+    },
+    "correction_guidance": {
+      "items": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Correction Guidance",
+      "type": "array"
+    },
+    "knowledge_assessments": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeAssessment"
+      },
+      "minItems": 1,
+      "title": "Knowledge Assessments",
+      "type": "array"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "review_reasons": {
+      "items": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Review Reasons",
+      "type": "array"
+    },
+    "question_analysis": {
+      "$ref": "#/$defs/QuestionAnalysis"
+    },
+    "knowledge_points": {
+      "items": {
+        "$ref": "#/$defs/KnowledgePoint"
+      },
+      "minItems": 1,
+      "title": "Knowledge Points",
+      "type": "array"
+    },
+    "rubric": {
+      "items": {
+        "$ref": "#/$defs/RubricItem"
+      },
+      "minItems": 1,
+      "title": "Rubric",
+      "type": "array"
+    },
+    "submission_id": {
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "max_score": {
+      "const": 10,
+      "title": "Max Score",
+      "type": "integer"
+    },
+    "needs_manual_review": {
+      "const": true,
+      "title": "Needs Manual Review",
+      "type": "boolean"
+    },
+    "image_quality": {
+      "items": {
+        "$ref": "#/$defs/ImageQuality"
+      },
+      "title": "Image Quality",
+      "type": "array"
+    },
+    "model_metadata": {
+      "$ref": "#/$defs/ModelMetadata"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "rubric_scores",
+    "total_score",
+    "correct_parts",
+    "mistakes",
+    "correction_guidance",
+    "knowledge_assessments",
+    "confidence",
+    "review_reasons",
+    "question_analysis",
+    "knowledge_points",
+    "rubric",
+    "submission_id",
+    "max_score",
+    "needs_manual_review",
+    "image_quality",
+    "model_metadata",
+    "created_at"
+  ],
+  "title": "GradingReport",
+  "type": "object"
+}

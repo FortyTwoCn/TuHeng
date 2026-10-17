@@ -1,0 +1,358 @@
+{
+  "rubric_scores": [
+    {
+      "rubric_id": "R1",
+      "score": 2.0,
+      "max_score": 4.0,
+      "evidence": "MOCK 预置：上方投影位置正确，下方投影向右偏移",
+      "confidence": 0.8,
+      "status": "部分正确"
+    },
+    {
+      "rubric_id": "R2",
+      "score": 2.0,
+      "max_score": 4.0,
+      "evidence": "MOCK 预置：保留了辅助连线，但连线倾斜，未支持正确对应",
+      "confidence": 0.8,
+      "status": "部分正确"
+    },
+    {
+      "rubric_id": "R3",
+      "score": 1.5,
+      "max_score": 2.0,
+      "evidence": "MOCK 预置：下方投影名称误写为大写 A；题设要求小写 a，辅助线已采用细线",
+      "confidence": 0.8,
+      "status": "部分正确"
+    }
+  ],
+  "total_score": 5.5,
+  "correct_parts": [
+    "MOCK 预置：上方投影点和 X 轴已表达"
+  ],
+  "mistakes": [
+    {
+      "rubric_id": "R1",
+      "category": "知识性错误",
+      "description": "MOCK 预置：下方投影未与上方投影对应",
+      "reason": "同一点的两面投影应在垂直 X 轴的同一连线上",
+      "correction_steps": [
+        "过上方投影作 X 轴垂线",
+        "按题设距离在垂线上重新定位下方投影",
+        "复核投影名称与已知坐标"
+      ]
+    },
+    {
+      "rubric_id": "R2",
+      "category": "知识性错误",
+      "description": "MOCK 预置：辅助投影连线倾斜",
+      "reason": "连线未满足投影对应关系",
+      "correction_steps": [
+        "先确认 X 轴方向",
+        "重新画垂直 X 轴的细辅助线并保留作图过程"
+      ]
+    },
+    {
+      "rubric_id": "R3",
+      "category": "作图规范错误",
+      "description": "MOCK 预置：下方投影点使用了大写 A",
+      "reason": "本题约定空间点用 A，投影用小写 a、a′，应区分二者",
+      "correction_steps": [
+        "将下方投影名称由 A 改为 a",
+        "复核上方投影的 a′ 名称，并保持辅助线为细线"
+      ]
+    }
+  ],
+  "correction_guidance": [
+    "MOCK 固定建议：先校核投影对应关系，再调整点位和辅助线，最后检查标注"
+  ],
+  "knowledge_assessments": [
+    {
+      "knowledge_id": "DG-PROJECTION-CORRESPONDENCE",
+      "name": "投影对应关系",
+      "score": 50.0,
+      "evidence": [
+        "MOCK 固定证据：上下投影未对齐"
+      ],
+      "weaknesses": [
+        "投影对应关系应用不稳"
+      ],
+      "suggestions": [
+        "练习同一点在两投影面中的对应关系"
+      ],
+      "confidence": 0.75,
+      "status": "需要加强"
+    },
+    {
+      "knowledge_id": "DG-AUXILIARY-CONSTRUCTION",
+      "name": "辅助作图线",
+      "score": 50.0,
+      "evidence": [
+        "MOCK 固定证据：辅助线倾斜"
+      ],
+      "weaknesses": [
+        "辅助定位流程需加强"
+      ],
+      "suggestions": [
+        "练习先画投影连线再定位点"
+      ],
+      "confidence": 0.75,
+      "status": "需要加强"
+    },
+    {
+      "knowledge_id": "DG-DRAWING-STANDARDS",
+      "name": "图线、符号和标注规范",
+      "score": 75.0,
+      "evidence": [
+        "MOCK 固定证据：下方投影误标为大写 A"
+      ],
+      "weaknesses": [
+        "空间点和投影的符号混淆"
+      ],
+      "suggestions": [
+        "对照本题约定区分 A 与 a、a′，再检查线型"
+      ],
+      "confidence": 0.75,
+      "status": "基本掌握"
+    }
+  ],
+  "confidence": 0.75,
+  "review_reasons": [
+    "MOCK 固定响应，未执行真实视觉推理；待教师复核",
+    "AI 建议，待教师复核；单次作业仅反映本题局部表现，不代表长期掌握度",
+    "MOCK 固定样例：未执行视觉推理，不代表上传图片的实际表现"
+  ],
+  "question_analysis": {
+    "summary": "MOCK 固定样例：根据已知坐标绘制点 A 的两面投影。此内容不是模型对上传图片的识别结果。",
+    "question_type": "点的两面投影（程序生成示例）",
+    "tasks": [
+      "画出 a 与 a′",
+      "校核投影对应并保留细辅助线"
+    ],
+    "key_relationships": [
+      "两面投影连线垂直于 X 轴，横坐标对应"
+    ],
+    "construction_steps": [
+      "定位投影连线",
+      "按给定距离定位两面投影",
+      "标记投影点名称"
+    ],
+    "required_results": [
+      "投影点位置、对应关系和符号正确"
+    ],
+    "acceptable_alternatives": [
+      "允许使用不同的辅助定位方法，只要最终关系正确且证据充分"
+    ],
+    "uncertainties": [
+      "MOCK 固定数据仅用于验证流程；不代表任何真实学生作业"
+    ],
+    "teacher_rules_used": false
+  },
+  "knowledge_points": [
+    {
+      "knowledge_id": "DG-PROJECTION-CORRESPONDENCE",
+      "name": "投影对应关系",
+      "description": "同一点的两面投影位于同一投影连线上"
+    },
+    {
+      "knowledge_id": "DG-AUXILIARY-CONSTRUCTION",
+      "name": "辅助作图线",
+      "description": "通过辅助线定位投影并表达作图过程"
+    },
+    {
+      "knowledge_id": "DG-DRAWING-STANDARDS",
+      "name": "图线、符号和标注规范",
+      "description": "区分结果线与细辅助线，正确标记投影名称"
+    }
+  ],
+  "rubric": [
+    {
+      "rubric_id": "R1",
+      "criterion": "两面投影位置及对应关系",
+      "max_score": 4.0,
+      "knowledge_ids": [
+        "DG-PROJECTION-CORRESPONDENCE"
+      ],
+      "evidence_required": "核对两点相对 X 轴的位置及同一投影连线关系"
+    },
+    {
+      "rubric_id": "R2",
+      "criterion": "辅助投影连线和作图过程",
+      "max_score": 4.0,
+      "knowledge_ids": [
+        "DG-AUXILIARY-CONSTRUCTION"
+      ],
+      "evidence_required": "核对可见辅助线是否支持正确定位"
+    },
+    {
+      "rubric_id": "R3",
+      "criterion": "图线与投影标注规范",
+      "max_score": 2.0,
+      "knowledge_ids": [
+        "DG-DRAWING-STANDARDS"
+      ],
+      "evidence_required": "检查辅助线粗细，投影点按题设标注小写 a 与 a′"
+    }
+  ],
+  "submission_id": "SYNTHETIC-MOCK-EXAMPLE",
+  "max_score": 10,
+  "needs_manual_review": true,
+  "image_quality": [
+    {
+      "image_id": "question-1",
+      "role": "question",
+      "source_sha256": "9f18baddcf7fdfb36fc4ca234d51364b5269e22b75bc4232027734f4d15641d2",
+      "original_width": 800,
+      "original_height": 650,
+      "processed_width": 800,
+      "processed_height": 650,
+      "sharpness_reference": 1216.0890307692307,
+      "mean_brightness": 252.39797307692308,
+      "perspective_status": "fallback_original",
+      "failure_reason": "未发现同时满足面积、凸性和内外亮度差的可靠纸张外框；保留原图，可手动裁切/选四角",
+      "orientation_status": "无可靠 EXIF 方向；绘图上下方向不确定; 水平倾斜小于 0.35°；上下方向仍需用户确认",
+      "thin_line_retention_reference": 1.0,
+      "warnings": [
+        "细线指标只比较矫正图与增强图，无法保证透视、压缩及缩放后的细线均保留"
+      ],
+      "logs": [
+        "透视/裁切状态：fallback_original",
+        "未发现同时满足面积、凸性和内外亮度差的可靠纸张外框；保留原图，可手动裁切/选四角",
+        "无可靠 EXIF 方向；绘图上下方向不确定; 水平倾斜小于 0.35°；上下方向仍需用户确认",
+        "CLAHE=True; 轻去噪=True; 锐化=0.25; 亮度=1.0",
+        "锐化不恢复真实细节；未使用生成式修复、图线擦除或自动内容裁边"
+      ]
+    },
+    {
+      "image_id": "reference-1",
+      "role": "reference",
+      "source_sha256": "c2cc5c0a96d4fe9f846056af21421cc4dc624390d3ee9a7f0895989beca79908",
+      "original_width": 800,
+      "original_height": 650,
+      "processed_width": 800,
+      "processed_height": 650,
+      "sharpness_reference": 1462.448873076923,
+      "mean_brightness": 251.96532692307693,
+      "perspective_status": "fallback_original",
+      "failure_reason": "未发现同时满足面积、凸性和内外亮度差的可靠纸张外框；保留原图，可手动裁切/选四角",
+      "orientation_status": "无可靠 EXIF 方向；绘图上下方向不确定; 水平倾斜小于 0.35°；上下方向仍需用户确认",
+      "thin_line_retention_reference": 1.0,
+      "warnings": [
+        "细线指标只比较矫正图与增强图，无法保证透视、压缩及缩放后的细线均保留"
+      ],
+      "logs": [
+        "透视/裁切状态：fallback_original",
+        "未发现同时满足面积、凸性和内外亮度差的可靠纸张外框；保留原图，可手动裁切/选四角",
+        "无可靠 EXIF 方向；绘图上下方向不确定; 水平倾斜小于 0.35°；上下方向仍需用户确认",
+        "CLAHE=True; 轻去噪=True; 锐化=0.25; 亮度=1.0",
+        "锐化不恢复真实细节；未使用生成式修复、图线擦除或自动内容裁边"
+      ]
+    },
+    {
+      "image_id": "student-1",
+      "role": "student",
+      "source_sha256": "f49a8fa72a4932664c1b757e515fd91823a6145d8f66c839a4b78a3be0cb40b2",
+      "original_width": 800,
+      "original_height": 650,
+      "processed_width": 800,
+      "processed_height": 650,
+      "sharpness_reference": 1702.8167,
+      "mean_brightness": 251.55503846153846,
+      "perspective_status": "fallback_original",
+      "failure_reason": "未发现同时满足面积、凸性和内外亮度差的可靠纸张外框；保留原图，可手动裁切/选四角",
+      "orientation_status": "无可靠 EXIF 方向；绘图上下方向不确定; 水平倾斜小于 0.35°；上下方向仍需用户确认",
+      "thin_line_retention_reference": 1.0,
+      "warnings": [
+        "细线指标只比较矫正图与增强图，无法保证透视、压缩及缩放后的细线均保留"
+      ],
+      "logs": [
+        "透视/裁切状态：fallback_original",
+        "未发现同时满足面积、凸性和内外亮度差的可靠纸张外框；保留原图，可手动裁切/选四角",
+        "无可靠 EXIF 方向；绘图上下方向不确定; 水平倾斜小于 0.35°；上下方向仍需用户确认",
+        "CLAHE=True; 轻去噪=True; 锐化=0.25; 亮度=1.0",
+        "锐化不恢复真实细节；未使用生成式修复、图线擦除或自动内容裁边"
+      ]
+    }
+  ],
+  "model_metadata": {
+    "provider": "MOCK / 固定响应 / 非真实推理",
+    "model": "MOCK-FIXTURE-NO-VISUAL-INFERENCE",
+    "is_mock": true,
+    "stage_a_request_id": "mock-fixed-question_analysis",
+    "stage_b_request_id": "mock-fixed-student_evaluation",
+    "stage_a_usage": {},
+    "stage_b_usage": {},
+    "input_manifest": [
+      {
+        "role": "question",
+        "image_id": "question-1",
+        "variant": "original",
+        "mime": "image/png",
+        "bytes": 12775,
+        "width": 800,
+        "height": 650,
+        "source_sha256": "9f18baddcf7fdfb36fc4ca234d51364b5269e22b75bc4232027734f4d15641d2",
+        "sha256": "9f18baddcf7fdfb36fc4ca234d51364b5269e22b75bc4232027734f4d15641d2"
+      },
+      {
+        "role": "question",
+        "image_id": "question-1",
+        "variant": "enhanced",
+        "mime": "image/png",
+        "bytes": 13631,
+        "width": 800,
+        "height": 650,
+        "source_sha256": "9f18baddcf7fdfb36fc4ca234d51364b5269e22b75bc4232027734f4d15641d2",
+        "sha256": "dcc1f44a8b12f6e239f2cb7e5ec7ad59e562b60a26fedf403c8660b512d8a8c0"
+      },
+      {
+        "role": "reference",
+        "image_id": "reference-1",
+        "variant": "original",
+        "mime": "image/png",
+        "bytes": 15088,
+        "width": 800,
+        "height": 650,
+        "source_sha256": "c2cc5c0a96d4fe9f846056af21421cc4dc624390d3ee9a7f0895989beca79908",
+        "sha256": "c2cc5c0a96d4fe9f846056af21421cc4dc624390d3ee9a7f0895989beca79908"
+      },
+      {
+        "role": "reference",
+        "image_id": "reference-1",
+        "variant": "enhanced",
+        "mime": "image/png",
+        "bytes": 16534,
+        "width": 800,
+        "height": 650,
+        "source_sha256": "c2cc5c0a96d4fe9f846056af21421cc4dc624390d3ee9a7f0895989beca79908",
+        "sha256": "6a52e84f012fe4ec72d125ec3ccd536a6ccf3c48d907278a4d6950d4af5484a0"
+      },
+      {
+        "role": "student",
+        "image_id": "student-1",
+        "variant": "original",
+        "mime": "image/png",
+        "bytes": 17357,
+        "width": 800,
+        "height": 650,
+        "source_sha256": "f49a8fa72a4932664c1b757e515fd91823a6145d8f66c839a4b78a3be0cb40b2",
+        "sha256": "f49a8fa72a4932664c1b757e515fd91823a6145d8f66c839a4b78a3be0cb40b2"
+      },
+      {
+        "role": "student",
+        "image_id": "student-1",
+        "variant": "enhanced",
+        "mime": "image/png",
+        "bytes": 19615,
+        "width": 800,
+        "height": 650,
+        "source_sha256": "f49a8fa72a4932664c1b757e515fd91823a6145d8f66c839a4b78a3be0cb40b2",
+        "sha256": "221529f55a4770f62d8bb4cc88f6057b7d2c65721776e4d13e99ac8f0deb569b"
+      }
+    ],
+    "duration_seconds": 0.058,
+    "rubric_sha256": "3b63a7f1840ccc75b28c682923b1abd691af47d6a57e61ed5512281af97066ac",
+    "teacher_confirmed_at": "2026-10-17T11:47:02.106283Z",
+    "schema_version": "0.1"
+  },
+  "created_at": "2026-10-17T11:47:02.164810Z"
+}

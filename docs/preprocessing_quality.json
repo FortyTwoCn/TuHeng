@@ -1,0 +1,25 @@
+{
+  "image_id": "synthetic-photo",
+  "role": "student",
+  "source_sha256": "1d0701967a82d8ead53cfbb0e8731a69096bd2f5fb95fab69a4c2df41d9cba8b",
+  "original_width": 1100,
+  "original_height": 850,
+  "processed_width": 818,
+  "processed_height": 656,
+  "sharpness_reference": 490.4489681575109,
+  "mean_brightness": 145.71727272727273,
+  "perspective_status": "auto_corrected",
+  "failure_reason": null,
+  "orientation_status": "无可靠 EXIF 方向；绘图上下方向不确定",
+  "thin_line_retention_reference": 1.0,
+  "warnings": [
+    "自动纸张边框仍需核对；若边缘标注丢失请关闭自动透视",
+    "细线指标只比较矫正图与增强图，无法保证透视、压缩及缩放后的细线均保留"
+  ],
+  "logs": [
+    "透视/裁切状态：auto_corrected",
+    "无可靠 EXIF 方向；绘图上下方向不确定",
+    "CLAHE=True; 轻去噪=True; 锐化=0.25; 亮度=1.0",
+    "锐化不恢复真实细节；未使用生成式修复、图线擦除或自动内容裁边"
+  ]
+}

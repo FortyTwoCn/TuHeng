@@ -1,0 +1,122 @@
+{
+  "rubric_scores": [
+    {
+      "rubric_id": "R1",
+      "score": 2.0,
+      "max_score": 4.0,
+      "evidence": "MOCK 预置：上方投影位置正确，下方投影向右偏移",
+      "confidence": 0.8,
+      "status": "部分正确"
+    },
+    {
+      "rubric_id": "R2",
+      "score": 2.0,
+      "max_score": 4.0,
+      "evidence": "MOCK 预置：保留了辅助连线，但连线倾斜，未支持正确对应",
+      "confidence": 0.8,
+      "status": "部分正确"
+    },
+    {
+      "rubric_id": "R3",
+      "score": 1.5,
+      "max_score": 2.0,
+      "evidence": "MOCK 预置：下方投影名称误写为大写 A；题设要求小写 a，辅助线已采用细线",
+      "confidence": 0.8,
+      "status": "部分正确"
+    }
+  ],
+  "total_score": 5.5,
+  "correct_parts": [
+    "MOCK 预置：上方投影点和 X 轴已表达"
+  ],
+  "mistakes": [
+    {
+      "rubric_id": "R1",
+      "category": "知识性错误",
+      "description": "MOCK 预置：下方投影未与上方投影对应",
+      "reason": "同一点的两面投影应在垂直 X 轴的同一连线上",
+      "correction_steps": [
+        "过上方投影作 X 轴垂线",
+        "按题设距离在垂线上重新定位下方投影",
+        "复核投影名称与已知坐标"
+      ]
+    },
+    {
+      "rubric_id": "R2",
+      "category": "知识性错误",
+      "description": "MOCK 预置：辅助投影连线倾斜",
+      "reason": "连线未满足投影对应关系",
+      "correction_steps": [
+        "先确认 X 轴方向",
+        "重新画垂直 X 轴的细辅助线并保留作图过程"
+      ]
+    },
+    {
+      "rubric_id": "R3",
+      "category": "作图规范错误",
+      "description": "MOCK 预置：下方投影点使用了大写 A",
+      "reason": "本题约定空间点用 A，投影用小写 a、a′，应区分二者",
+      "correction_steps": [
+        "将下方投影名称由 A 改为 a",
+        "复核上方投影的 a′ 名称，并保持辅助线为细线"
+      ]
+    }
+  ],
+  "correction_guidance": [
+    "MOCK 固定建议：先校核投影对应关系，再调整点位和辅助线，最后检查标注"
+  ],
+  "knowledge_assessments": [
+    {
+      "knowledge_id": "DG-PROJECTION-CORRESPONDENCE",
+      "name": "投影对应关系",
+      "score": 50.0,
+      "evidence": [
+        "MOCK 固定证据：上下投影未对齐"
+      ],
+      "weaknesses": [
+        "投影对应关系应用不稳"
+      ],
+      "suggestions": [
+        "练习同一点在两投影面中的对应关系"
+      ],
+      "confidence": 0.75,
+      "status": "需要加强"
+    },
+    {
+      "knowledge_id": "DG-AUXILIARY-CONSTRUCTION",
+      "name": "辅助作图线",
+      "score": 50.0,
+      "evidence": [
+        "MOCK 固定证据：辅助线倾斜"
+      ],
+      "weaknesses": [
+        "辅助定位流程需加强"
+      ],
+      "suggestions": [
+        "练习先画投影连线再定位点"
+      ],
+      "confidence": 0.75,
+      "status": "需要加强"
+    },
+    {
+      "knowledge_id": "DG-DRAWING-STANDARDS",
+      "name": "图线、符号和标注规范",
+      "score": 75.0,
+      "evidence": [
+        "MOCK 固定证据：下方投影误标为大写 A"
+      ],
+      "weaknesses": [
+        "空间点和投影的符号混淆"
+      ],
+      "suggestions": [
+        "对照本题约定区分 A 与 a、a′，再检查线型"
+      ],
+      "confidence": 0.75,
+      "status": "基本掌握"
+    }
+  ],
+  "confidence": 0.75,
+  "review_reasons": [
+    "MOCK 固定响应，未执行真实视觉推理；待教师复核"
+  ]
+}

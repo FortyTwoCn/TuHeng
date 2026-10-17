@@ -1,0 +1,12 @@
+streamlit==1.66.0
+opencv-python-headless==4.14.0.94
+Pillow==12.3.0
+numpy==2.3.5
+pydantic==2.13.4
+httpx==0.28.1
+python-dotenv==1.2.2
+pandas==2.2.3
+pytest==9.1.1
+pytest-cov==7.1.0
+jsonschema==4.26.0
+ruff==0.17.1

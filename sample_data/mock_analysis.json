@@ -1,0 +1,74 @@
+{
+  "question_analysis": {
+    "summary": "MOCK 固定样例：根据已知坐标绘制点 A 的两面投影。此内容不是模型对上传图片的识别结果。",
+    "question_type": "点的两面投影（程序生成示例）",
+    "tasks": [
+      "画出 a 与 a′",
+      "校核投影对应并保留细辅助线"
+    ],
+    "key_relationships": [
+      "两面投影连线垂直于 X 轴，横坐标对应"
+    ],
+    "construction_steps": [
+      "定位投影连线",
+      "按给定距离定位两面投影",
+      "标记投影点名称"
+    ],
+    "required_results": [
+      "投影点位置、对应关系和符号正确"
+    ],
+    "acceptable_alternatives": [
+      "允许使用不同的辅助定位方法，只要最终关系正确且证据充分"
+    ],
+    "uncertainties": [
+      "MOCK 固定数据仅用于验证流程；不代表任何真实学生作业"
+    ],
+    "teacher_rules_used": false
+  },
+  "knowledge_points": [
+    {
+      "knowledge_id": "DG-PROJECTION-CORRESPONDENCE",
+      "name": "投影对应关系",
+      "description": "同一点的两面投影位于同一投影连线上"
+    },
+    {
+      "knowledge_id": "DG-AUXILIARY-CONSTRUCTION",
+      "name": "辅助作图线",
+      "description": "通过辅助线定位投影并表达作图过程"
+    },
+    {
+      "knowledge_id": "DG-DRAWING-STANDARDS",
+      "name": "图线、符号和标注规范",
+      "description": "区分结果线与细辅助线，正确标记投影名称"
+    }
+  ],
+  "rubric": [
+    {
+      "rubric_id": "R1",
+      "criterion": "两面投影位置及对应关系",
+      "max_score": 4.0,
+      "knowledge_ids": [
+        "DG-PROJECTION-CORRESPONDENCE"
+      ],
+      "evidence_required": "核对两点相对 X 轴的位置及同一投影连线关系"
+    },
+    {
+      "rubric_id": "R2",
+      "criterion": "辅助投影连线和作图过程",
+      "max_score": 4.0,
+      "knowledge_ids": [
+        "DG-AUXILIARY-CONSTRUCTION"
+      ],
+      "evidence_required": "核对可见辅助线是否支持正确定位"
+    },
+    {
+      "rubric_id": "R3",
+      "criterion": "图线与投影标注规范",
+      "max_score": 2.0,
+      "knowledge_ids": [
+        "DG-DRAWING-STANDARDS"
+      ],
+      "evidence_required": "检查辅助线粗细，投影点按题设标注小写 a 与 a′"
+    }
+  ]
+}

@@ -1,0 +1,289 @@
+{
+  "$defs": {
+    "KnowledgeAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "knowledge_id": {
+          "pattern": "^DG-[A-Z0-9-]+$",
+          "title": "Knowledge Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "evidence": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "weaknesses": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Weaknesses",
+          "type": "array"
+        },
+        "suggestions": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Suggestions",
+          "type": "array"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "掌握良好",
+            "基本掌握",
+            "需要加强",
+            "证据不足"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "knowledge_id",
+        "name",
+        "score",
+        "evidence",
+        "weaknesses",
+        "suggestions",
+        "confidence",
+        "status"
+      ],
+      "title": "KnowledgeAssessment",
+      "type": "object"
+    },
+    "Mistake": {
+      "additionalProperties": false,
+      "properties": {
+        "rubric_id": {
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "知识性错误",
+            "作图规范错误",
+            "图片模糊",
+            "无法识别"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "correction_steps": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Correction Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rubric_id",
+        "category",
+        "description",
+        "reason",
+        "correction_steps"
+      ],
+      "title": "Mistake",
+      "type": "object"
+    },
+    "RubricScore": {
+      "additionalProperties": false,
+      "properties": {
+        "rubric_id": {
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 10,
+              "minimum": 0,
+              "multipleOf": 0.5,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "max_score": {
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "multipleOf": 0.5,
+          "title": "Max Score",
+          "type": "number"
+        },
+        "evidence": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "正确",
+            "部分正确",
+            "错误",
+            "无法识别",
+            "待复核"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rubric_id",
+        "score",
+        "max_score",
+        "evidence",
+        "confidence",
+        "status"
+      ],
+      "title": "RubricScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "rubric_scores": {
+      "items": {
+        "$ref": "#/$defs/RubricScore"
+      },
+      "minItems": 1,
+      "title": "Rubric Scores",
+      "type": "array"
+    },
+    "total_score": {
+      "anyOf": [
+        {
+          "maximum": 10,
+          "minimum": 0,
+          "multipleOf": 0.5,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Total Score"
+    },
+    "correct_parts": {
+      "items": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Correct Parts",
+      "type": "array"
+    },
+    "mistakes": {
+      "items": {
+        "$ref": "#/$defs/Mistake"
+      },
+      "title": "Mistakes",
+      "type": "array"
+    },
+    "correction_guidance": {
+      "items": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Correction Guidance",
+      "type": "array"
+    },
+    "knowledge_assessments": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeAssessment"
+      },
+      "minItems": 1,
+      "title": "Knowledge Assessments",
+      "type": "array"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "review_reasons": {
+      "items": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Review Reasons",
+      "type": "array"
+    }
+  },
+  "required": [
+    "rubric_scores",
+    "total_score",
+    "correct_parts",
+    "mistakes",
+    "correction_guidance",
+    "knowledge_assessments",
+    "confidence",
+    "review_reasons"
+  ],
+  "title": "StudentEvaluation",
+  "type": "object"
+}

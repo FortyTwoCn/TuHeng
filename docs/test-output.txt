@@ -1,0 +1,28 @@
+......................................................................   [100%]
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.12.14-final-0 _______________
+
+Name                            Stmts   Miss  Cover   Missing
+-------------------------------------------------------------
+app.py                            234     36    85%   26-27, 40-42, 55-58, 60-62, 76-78, 100, 133-135, 143, 148, 164-166, 207-208, 223-224, 252-253, 257-262
+src/__init__.py                     0      0   100%
+src/ai/__init__.py                  0      0   100%
+src/ai/client.py                   75      3    96%   36, 94-95
+src/ai/images.py                   41      4    90%   28, 34, 40, 46
+src/ai/mock.py                     29      0   100%
+src/ai/prompts.py                   4      0   100%
+src/grading/__init__.py             0      0   100%
+src/grading/service.py             87      6    93%   43, 46, 58, 83, 91, 112
+src/preprocessing/__init__.py       2      0   100%
+src/preprocessing/pipeline.py     212     20    91%   65, 86, 90, 127, 129, 133-134, 145, 152, 156-162, 192, 200, 203, 241
+src/reporting/__init__.py           0      0   100%
+src/reporting/export.py            23      0   100%
+src/schemas/__init__.py             2      0   100%
+src/schemas/models.py             164      4    98%   69, 71, 90, 92
+src/utils/__init__.py               0      0   100%
+src/utils/audit.py                 18      0   100%
+src/utils/config.py                41      3    93%   30, 32, 39
+-------------------------------------------------------------
+TOTAL                             932     76    92%
+Coverage XML written to file docs/coverage.xml
+70 passed in 7.32s

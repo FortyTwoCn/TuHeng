@@ -1,0 +1,17 @@
+{
+  "health_status": 200,
+  "browser_console_errors": [],
+  "flow": [
+    "Mock selected",
+    "actual upload into all 3 roles",
+    "analysis",
+    "teacher confirmed",
+    "mock grading"
+  ],
+  "metrics": [
+    "建议总分 / 105.5",
+    "模型自报置信度（未校准）75%",
+    "教师复核必需"
+  ],
+  "real_api_called": false
+}

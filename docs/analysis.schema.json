@@ -1,0 +1,198 @@
+{
+  "$defs": {
+    "KnowledgePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "knowledge_id": {
+          "pattern": "^DG-[A-Z0-9-]+$",
+          "title": "Knowledge Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "knowledge_id",
+        "name",
+        "description"
+      ],
+      "title": "KnowledgePoint",
+      "type": "object"
+    },
+    "QuestionAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "question_type": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Question Type",
+          "type": "string"
+        },
+        "tasks": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Tasks",
+          "type": "array"
+        },
+        "key_relationships": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Key Relationships",
+          "type": "array"
+        },
+        "construction_steps": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Construction Steps",
+          "type": "array"
+        },
+        "required_results": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Required Results",
+          "type": "array"
+        },
+        "acceptable_alternatives": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Acceptable Alternatives",
+          "type": "array"
+        },
+        "uncertainties": {
+          "items": {
+            "maxLength": 12000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Uncertainties",
+          "type": "array"
+        },
+        "teacher_rules_used": {
+          "title": "Teacher Rules Used",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "summary",
+        "question_type",
+        "tasks",
+        "key_relationships",
+        "construction_steps",
+        "required_results",
+        "acceptable_alternatives",
+        "uncertainties",
+        "teacher_rules_used"
+      ],
+      "title": "QuestionAnalysis",
+      "type": "object"
+    },
+    "RubricItem": {
+      "additionalProperties": false,
+      "properties": {
+        "rubric_id": {
+          "pattern": "^R[0-9]+$",
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "criterion": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Criterion",
+          "type": "string"
+        },
+        "max_score": {
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "multipleOf": 0.5,
+          "title": "Max Score",
+          "type": "number"
+        },
+        "knowledge_ids": {
+          "items": {
+            "pattern": "^DG-[A-Z0-9-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Knowledge Ids",
+          "type": "array"
+        },
+        "evidence_required": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Evidence Required",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rubric_id",
+        "criterion",
+        "max_score",
+        "knowledge_ids",
+        "evidence_required"
+      ],
+      "title": "RubricItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "question_analysis": {
+      "$ref": "#/$defs/QuestionAnalysis"
+    },
+    "knowledge_points": {
+      "items": {
+        "$ref": "#/$defs/KnowledgePoint"
+      },
+      "minItems": 1,
+      "title": "Knowledge Points",
+      "type": "array"
+    },
+    "rubric": {
+      "items": {
+        "$ref": "#/$defs/RubricItem"
+      },
+      "minItems": 1,
+      "title": "Rubric",
+      "type": "array"
+    }
+  },
+  "required": [
+    "question_analysis",
+    "knowledge_points",
+    "rubric"
+  ],
+  "title": "AnalysisResult",
+  "type": "object"
+}
