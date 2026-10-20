@@ -1,0 +1,433 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+
+}
+
+model User {
+  id           String              @id @default(uuid())
+  email        String              @unique
+  name         String
+  passwordHash String
+  roles        String[]
+  active       Boolean             @default(true)
+  tokenVersion Int                 @default(0)
+  createdAt    DateTime            @default(now())
+  enrollments  Enrollment[]
+  grants       TeachingGrant[]
+  questions    Question[]
+  assets       StoredAsset[]
+  submissions  Submission[]
+  attempts     SubmissionAttempt[]
+  decisions    GradeDecision[]
+  appeals      Appeal[]
+  folders      SelfTestFolder[]
+  sets         SelfTestSet[]
+  errors       ErrorBookEntry[]
+  evidence     KnowledgeEvidence[]
+  audits       AuditLog[]
+
+  @@index([active])
+}
+
+model Course {
+  id        String           @id @default(uuid())
+  title     String
+  code      String           @unique
+  offerings CourseOffering[]
+  questions Question[]
+}
+
+model CourseOffering {
+  id       String          @id @default(uuid())
+  courseId String
+  term     String
+  course   Course          @relation(fields: [courseId], references: [id])
+  classes  TeachingClass[]
+
+  @@unique([courseId, term])
+}
+
+model TeachingClass {
+  id          String          @id @default(uuid())
+  offeringId  String
+  name        String
+  offering    CourseOffering  @relation(fields: [offeringId], references: [id])
+  enrollments Enrollment[]
+  grants      TeachingGrant[]
+  assignments Assignment[]
+
+  @@index([offeringId])
+}
+
+model Enrollment {
+  id            String        @id @default(uuid())
+  userId        String
+  classId       String
+  user          User          @relation(fields: [userId], references: [id])
+  teachingClass TeachingClass @relation(fields: [classId], references: [id])
+
+  @@unique([userId, classId])
+  @@index([classId])
+}
+
+model TeachingGrant {
+  id            String        @id @default(uuid())
+  userId        String
+  classId       String
+  user          User          @relation(fields: [userId], references: [id])
+  teachingClass TeachingClass @relation(fields: [classId], references: [id])
+
+  @@unique([userId, classId])
+  @@index([classId])
+}
+
+model KnowledgePoint {
+  id       String              @id @default(uuid())
+  title    String
+  chapter  String
+  evidence KnowledgeEvidence[]
+}
+
+model Question {
+  id         String            @id @default(uuid())
+  ownerId    String
+  courseId   String?
+  visibility String            @default("PRIVATE")
+  active     Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  owner      User              @relation(fields: [ownerId], references: [id])
+  course     Course?           @relation(fields: [courseId], references: [id])
+  versions   QuestionVersion[]
+
+  @@index([ownerId, active])
+}
+
+model QuestionVersion {
+  id           String              @id @default(uuid())
+  questionId   String
+  version      Int
+  title        String
+  content      String
+  type         String
+  chapter      String
+  maxPoints    Int
+  knowledgeIds String[]
+  assetIds     String[]
+  reference    Json
+  rubric       Json
+  analysis     Json?
+  confirmed    Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+  question     Question            @relation(fields: [questionId], references: [id])
+  items        AssignmentItem[]
+  selfItems    SelfTestItem[]
+  attempts     SubmissionAttempt[]
+  errors       ErrorBookEntry[]
+
+  @@unique([questionId, version])
+}
+
+model Assignment {
+  id             String           @id @default(uuid())
+  classId        String
+  creatorId      String
+  title          String
+  status         String           @default("DRAFT")
+  startsAt       DateTime
+  dueAt          DateTime
+  allowLate      Boolean          @default(false)
+  maxAttempts    Int              @default(1)
+  releaseAnswers Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  teachingClass  TeachingClass    @relation(fields: [classId], references: [id])
+  items          AssignmentItem[]
+
+  @@index([classId, status, dueAt])
+}
+
+model AssignmentItem {
+  id                String          @id @default(uuid())
+  assignmentId      String
+  questionVersionId String
+  position          Int
+  assignment        Assignment      @relation(fields: [assignmentId], references: [id])
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id])
+  submissions       Submission[]
+
+  @@unique([assignmentId, position])
+}
+
+model Submission {
+  id            String              @id @default(uuid())
+  userId        String
+  itemId        String
+  draftAssetIds String[]
+  attempts      SubmissionAttempt[]
+  user          User                @relation(fields: [userId], references: [id])
+  item          AssignmentItem      @relation(fields: [itemId], references: [id])
+
+  @@unique([userId, itemId])
+}
+
+model SubmissionAttempt {
+  id                  String            @id @default(uuid())
+  ownerId             String
+  submissionId        String?
+  questionVersionId   String
+  selfTestItemId      String?
+  version             Int
+  idempotencyKey      String
+  source              String
+  submittedAt         DateTime          @default(now())
+  publishedDecisionId String?           @unique
+  owner               User              @relation(fields: [ownerId], references: [id])
+  submission          Submission?       @relation(fields: [submissionId], references: [id])
+  questionVersion     QuestionVersion   @relation(fields: [questionVersionId], references: [id])
+  selfTestItem        SelfTestItem?     @relation(fields: [selfTestItemId], references: [id])
+  assets              SubmissionAsset[]
+  runs                GradingRun[]
+  decisions           GradeDecision[]   @relation("AttemptDecisions")
+  publishedDecision   GradeDecision?    @relation("PublishedDecision", fields: [publishedDecisionId], references: [id])
+  appeals             Appeal[]
+  errors              ErrorBookEntry[]
+  reviews             ReviewAttempt[]
+
+  @@unique([ownerId, idempotencyKey])
+  @@unique([submissionId, version])
+  @@index([ownerId, submittedAt])
+}
+
+model SubmissionAsset {
+  id        String            @id @default(uuid())
+  attemptId String
+  assetId   String
+  position  Int
+  attempt   SubmissionAttempt @relation(fields: [attemptId], references: [id])
+  asset     StoredAsset       @relation(fields: [assetId], references: [id])
+
+  @@unique([attemptId, position])
+}
+
+model StoredAsset {
+  id          String            @id @default(uuid())
+  ownerId     String
+  objectKey   String            @unique
+  name        String
+  mime        String
+  bytes       Int
+  width       Int?
+  height      Int?
+  purpose     String
+  parentId    String?
+  transform   Json?
+  createdAt   DateTime          @default(now())
+  owner       User              @relation(fields: [ownerId], references: [id])
+  submissions SubmissionAsset[]
+
+  @@index([ownerId, createdAt])
+}
+
+model ModelConfigurationVersion {
+  id          String       @id @default(uuid())
+  provider    String
+  baseUrl     String
+  model       String
+  outputMode  String
+  timeoutMs   Int
+  concurrency Int
+  keyEnv      String       @default("AI_API_KEY")
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  runs        GradingRun[]
+}
+
+model GradingRun {
+  id              String                    @id @default(uuid())
+  attemptId       String
+  configId        String
+  status          String                    @default("QUEUED")
+  strategyVersion String
+  promptVersion   String
+  request         Json
+  errorCode       String?
+  leaseUntil      DateTime?
+  leaseToken      String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  attempt         SubmissionAttempt         @relation(fields: [attemptId], references: [id])
+  config          ModelConfigurationVersion @relation(fields: [configId], references: [id])
+  suggestion      GradingSuggestion?
+  job             BackgroundJob?
+
+  @@index([status, leaseUntil])
+  @@index([attemptId, createdAt])
+}
+
+model GradingSuggestion {
+  id              String     @id @default(uuid())
+  runId           String     @unique
+  result          Json
+  rawResponse     Json
+  processedAssets Json
+  createdAt       DateTime   @default(now())
+  run             GradingRun @relation(fields: [runId], references: [id])
+}
+
+model GradeDecision {
+  id           String              @id @default(uuid())
+  attemptId    String
+  teacherId    String
+  revision     Int
+  points       Int
+  items        Json
+  feedback     String
+  annotations  Json
+  aiIncorrect  Boolean             @default(false)
+  publishedAt  DateTime?
+  createdAt    DateTime            @default(now())
+  attempt      SubmissionAttempt   @relation("AttemptDecisions", fields: [attemptId], references: [id])
+  publishedFor SubmissionAttempt?  @relation("PublishedDecision")
+  teacher      User                @relation(fields: [teacherId], references: [id])
+  evidence     KnowledgeEvidence[]
+
+  @@unique([attemptId, revision])
+}
+
+model Appeal {
+  id        String            @id @default(uuid())
+  attemptId String
+  userId    String
+  reason    String
+  status    String            @default("OPEN")
+  response  String?
+  createdAt DateTime          @default(now())
+  attempt   SubmissionAttempt @relation(fields: [attemptId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
+
+  @@index([status, attemptId])
+}
+
+model SelfTestFolder {
+  id      String        @id @default(uuid())
+  ownerId String
+  title   String
+  owner   User          @relation(fields: [ownerId], references: [id])
+  sets    SelfTestSet[]
+
+  @@index([ownerId])
+}
+
+model SelfTestSet {
+  id        String          @id @default(uuid())
+  ownerId   String
+  folderId  String?
+  title     String
+  mode      String
+  createdAt DateTime        @default(now())
+  owner     User            @relation(fields: [ownerId], references: [id])
+  folder    SelfTestFolder? @relation(fields: [folderId], references: [id])
+  items     SelfTestItem[]
+
+  @@index([ownerId])
+}
+
+model SelfTestItem {
+  id                String              @id @default(uuid())
+  setId             String
+  questionVersionId String
+  position          Int
+  set               SelfTestSet         @relation(fields: [setId], references: [id])
+  questionVersion   QuestionVersion     @relation(fields: [questionVersionId], references: [id])
+  attempts          SubmissionAttempt[]
+
+  @@unique([setId, position])
+}
+
+model ErrorBookEntry {
+  id                String            @id @default(uuid())
+  ownerId           String
+  questionVersionId String
+  attemptId         String
+  archived          Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  owner             User              @relation(fields: [ownerId], references: [id])
+  questionVersion   QuestionVersion   @relation(fields: [questionVersionId], references: [id])
+  attempt           SubmissionAttempt @relation(fields: [attemptId], references: [id])
+  reviews           ReviewAttempt[]
+
+  @@unique([ownerId, attemptId])
+  @@index([ownerId, archived])
+}
+
+model ReviewAttempt {
+  id        String            @id @default(uuid())
+  entryId   String
+  attemptId String            @unique
+  entry     ErrorBookEntry    @relation(fields: [entryId], references: [id])
+  attempt   SubmissionAttempt @relation(fields: [attemptId], references: [id])
+}
+
+model KnowledgeEvidence {
+  id          String         @id @default(uuid())
+  ownerId     String
+  knowledgeId String
+  decisionId  String
+  earned      Int
+  possible    Int
+  evidence    String
+  owner       User           @relation(fields: [ownerId], references: [id])
+  knowledge   KnowledgePoint @relation(fields: [knowledgeId], references: [id])
+  decision    GradeDecision  @relation(fields: [decisionId], references: [id])
+
+  @@unique([decisionId, knowledgeId])
+  @@index([ownerId, knowledgeId])
+}
+
+model BackgroundJob {
+  id        String     @id @default(uuid())
+  runId     String     @unique
+  lane      String
+  status    String     @default("QUEUED")
+  attempts  Int        @default(0)
+  errorCode String?
+  updatedAt DateTime   @updatedAt
+  run       GradingRun @relation(fields: [runId], references: [id])
+
+  @@index([status, updatedAt])
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  runId       String    @unique
+  lane        String
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([deliveredAt, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  resourceId String
+  details    Json
+  createdAt  DateTime @default(now())
+  actor      User     @relation(fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+}
+
+model LoginThrottle {
+  id           String    @id
+  failures     Int       @default(0)
+  blockedUntil DateTime?
+  updatedAt    DateTime  @updatedAt
+}

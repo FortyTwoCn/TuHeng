@@ -1,0 +1,60 @@
+{
+  "name": "tuheng",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "dotenv -e .env -- next dev apps/web --hostname 0.0.0.0",
+    "build": "dotenv -e .env -- next build apps/web --webpack",
+    "start": "dotenv -e .env -- next start apps/web --hostname 0.0.0.0",
+    "worker": "dotenv -e .env -- tsx apps/worker/src/index.ts",
+    "db:generate": "prisma generate --schema packages/database/prisma/schema.prisma",
+    "db:migrate": "dotenv -e .env -- tsx scripts/migrate.ts",
+    "db:seed": "dotenv -e .env -- tsx packages/database/src/seed.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run tests/unit",
+    "test:integration": "dotenv -e .env -- vitest run tests/integration",
+    "test:e2e": "dotenv -e .env -- playwright test",
+    "load": "dotenv -e .env -- tsx scripts/load.ts",
+    "model:sync": "dotenv -e .env -- tsx scripts/sync-model.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@prisma/adapter-pg": "6.19.3",
+    "@prisma/client": "6.19.3",
+    "bcryptjs": "^3.0.0",
+    "bullmq": "^5.0.0",
+    "dotenv": "^17.0.0",
+    "ioredis": "^5.0.0",
+    "lucide-react": "^0.468.0",
+    "next": "16.4.2",
+    "next-auth": "4.24.15",
+    "pg": "^8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "sharp": "^0.34.0",
+    "undici": "^7.30.1",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "dotenv-cli": "^10.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.4.2",
+    "prettier": "^3.0.0",
+    "prisma": "6.19.3",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

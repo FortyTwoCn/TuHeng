@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "incremental": true,
+    "paths": { "@tuheng/*": ["../../packages/*/src/index.ts"] }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

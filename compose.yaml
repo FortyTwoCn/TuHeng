@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: tuheng
+      POSTGRES_PASSWORD: tuheng_local
+      POSTGRES_DB: tuheng
+    ports: ['127.0.0.1:5432:5432']
+    volumes: ['postgres-data:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tuheng']
+      interval: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports: ['127.0.0.1:6379:6379']
+    volumes: ['redis-data:/data']
+  minio:
+    image: rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: tuheng_local
+      RUSTFS_SECRET_KEY: tuheng_local_secret
+    ports: ['127.0.0.1:9000:9000', '127.0.0.1:9001:9001']
+    volumes: ['minio-data:/data']
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
