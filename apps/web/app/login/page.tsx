@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { BrandLogo } from '../../components/BrandLogo';
 import { LoginProjection } from '../../components/LoginProjection';
+import { loginReturnPath } from '../../lib/login-redirect';
 export default function Login() {
   const router = useRouter();
   const [error, setError] = useState(''),
@@ -42,13 +43,18 @@ export default function Login() {
             setError('');
             const f = new FormData(e.currentTarget);
             try {
+              const callbackUrl = loginReturnPath(
+                new URLSearchParams(window.location.search).get('callbackUrl'),
+                window.location.origin,
+              );
               const r = await signIn('credentials', {
                 email: f.get('email'),
                 password: f.get('password'),
                 redirect: false,
+                callbackUrl,
               });
               if (r?.ok) {
-                router.push('/');
+                router.push(callbackUrl);
                 router.refresh();
               } else setError('账号或密码不正确，或账户暂时被锁定。');
             } catch {

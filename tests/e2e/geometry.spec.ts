@@ -13,6 +13,33 @@ async function draw(page: Page, tool: string, x = 150, y = 130) {
   const svg = page.locator('.geo-active svg');
   await svg.click({ position: { x, y } });
 }
+test('anonymous geometry visits return through login and a lost session returns to login', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/geometry');
+  await expect(page).toHaveURL('/login?callbackUrl=%2Fgeometry');
+  await expect(page.getByText('暂时无法加载')).toHaveCount(0);
+  await expect(page.locator('.geometry-editor')).toHaveCount(0);
+  await page.getByLabel('账号邮箱').fill('student@tuheng.local');
+  await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
+  await page.getByRole('button', { name: '进入图衡' }).click();
+  await expect(page).toHaveURL('/geometry');
+  await expect(page.locator('.geometry-editor')).toBeVisible();
+  await context.clearCookies();
+  await page.reload();
+  await expect(page).toHaveURL('/login?callbackUrl=%2Fgeometry');
+  await expect(page.locator('.geometry-editor')).toHaveCount(0);
+});
+
+test('external login return URLs stay inside the application', async ({ page }) => {
+  await page.goto('/login?callbackUrl=https%3A%2F%2Fexample.invalid%2Fgeometry');
+  await page.getByLabel('账号邮箱').fill('student@tuheng.local');
+  await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
+  await page.getByRole('button', { name: '进入图衡' }).click();
+  await expect(page).toHaveURL('/student/dashboard');
+});
+
 test('JSON validation, projection links, touch zoom and the multi-object mobile fixture', async ({
   page,
 }) => {

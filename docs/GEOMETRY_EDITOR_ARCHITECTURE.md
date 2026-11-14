@@ -14,6 +14,8 @@ GeometryDocument 是输入来源无关的版本化契约，位于 contracts。ge
 
 登录后访问 `/geometry` 进行独立作图和本地 JSON 保存。教师建题页面的“作答方式”可选择四种几何编辑器。学生在对应作业题目下绘图，保存草稿或正式提交。复核页面直接显示作答快照和经过校验的几何批注。
 
+直接访问 `/geometry` 时，未登录或会话失效会跳转到登录页，并在登录成功后返回编辑器。登录返回地址仅允许当前站点，其他运行错误继续交给错误边界处理。
+
 组件 `GeometryEditor` 支持 `value/onChange` 受控模式和 `defaultValue` 非受控模式。`role` 为 teacher 或 student，`readOnly` 控制只读展示。通过 ref 提供 getDocument、exportJSON、exportNarrative、undo、redo 和 fitToContent。外部 value 更新会同步历史基线。
 
 独立编辑器通过真实 Schema 接受自定义稳定视图 ID、图层 ID 和投影配置。作业编辑器额外传入 `problemDocument`，即使题干没有几何对象也锁定老师给定的文档结构；含题干的文档始终保护已有题干对象及其内部关系。后端仍以数据库冻结版本独立校验，客户端参数不作为权限依据。
