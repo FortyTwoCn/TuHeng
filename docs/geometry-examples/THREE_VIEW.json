@@ -1,0 +1,198 @@
+{
+  "schemaVersion": "tuheng.geometry/1.0.0",
+  "editorType": "THREE_VIEW",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_X_RIGHT_Y_UP",
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "主视图",
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "view-1",
+      "name": "俯视图",
+      "mapping": [
+        "x",
+        "y"
+      ],
+      "signs": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "view-2",
+      "name": "左视图",
+      "mapping": [
+        "y",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "cc94849f-5ce4-4b4a-9ba9-02d105452c76",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 10
+      },
+      "name": "P1",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "f4581dcb-1d1d-4f24-8541-f2aeb6a577ed",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 30,
+        "y": 10
+      },
+      "name": "P2",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "00a6b956-0419-4795-b99e-20da7134289b",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "cc94849f-5ce4-4b4a-9ba9-02d105452c76",
+      "endPoint": "f4581dcb-1d1d-4f24-8541-f2aeb6a577ed"
+    },
+    {
+      "id": "631ee45f-4152-4f83-b6ce-d427c71b800a",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 20,
+        "y": 25
+      },
+      "name": "P3",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "fe9491cf-f251-41cc-b1b8-15acc020dbf6",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "circle",
+      "center": "631ee45f-4152-4f83-b6ce-d427c71b800a",
+      "radius": 5
+    },
+    {
+      "id": "c3d3c9bb-a83c-445d-9615-0b6768b4354c",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 50,
+        "y": 25
+      },
+      "name": "P4",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "ae834baf-00fe-48c7-acce-3476b5dd50fc",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "arc",
+      "center": "c3d3c9bb-a83c-445d-9615-0b6768b4354c",
+      "radius": 5,
+      "startAngle": 0,
+      "sweep": 90
+    },
+    {
+      "id": "7298db47-a2f0-401a-a418-aad270faa2ab",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 12,
+        "y": -10
+      },
+      "name": "P5",
+      "spatial": null,
+      "labelVisible": true
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [
+    {
+      "id": "b130a914-a974-4ad3-b873-823c26fcc9b7",
+      "kind": "POINT",
+      "entityIds": [
+        "cc94849f-5ce4-4b4a-9ba9-02d105452c76",
+        "7298db47-a2f0-401a-a418-aad270faa2ab"
+      ],
+      "source": "USER"
+    }
+  ],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": false
+  },
+  "metadata": {
+    "title": ""
+  }
+}

@@ -20,6 +20,13 @@ export async function createQuestion(
   questionId?: string,
 ) {
   const data = QuestionInput.parse(input);
+  if (data.geometryDocument) {
+    const stemLayer = data.geometryDocument.layers.find((l) => l.role === 'PROBLEM_STEM')!.id;
+    ensure(
+      data.geometryDocument.entities.every((e) => e.layerId === stemLayer),
+      'QUESTION_GEOMETRY_MUST_BE_STEM',
+    );
+  }
   if (!privateSelf) requireRole(a, 'TEACHER');
   else {
     data.confirmed = false;

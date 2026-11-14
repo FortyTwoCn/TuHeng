@@ -7,6 +7,7 @@ import {
   parseChatResponse,
 } from '@tuheng/ai-providers';
 import { requestFixture, evaluationFixture } from '../fixtures';
+import { createDocument, addDrawing, exportGeometryBundle } from '@tuheng/geometry-core';
 const response = (data: unknown) => ({
   data,
   raw: data,
@@ -16,6 +17,53 @@ const response = (data: unknown) => ({
   outputTokens: 20,
 });
 describe('independent grading core', () => {
+  it('sends pure geometry as structured text through the existing provider', async () => {
+    const problem = createDocument('ISOMETRIC');
+    const answer = addDrawing(problem, 'segment', 'view-0', [{ x: 0, y: 0 }], 'student');
+    const bundle = exportGeometryBundle(answer);
+    const request = GradingRequest.parse({
+      ...requestFixture(),
+      submissionAssets: [],
+      promptVersion: 'geometry-review/1.1.0',
+      geometryEvidence: {
+        schemaVersion: answer.schemaVersion,
+        editorType: answer.editorType,
+        problemDocument: problem,
+        answerDocument: answer,
+        derivedRelations: bundle.derivedRelations,
+        narrative: bundle.narrative,
+      },
+    });
+    const transport: typeof fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      const parts = body.messages[1].content;
+      expect(parts.some((part: { type: string }) => part.type === 'image_url')).toBe(false);
+      expect(parts[0].text).toContain(answer.entities.at(-1)!.id);
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(evaluationFixture()) } }],
+        }),
+        { status: 200 },
+      );
+    };
+    const provider = new OpenAICompatibleVisionProvider(
+      {
+        baseUrl: 'https://example.invalid/v1',
+        model: 'TEST_ONLY',
+        apiKey: 'TEST_ONLY',
+        outputMode: 'json_object',
+        timeoutMs: 1000,
+      },
+      transport,
+    );
+    const result = await new GeometryGradingEngine(provider, {
+      prepare: async () => ({ images: [], warnings: [], records: [] }),
+    }).grade(request);
+    expect(result.result.totalPoints).toBe(94);
+    expect(GradingRequest.safeParse({ ...request, geometryEvidence: undefined }).success).toBe(
+      false,
+    );
+  });
   it('calculates integer tenths without float drift', () => {
     const r = validateEvaluation(requestFixture(), response(evaluationFixture()));
     expect(r.totalPoints).toBe(94);

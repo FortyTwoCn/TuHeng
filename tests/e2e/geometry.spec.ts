@@ -1,0 +1,244 @@
+import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { performanceDocument } from '../geometry-fixtures';
+async function login(page: Page, who = 'teacher') {
+  await page.goto('/login');
+  await page.getByLabel('账号邮箱').fill(`${who}@tuheng.local`);
+  await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
+  await page.getByRole('button', { name: '进入图衡' }).click();
+  await expect(page).toHaveURL(new RegExp(`/${who}/dashboard`));
+}
+async function draw(page: Page, tool: string, x = 150, y = 130) {
+  await page.getByRole('button', { name: tool, exact: true }).click();
+  const svg = page.locator('.geo-active svg');
+  await svg.click({ position: { x, y } });
+}
+test('JSON validation, projection links, touch zoom and the multi-object mobile fixture', async ({
+  page,
+}) => {
+  await login(page, 'student');
+  await page.goto('/geometry');
+  await page.getByLabel('吸附', { exact: true }).uncheck();
+  await draw(page, '点', 130, 110);
+  await page.locator('.geo-tabs').getByRole('button', { name: 'H', exact: true }).click();
+  await draw(page, '点', 130, 110);
+  await page.getByRole('button', { name: '投影关联', exact: true }).click();
+  await page
+    .locator('.geo-view')
+    .filter({ has: page.getByRole('button', { name: 'V', exact: true }) })
+    .locator('svg')
+    .click({ position: { x: 130, y: 110 } });
+  await page
+    .locator('.geo-view')
+    .filter({ has: page.getByRole('button', { name: 'H', exact: true }) })
+    .locator('svg')
+    .click({ position: { x: 130, y: 110 } });
+  await expect(page.locator('.geo-status').first()).toContainText('投影关联已记录');
+  await page.getByLabel('加载几何 JSON').setInputFiles({
+    name: 'invalid.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{"schemaVersion":"invalid"}'),
+  });
+  await expect(page.locator('.geo-status').first()).toContainText('加载失败');
+  await expect(page.locator('[data-kind=point]')).toHaveCount(2);
+  const fixture = performanceDocument();
+  // Importers may choose stable view IDs and projection conventions independently of the UI.
+  for (const view of fixture.views) {
+    const original = view.id;
+    view.id = `imported-${original}`;
+    fixture.entities
+      .filter((e) => e.viewId === original)
+      .forEach((e) => {
+        e.viewId = view.id;
+      });
+  }
+  fixture.projectionConfig.convention = 'THIRD_ANGLE_RIGHT';
+  const start = Date.now();
+  await page.getByLabel('加载几何 JSON').setInputFiles({
+    name: 'performance.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(fixture)),
+  });
+  await expect(page.locator('[data-entity-id]')).toHaveCount(fixture.entities.length);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('.geo-tabs').getByRole('button', { name: 'V', exact: true }).click();
+  const canvas = page.locator('.geo-active svg'),
+    initial = await canvas.getAttribute('viewBox');
+  const box = (await canvas.boundingBox())!;
+  await canvas.dispatchEvent('pointerdown', {
+    pointerId: 31,
+    pointerType: 'touch',
+    button: 0,
+    clientX: box.x + 90,
+    clientY: box.y + 100,
+  });
+  await canvas.dispatchEvent('pointerdown', {
+    pointerId: 32,
+    pointerType: 'touch',
+    button: 0,
+    clientX: box.x + 180,
+    clientY: box.y + 100,
+  });
+  await canvas.dispatchEvent('pointermove', {
+    pointerId: 32,
+    pointerType: 'touch',
+    buttons: 1,
+    clientX: box.x + 240,
+    clientY: box.y + 110,
+  });
+  await expect(canvas).not.toHaveAttribute('viewBox', initial!);
+  for (const pointerId of [31, 32])
+    await canvas.dispatchEvent('pointerup', { pointerId, pointerType: 'touch', button: 0 });
+  await expect(page.locator('[data-entity-id]')).toHaveCount(fixture.entities.length);
+  await page.getByRole('button', { name: '适应画布', exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/geometry-mobile.png', fullPage: true });
+  console.log(`Geometry mobile fixture loaded and interacted in ${Date.now() - start} ms`);
+});
+test('four editors load, draw, undo, export, and keep mobile views and raw pen strokes usable', async ({
+  page,
+}) => {
+  await login(page, 'student');
+  await page.goto('/geometry');
+  page.on('dialog', (d) => d.accept());
+  for (const type of ['VHW_PROJECTION', 'THREE_VIEW', 'ISOMETRIC', 'OBLIQUE_DIMETRIC']) {
+    if (type !== 'VHW_PROJECTION') await page.getByLabel('图纸类型').selectOption(type);
+    await page.getByLabel('吸附', { exact: true }).uncheck();
+    await draw(page, '点');
+    await expect(page.locator('.geo-active [data-kind=point]')).toHaveCount(1);
+    if (type === 'THREE_VIEW')
+      await expect(page.locator('.geo-active [data-kind=point] text')).toHaveCount(0);
+    await draw(page, '实线', 200, 150);
+    await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(1);
+    await page.getByRole('button', { name: '撤销', exact: true }).click();
+    await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(0);
+    await page.getByRole('button', { name: '恢复', exact: true }).click();
+    await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(1);
+    await page.getByRole('combobox', { name: '线型', exact: true }).selectOption('CONSTRUCTION');
+    await expect(page.locator('.geo-active [data-kind=line]')).toHaveCount(1);
+    await page.getByRole('combobox', { name: '线型', exact: true }).selectOption('ANSWER_VISIBLE');
+    await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(1);
+    await draw(page, '圆', 220, 80);
+    await page.locator('.geo-active svg').click({ position: { x: 250, y: 80 } });
+    await expect(page.locator('.geo-active [data-kind=circle]')).toHaveCount(1);
+    await draw(page, '圆弧', 220, 220);
+    await page.locator('.geo-active svg').click({ position: { x: 250, y: 220 } });
+    await page.locator('.geo-active svg').click({ position: { x: 220, y: 190 } });
+    await expect(page.locator('.geo-active [data-kind=arc]')).toHaveCount(1);
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: '导出 JSON', exact: true }).click();
+    expect((await download).suggestedFilename()).toBe('tuheng.json');
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await draw(page, '虚线', 100, 100);
+  await expect(page.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
+  await page.getByRole('button', { name: '电子笔', exact: true }).click();
+  await page.getByLabel('虚拟直尺', { exact: true }).check();
+  const svg = page.locator('.geo-active svg');
+  const box = (await svg.boundingBox())!;
+  await svg.dispatchEvent('pointerdown', {
+    pointerId: 19,
+    pointerType: 'pen',
+    button: 0,
+    clientX: box.x + 80,
+    clientY: box.y + 80,
+    pressure: 0.5,
+  });
+  for (let i = 0; i < 30; i++)
+    await svg.dispatchEvent('pointermove', {
+      pointerId: 19,
+      pointerType: 'pen',
+      buttons: 1,
+      clientX: box.x + 80 + i * 3,
+      clientY: box.y + 80 + Math.sin(i) * 4,
+      pressure: 0.5,
+    });
+  await svg.dispatchEvent('pointerup', {
+    pointerId: 19,
+    pointerType: 'pen',
+    button: 0,
+    clientX: box.x + 167,
+    clientY: box.y + 80,
+    pressure: 0,
+  });
+  await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(3);
+  const svgDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出当前视图 SVG', exact: true }).click();
+  const exportedSvg = readFileSync((await (await svgDownload).path())!, 'utf8');
+  expect(exportedSvg).not.toContain('data-transient');
+  expect(exportedSvg).not.toContain('#d97706');
+  expect(exportedSvg).toContain('non-scaling-stroke');
+});
+test('teacher geometry question is versioned and student submits a pure vector snapshot', async ({
+  browser,
+}) => {
+  const teacher = await browser.newPage(),
+    student = await browser.newPage();
+  const title = `[E2E几何] ${Date.now()}`;
+  teacher.on('dialog', (d) => d.accept());
+  student.on('dialog', (d) => d.accept());
+  await login(teacher);
+  await teacher.goto('/teacher/questions/new');
+  await teacher.getByLabel('题目名称').fill(title);
+  await teacher.getByLabel('题目要求').fill('补全对应投影，保留辅助线。');
+  await teacher.getByLabel('点的投影规律', { exact: true }).check();
+  await teacher.getByLabel('作答方式').selectOption('VHW_PROJECTION');
+  await teacher.getByLabel('吸附', { exact: true }).uncheck();
+  await draw(teacher, '实线');
+  await expect(teacher.locator('[data-style=PROBLEM_VISIBLE][data-kind=segment]')).toHaveCount(1);
+  await teacher.getByLabel('参考作图与关键步骤').fill('对应投影的横坐标一致。');
+  await teacher.getByLabel('我已检查参考答案与等价正确解法，确认可作为判分依据').check();
+  await teacher.getByLabel('我已确认题意、参考答案和评分细则（保存为新版本）').check();
+  await teacher.getByRole('button', { name: '保存并确认题目版本' }).click();
+  await expect(teacher).toHaveURL('/teacher/questions');
+  await teacher.goto('/teacher/assignments/new');
+  await teacher.getByLabel('作业标题').fill(title);
+  await teacher.getByLabel('教学班', { exact: true }).selectOption('class-demo');
+  await teacher.getByLabel('开始时间（当前设备时区）').fill('2026-01-01T08:00');
+  await teacher.getByLabel('截止时间（当前设备时区）').fill('2027-12-31T23:59');
+  await teacher
+    .locator('.question-choice')
+    .filter({ hasText: title })
+    .getByRole('checkbox')
+    .check();
+  await teacher.getByRole('button', { name: '保存作业草稿' }).click();
+  await expect(teacher).toHaveURL(/\/teacher\/assignments\/[a-f0-9-]{36}$/);
+  const assignment = new URL(teacher.url()).pathname.replace('/teacher/', '/student/');
+  await teacher.getByRole('button', { name: '正式发布作业' }).click();
+  await login(student, 'student');
+  await student.goto(assignment);
+  await student.getByLabel('吸附', { exact: true }).uncheck();
+  await draw(student, '虚线', 180, 140);
+  await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
+  await draw(student, '辅助线', 120, 100);
+  const draftResponse = student.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/actions/draft') && response.request().method() === 'POST',
+  );
+  await student.getByRole('button', { name: '保存草稿', exact: true }).click();
+  const draftRequest = (await draftResponse).request().postDataJSON();
+  const forged = structuredClone(draftRequest);
+  const stemPoint = forged.geometry.entities.find(
+    (e: { kind: string; lineStyle: string }) =>
+      e.kind === 'point' && e.lineStyle === 'PROBLEM_VISIBLE',
+  );
+  stemPoint.position.x += 5;
+  const denied = await student.request.post('/api/actions/draft', {
+    headers: { Origin: 'http://localhost:3000' },
+    data: forged,
+  });
+  expect(denied.status()).toBe(403);
+  expect((await denied.json()).error).toBe('GEOMETRY_STEM_CHANGED');
+  await expect(student.getByText('草稿已保存，可稍后继续。')).toBeVisible();
+  await student.reload();
+  await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
+  await student.getByRole('button', { name: '正式提交并排队批改' }).click();
+  await expect(student).toHaveURL(/\/student\/results\//);
+  await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
+  const id = student.url().split('/').at(-1);
+  await teacher.goto(`/teacher/reviews/${id}`);
+  await expect(teacher.locator('.geometry-editor')).toBeVisible();
+  await teacher.close();
+  await student.close();
+});

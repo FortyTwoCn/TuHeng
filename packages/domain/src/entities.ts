@@ -1,4 +1,4 @@
-import type { Role, QuestionInput } from '@tuheng/contracts';
+import type { Role, QuestionInput, GeometryDocument } from '@tuheng/contracts';
 export interface Actor {
   id: string;
   roles: Role[];
@@ -51,7 +51,12 @@ export interface Entities {
     createdAt: Date;
   };
   assignmentItem: Row & { assignmentId: string; questionVersionId: string; position: number };
-  submission: Row & { userId: string; itemId: string; draftAssetIds: string[] };
+  submission: Row & {
+    userId: string;
+    itemId: string;
+    draftAssetIds: string[];
+    draftGeometry?: GeometryDocument | null;
+  };
   submissionAttempt: Row & {
     ownerId: string;
     submissionId: string | null;
@@ -62,6 +67,8 @@ export interface Entities {
     source: string;
     submittedAt: Date;
     publishedDecisionId: string | null;
+    geometryAnswer?: GeometryDocument | null;
+    geometrySchemaVersion?: string | null;
   };
   submissionAsset: Row & { attemptId: string; assetId: string; position: number };
   storedAsset: Row & {

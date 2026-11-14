@@ -240,7 +240,7 @@ export async function SelfTests({ a, segments }: { a: Actor; segments: string[] 
               查看题目材料
             </a>
           ))}
-          <SubmissionEditor selfTestItemId={item.id} />
+          <SubmissionEditor selfTestItemId={item.id} problemGeometry={q.geometryDocument} />
         </Panel>
         <Panel title="练习记录">
           {attempts.length ? (
@@ -330,7 +330,7 @@ export async function ErrorBook({ a, segments }: { a: Actor; segments: string[] 
               查看原题
             </a>
           ))}
-          <SubmissionEditor reviewEntryId={entry.id} />
+          <SubmissionEditor reviewEntryId={entry.id} problemGeometry={q.geometryDocument} />
         </Panel>
         <Link href={`/student/results/${entry.attemptId}`}>查看原始作答与错误解析 →</Link>
       </>

@@ -1,6 +1,23 @@
 # 图衡 TuHeng
 
+<img src="apps/web/public/brand/tuheng-logo.svg" alt="图衡几何图标" width="96" height="96" />
+
 工程图学教学闭环。Next.js + TypeScript 模块化单体，独立 Node Worker 与可替换视觉评分核心。
+
+几何编辑器支持 VHW、三视图、正等轴测和斜二等轴。登录后访问 `/geometry` 独立作图，或在教师建题时选择几何作答方式。升级需执行 `npm install`、`npm run db:generate`、`npm run db:migrate`。使用与契约见 [几何编辑器架构](docs/GEOMETRY_EDITOR_ARCHITECTURE.md)。
+
+## 几何编辑与教学流程
+
+- 四种编辑器共用版本化 `GeometryDocument` 和运行时校验，提供点、实/虚线段、无限辅助线、圆/圆弧、投影面、吸附、投影关联、属性编辑和撤销恢复。
+- 电子笔直接采集轨迹，拟合直线、圆和圆弧，失败保留笔迹；支持虚拟直尺、移动端视图切换、触控平移和缩放。
+- 教师题目保存冻结版本；学生可保存几何草稿、提交独立作答快照，通过现有队列和评分核心进入教师复核。图片作答继续保留。
+- 支持 JSON、中文关系描述和 SVG 导出。照片识别导入属于下一轮，未来仍使用同一文档接口。
+
+文档：[架构与组件](docs/GEOMETRY_EDITOR_ARCHITECTURE.md) · [数据契约](docs/GEOMETRY_EDITOR_SCHEMA.md) · [交互说明](docs/GEOMETRY_EDITOR_INTERACTION.md) · [评分接入](docs/GEOMETRY_EDITOR_AI_EXPORT.md) · [四份 JSON 示例](docs/geometry-examples) · [交付与验证记录](docs/DELIVERY.md)。
+
+品牌图标统一使用几何 SVG。登录页以 H 水平底面、V/W 竖直面构成投影装饰，桌面端放大至左侧面板右下角，由右侧登录区域遮去部分边缘；手机端保留紧凑布局。
+
+![图衡登录页](docs/images/login.png)
 
 ## 本地运行
 

@@ -88,6 +88,18 @@ export function validateEvaluation(
       evidence: related.map((i) => i.evidence).filter(Boolean),
     };
   });
+  const geometryIds = new Set(
+    request.geometryEvidence?.answerDocument.entities.map((e) => e.id) ?? [],
+  );
+  const relationIds = new Set(request.geometryEvidence?.derivedRelations.map((r) => r.id) ?? []);
+  const geometryAnnotations = (raw.geometryAnnotations ?? []).filter((annotation) => {
+    const valid =
+      annotation.entityIds.every((id) => geometryIds.has(id)) &&
+      annotation.relationIds.every((id) => relationIds.has(id)) &&
+      (!annotation.errorId || raw.errors.some((e) => e.id === annotation.errorId));
+    if (!valid) reasons.push('忽略了无法对应几何对象或关系的定位');
+    return valid;
+  });
   return GradingResult.parse({
     contractVersion: '1',
     runId: request.runId,
@@ -98,6 +110,7 @@ export function validateEvaluation(
     correctParts: raw.correctParts,
     errors: raw.errors,
     annotations,
+    geometryAnnotations,
     analysis: raw.analysis,
     knowledgePerformance,
     requiresReview: true,

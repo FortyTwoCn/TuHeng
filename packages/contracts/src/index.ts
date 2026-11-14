@@ -1,4 +1,6 @@
 import { z } from 'zod';
+export * from './geometry';
+import { GeometryDocument, GeometryEvidence, GeometryAnnotation } from './geometry';
 export const Points = z.number().int().min(0).max(100000);
 export const Role = z.enum([
   'STUDENT',
@@ -79,35 +81,52 @@ export const QuestionInput = z.object({
   reference: Reference,
   rubric: Rubric,
   confirmed: z.boolean(),
+  geometryDocument: GeometryDocument.nullish(),
 });
 export type QuestionInput = z.infer<typeof QuestionInput>;
-export const GradingRequest = z.object({
-  contractVersion: z.literal('1'),
-  runId: z.string(),
-  question: z.object({
-    id: z.string(),
-    version: z.number().int(),
-    title: z.string(),
-    content: z.string(),
-    type: z.string(),
-    assets: z.array(AssetRef),
-    knowledgeIds: z.array(z.string()),
-  }),
-  reference: Reference.extend({ assets: z.array(AssetRef) }),
-  rubric: Rubric,
-  submissionAssets: z.array(AssetRef).min(1),
-  imageOptions: z.object({
-    maxDimension: z.number().int().min(512).max(3000),
-    rotate: z.number(),
-    crop: z
-      .object({ left: z.number(), top: z.number(), width: z.number(), height: z.number() })
-      .nullable(),
-  }),
-  strategyVersion: z.literal('geometry-v1'),
-  promptVersion: z.literal('geometry-review/1.0.0'),
-  modelConfigId: z.string(),
-  teacherRequirements: z.string().max(4000).optional(),
-});
+export const GradingRequest = z
+  .object({
+    contractVersion: z.literal('1'),
+    runId: z.string(),
+    question: z.object({
+      id: z.string(),
+      version: z.number().int(),
+      title: z.string(),
+      content: z.string(),
+      type: z.string(),
+      assets: z.array(AssetRef),
+      knowledgeIds: z.array(z.string()),
+    }),
+    reference: Reference.extend({ assets: z.array(AssetRef) }),
+    rubric: Rubric,
+    submissionAssets: z.array(AssetRef).max(10),
+    geometryEvidence: GeometryEvidence.optional(),
+    imageOptions: z.object({
+      maxDimension: z.number().int().min(512).max(3000),
+      rotate: z.number(),
+      crop: z
+        .object({ left: z.number(), top: z.number(), width: z.number(), height: z.number() })
+        .nullable(),
+    }),
+    strategyVersion: z.literal('geometry-v1'),
+    promptVersion: z.enum(['geometry-review/1.0.0', 'geometry-review/1.1.0']),
+    modelConfigId: z.string(),
+    teacherRequirements: z.string().max(4000).optional(),
+  })
+  .refine(
+    (r) =>
+      r.submissionAssets.length > 0 ||
+      r.geometryEvidence?.answerDocument.entities.some(
+        (e) =>
+          r.geometryEvidence!.answerDocument.layers.find((l) => l.id === e.layerId)?.role !==
+          'PROBLEM_STEM',
+      ),
+    '至少需要图片或几何作答',
+  )
+  .refine(
+    (r) => !r.geometryEvidence || r.promptVersion === 'geometry-review/1.1.0',
+    '几何证据需要新版提示词',
+  );
 export type GradingRequest = z.infer<typeof GradingRequest>;
 export const Analysis = z.object({
   requirements: z.array(z.string()),
@@ -154,6 +173,7 @@ export const ModelEvaluation = z.object({
   correctParts: z.array(z.string()),
   errors: z.array(Diagnosis),
   annotations: z.array(Annotation),
+  geometryAnnotations: z.array(GeometryAnnotation).max(100).optional(),
   confidence: z.number().min(0).max(1),
   guidance: z.string(),
 });
@@ -176,6 +196,7 @@ export const GradingResult = z.object({
   correctParts: z.array(z.string()),
   errors: z.array(Diagnosis),
   annotations: z.array(Annotation),
+  geometryAnnotations: z.array(GeometryAnnotation).max(100).optional(),
   analysis: Analysis,
   knowledgePerformance: z.array(
     z.object({

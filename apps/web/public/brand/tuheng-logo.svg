@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">图衡几何图标</title>
+  <desc id="desc">透明背景的几何立方体徽标，由深蓝色框架、蓝绿色投影面、虚线和尺规刻度构成。全部元素均为可编辑的矢量路径。</desc>
+
+  <!-- Construction guides, drawn behind the projection planes. -->
+  <g id="construction-guides" stroke="#064175" stroke-width="8" stroke-linecap="butt">
+    <path d="M256 747 271 740 M294 727 332 708 M356 697 393 679 M417 667 455 649 M478 637 516 619 M540 607 578 588"/>
+    <path d="M676 588 714 607 M738 620 776 638 M799 650 837 668 M860 680 898 698 M921 710 959 728 M983 740 996 746"/>
+  </g>
+
+  <!-- Open upper edges of the cube. -->
+  <g id="upper-frame" fill="#064175">
+    <path id="upper-left-frame" d="M235 385 534 234 534 308 303 428 303 693 235 728Z"/>
+    <path id="upper-right-frame" d="M720 234 1018 385 1018 728 951 693 951 428 720 306Z"/>
+  </g>
+
+  <!-- The central gaps are transparent, rather than white painted lines. -->
+  <g id="projection-planes">
+    <path id="top-left-plane" fill="#3EAEBC" d="M363 493 619 362 619 618Z"/>
+    <path id="top-right-plane" fill="#3EAEBC" d="M637 362 893 492 637 618Z"/>
+    <path id="bottom-left-plane" fill="#7AB6E6" d="M337 763 619 628 619 907Z"/>
+    <path id="bottom-right-plane" fill="#296DA4" d="M635 628 918 762 635 907Z"/>
+  </g>
+
+  <!-- Ruler notches are part of the outline and remain transparent. -->
+  <g id="lower-frame" fill="#064175">
+    <path id="ruler-edge" d="M235 748 235 861 277 882 277 830 285 834 285 886 323 905 323 870 332 874 332 909 373 930 373 880 382 884 382 934 427 956 427 921 436 925 436 961 480 983 480 934 489 938 489 987 533 1009 533 974 542 978 542 1014 587 1036 587 926Z"/>
+    <path id="lower-right-frame" d="M706 909 1018 748 1018 856 706 1014Z"/>
+  </g>
+
+  <g id="vertical-axis" fill="#064175">
+    <path d="M622 175H632V247H622Z M622 273H632V335H622Z M622 929H632V981H622Z M622 1006H632V1079H622Z"/>
+  </g>
+</svg>

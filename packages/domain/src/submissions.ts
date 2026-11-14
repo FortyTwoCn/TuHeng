@@ -1,4 +1,6 @@
 import { GradingRequest } from '@tuheng/contracts';
+import { exportGeometryBundle } from '@tuheng/geometry-core';
+import { validateAnswerGeometry } from './geometry';
 import type { Actor, DataPort, Entities } from './entities';
 import { ensure, requireClass, checkSubmissionWindow, audit } from './policy';
 import { ownAssets } from './teaching';
@@ -23,6 +25,7 @@ export async function scheduleRun(
     return { id: a.id, version: 'original', mime: a.mime };
   };
   const id = crypto.randomUUID();
+  const bundle = attempt.geometryAnswer ? exportGeometryBundle(attempt.geometryAnswer) : undefined;
   const request = GradingRequest.parse({
     contractVersion: '1',
     runId: id,
@@ -41,9 +44,21 @@ export async function scheduleRun(
     },
     rubric: question.rubric,
     submissionAssets: await Promise.all(assetIds.map(ref)),
+    ...(bundle
+      ? {
+          geometryEvidence: {
+            schemaVersion: bundle.document.schemaVersion,
+            editorType: bundle.document.editorType,
+            problemDocument: question.geometryDocument,
+            answerDocument: bundle.document,
+            derivedRelations: bundle.derivedRelations,
+            narrative: bundle.narrative,
+          },
+        }
+      : {}),
     imageOptions: { maxDimension: 2000, rotate: 0, crop: null },
     strategyVersion: 'geometry-v1',
-    promptVersion: 'geometry-review/1.0.0',
+    promptVersion: bundle ? 'geometry-review/1.1.0' : 'geometry-review/1.0.0',
     modelConfigId: config.id,
   });
   const run = await tx.create('gradingRun', {
@@ -60,7 +75,13 @@ export async function scheduleRun(
   await tx.create('outboxEvent', { runId: id, lane });
   return run;
 }
-export async function saveDraft(db: DataPort, a: Actor, itemId: string, assetIds: string[]) {
+export async function saveDraft(
+  db: DataPort,
+  a: Actor,
+  itemId: string,
+  assetIds: string[],
+  geometry?: unknown,
+) {
   await ownAssets(db, a, assetIds, 'SUBMISSION');
   const item = await db.get('assignmentItem', itemId);
   ensure(item, 'NOT_FOUND', 404);
@@ -74,10 +95,20 @@ export async function saveDraft(db: DataPort, a: Actor, itemId: string, assetIds
     403,
   );
   return db.transaction(async (tx) => {
+    const question = await tx.get('questionVersion', item.questionVersionId);
+    const draftGeometry = validateAnswerGeometry(question?.geometryDocument, geometry);
     const s = (await tx.list('submission', { userId: a.id, itemId }))[0];
     return s
-      ? tx.update('submission', s.id, { draftAssetIds: assetIds })
-      : tx.create('submission', { userId: a.id, itemId, draftAssetIds: assetIds });
+      ? tx.update('submission', s.id, {
+          draftAssetIds: assetIds,
+          ...(draftGeometry ? { draftGeometry } : {}),
+        })
+      : tx.create('submission', {
+          userId: a.id,
+          itemId,
+          draftAssetIds: assetIds,
+          ...(draftGeometry ? { draftGeometry } : {}),
+        });
   });
 }
 export async function submitAnswer(
@@ -89,10 +120,14 @@ export async function submitAnswer(
     reviewEntryId?: string;
     assetIds: string[];
     idempotencyKey: string;
+    geometry?: unknown;
   },
   quota = 20,
 ) {
-  ensure(input.assetIds.length > 0 && input.assetIds.length <= 10, 'ANSWER_IMAGES_REQUIRED');
+  ensure(
+    (input.assetIds.length > 0 || input.geometry != null) && input.assetIds.length <= 10,
+    'ANSWER_EVIDENCE_REQUIRED',
+  );
   await ownAssets(db, a, input.assetIds, 'SUBMISSION');
   for (const id of input.assetIds)
     ensure(
@@ -151,6 +186,15 @@ export async function submitAnswer(
         questionVersionId = item.questionVersionId;
       }
     }
+    const question = await tx.get('questionVersion', questionVersionId);
+    const geometryAnswer = validateAnswerGeometry(question?.geometryDocument, input.geometry);
+    ensure(
+      input.assetIds.length ||
+        geometryAnswer?.entities.some(
+          (e) => geometryAnswer.layers.find((l) => l.id === e.layerId)?.role !== 'PROBLEM_STEM',
+        ),
+      'ANSWER_EVIDENCE_REQUIRED',
+    );
     const attempt = await tx.create('submissionAttempt', {
       ownerId: a.id,
       submissionId,
@@ -159,6 +203,9 @@ export async function submitAnswer(
       source,
       version,
       idempotencyKey: input.idempotencyKey,
+      ...(geometryAnswer
+        ? { geometryAnswer, geometrySchemaVersion: geometryAnswer.schemaVersion }
+        : {}),
     });
     for (const [position, assetId] of input.assetIds.entries())
       await tx.create('submissionAsset', { attemptId: attempt.id, assetId, position });

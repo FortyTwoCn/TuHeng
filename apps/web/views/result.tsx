@@ -4,6 +4,7 @@ import { viewAttempt, type Actor } from '@tuheng/domain';
 import { Annotation, formatPoints } from '@tuheng/contracts';
 import { Panel, PageTitle, Badge } from '@tuheng/ui';
 import { DrawingViewer } from '../components/DrawingViewer';
+import { GeometryReview } from '../components/GeometryReview';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ActionButton, TextAction } from '../components/Actions';
 import { SuggestionReport, ScoreTable, date, Status } from './shared';
@@ -40,6 +41,12 @@ export async function ResultView({ a, id }: { a: Actor; id: string }) {
       <div className={d.teacher ? 'review-layout' : 'dashboard-grid'}>
         <div className="review-main">
           <Panel title="作答图纸">
+            {d.attempt.geometryAnswer && (
+              <GeometryReview
+                document={d.attempt.geometryAnswer}
+                annotations={suggestion?.result.geometryAnnotations}
+              />
+            )}
             <DrawingViewer assets={d.assets} annotations={annotations} processed={processed} />
           </Panel>
           {suggestion && (

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   GradingRequest,
   ModelEvaluation,
+  GeometryAnnotation,
   type VisionProvider,
   type VisionImage,
   type GradingResult,
@@ -41,7 +42,7 @@ export class GeometryGradingEngine implements GradingEngine {
     const prompt = PROMPTS[request.promptVersion];
     if (!prompt) throw new GradingError('UNKNOWN_PROMPT_VERSION');
     const processed = await this.images.prepare(request);
-    if (!SubmissionAnalysis(processed.images).length)
+    if (!SubmissionAnalysis(processed.images).length && !request.geometryEvidence)
       throw new GradingError('UNREADABLE_SUBMISSION');
     const response = await this.provider.evaluate({
       system: prompt,
@@ -50,10 +51,15 @@ export class GeometryGradingEngine implements GradingEngine {
         reference: ReferenceAnalysis(request),
         rubric: RubricResolution(request),
         teacherRequirements: request.teacherRequirements,
+        geometryEvidence: request.geometryEvidence,
         images: processed.images.map(({ role, assetId, version }) => ({ role, assetId, version })),
       }),
       images: processed.images,
-      schema: z.toJSONSchema(ModelEvaluation) as Record<string, unknown>,
+      schema: z.toJSONSchema(
+        request.geometryEvidence
+          ? ModelEvaluation.extend({ geometryAnnotations: z.array(GeometryAnnotation).max(100) })
+          : ModelEvaluation.omit({ geometryAnnotations: true }),
+      ) as Record<string, unknown>,
     });
     return {
       result: validateEvaluation(request, response, processed.warnings),

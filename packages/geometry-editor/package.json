@@ -1,0 +1,15 @@
+{
+  "name": "@tuheng/geometry-editor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@tuheng/contracts": "*",
+    "@tuheng/geometry-core": "*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

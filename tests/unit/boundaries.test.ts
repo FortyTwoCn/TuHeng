@@ -8,9 +8,11 @@ for (const name of packages) {
   imports.set(name, new Set([...code.matchAll(/from ['"]@tuheng\/([^'"]+)/g)].map((m) => m[1])));
 }
 it('keeps domain and grading contracts free of framework and infrastructure dependencies', () => {
-  for (const name of ['contracts', 'domain', 'grading-core']) {
+  for (const name of ['contracts', 'domain', 'grading-core', 'geometry-core']) {
     for (const dependency of imports.get(name) ?? [])
-      expect(['contracts', 'domain']).toContain(dependency);
+      expect(
+        name === 'domain' ? ['contracts', 'domain', 'geometry-core'] : ['contracts'],
+      ).toContain(dependency);
     const files = readdirSync(`packages/${name}/src`).filter((p) => p.endsWith('.ts'));
     for (const file of files) {
       const code = readFileSync(`packages/${name}/src/${file}`, 'utf8');

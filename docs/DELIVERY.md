@@ -78,3 +78,60 @@
 | 真实视觉评分、2000用户持续负载、灾备还原演练                                 | 未执行；不得视为通过                                                                  |
 
 浏览器覆盖：教师建题发布→学生真实上传提交→跨学生图纸拒绝访问→人工复核发布→学生成绩与错题；管理员创建搜索停用；私人自测创建/提交；未登录与跨站写入拒绝、390px手机布局无横向溢出。手机截图在本地 `test-results/student-mobile.png`，Playwright 报告在 `playwright-report/`（运行生成，未入源码）。
+
+## 几何编辑器交付（2026-11-14）
+
+本轮新增 `packages/geometry-core` 与 `packages/geometry-editor`，扩展 contracts、domain、grading-core、database 和 Web 的现有题目、作答、复核页面。四种编辑器共享 registry、几何内核、Pointer Events 与 SVG 实现。没有增加照片识别、OCR、识别任务表、专用队列或无效识别按钮。原图片上传及历史作答继续保留。
+
+VHW、三视图、正等轴测、斜二等轴编辑器均支持点、有限实/虚线、无限辅助线、平行/垂直线、圆、圆弧、三点定义及平行/垂直投影面、选择/框选、移动/复制/删除、属性、撤销/恢复、吸附确认、缩放/平移、电子笔拟合和虚拟直尺。正投影模式提供跨视图点/线段关联及偏差分析；三视图默认隐藏点名。轴测模式使用文档中的投影参数与轴向吸附。
+
+GeometryDocument 使用 `tuheng.geometry/1.0.0`、mm 单位、稳定对象/视图/图层/关系 ID；原始文档通过真实运行时 Schema 加载。非法版本、悬空引用、循环引用、非有限坐标、退化投影轴及不一致的线型/图层被拒绝。未知空间坐标保留 null。计算关系、显式关系和确认吸附来源分开记录；投影关联保留学生实际坐标。JSON、中文关系描述、SVG 都来自同一文档。
+
+教师题目版本保存蓝色题干，学生草稿和正式作答保存独立几何快照。服务端依据已冻结题干检查所有对象与结构，拒绝越权篡改。正式提交在原事务中生成 geometryEvidence，经原 outbox、BullMQ、Worker、Provider 和教师 GradeDecision 流程处理。几何请求使用新提示词 `geometry-review/1.1.0`，旧图片快照与 `1.0.0` 继续兼容。定位返回经对象、关系及错误 ID 校验后展示，AI 不发布成绩。
+
+迁移 `packages/database/prisma/migrations/202611140001_geometry/migration.sql` 为 QuestionVersion 增加 geometryDocument，为 Submission 增加 draftGeometry，为 SubmissionAttempt 增加 geometryAnswer、geometrySchemaVersion；全部 nullable，无删表或重建。已生成 Prisma Client 并应用到本机开发库和隔离测试库。
+
+| 最终检查                   | 真实结果                                                    |
+| -------------------------- | ----------------------------------------------------------- |
+| `npm run typecheck`        | 通过                                                        |
+| `npm run lint`             | 通过，0 错误、0 警告                                        |
+| `npm test`                 | 51/51，4 个文件                                             |
+| `npm run test:integration` | 16/16，真实 PostgreSQL、Redis、S3；模型仅使用明确的测试替身 |
+| `npm run test:e2e`         | 7/7，33.5s；本机 Chrome，连接 Next dev                      |
+| `npm run build`            | 通过，Next.js 16.4.2 生产构建，包含 `/geometry`             |
+| Git 空白检查               | 通过，使用 Windows CRLF 约定                                |
+
+几何浏览器覆盖包含四类型绘图、线型语义转换、圆/圆弧、撤销/恢复、JSON 下载与非法导入、自定义视图 ID、跨视图关联、电子笔沿虚拟尺拟合、SVG 清除瞬态图形、教师建题发布、学生草稿重载/提交、后端题干防篡改和教师只读复核。原有图片上传、人工发布、自测、管理与权限流程全部重跑。
+
+生产构建已在本机回环地址启动预览，登录页 HTTP 200。登录后访问 `http://localhost:3000/geometry`；该预览仅供本机访问。
+
+性能夹具包含 513 个对象（100 点、300 线段、50 圆、50 圆弧、3 面及10个关联投影点）。本机核心分析和导出实测约45.1ms，关系达到3000条上限时描述明确说明截断，原对象完整保留。390px 手机视口中夹具加载、双指缩放和适应画布测试完成，脚本总耗时695ms，无横向溢出。该数字包含自动化操作，不是屏幕帧率或手写笔延迟指标。截图为 `test-results/geometry-mobile.png`。
+
+验收期间修复本机 Redis 默认目录的快照保存失败。当前数据和日志目录为 `D:\Project\WebStorm\TuHeng-data\redis`，后台保存状态为 ok，未关闭持久化保护。独立本机依赖启动脚本仍位于 `D:\Project\WebStorm\TuHeng-data\Start-Dependencies.ps1`。Redis 故障导致的一轮集成失败已在修复后完整重跑通过。
+
+文档与示例：
+
+- [架构、目录、组件接口和入口](GEOMETRY_EDITOR_ARCHITECTURE.md)
+- [GeometryDocument Schema](GEOMETRY_EDITOR_SCHEMA.md)
+- [工具、触控与电子笔交互](GEOMETRY_EDITOR_INTERACTION.md)
+- [中文描述及现有 AI 流程接入](GEOMETRY_EDITOR_AI_EXPORT.md)
+- [VHW 示例 JSON](geometry-examples/VHW_PROJECTION.json)、[三视图](geometry-examples/THREE_VIEW.json)、[正等轴测](geometry-examples/ISOMETRIC.json)、[斜二等轴](geometry-examples/OBLIQUE_DIMETRIC.json)
+- [确定性中文导出示例](geometry-examples/VHW_PROJECTION.txt)：保留并描述 V、H 面的 2.000mm 投影偏差。
+
+尚未验收：真实 Apple Pencil/Android 手写笔的延迟、掌触抑制及 Safari 行为；真实 AI 服务的几何评分准确性。本轮使用真实保存和队列，模型测试替身仅存在于自动化测试。下一轮先进行真机与教师样本验收，再增加学生/教师照片识别导入；识别结果继续通过同一 GeometryDocument 校验和加载接口，编辑器不直接调用识别或评分模型。
+
+## Logo 与登录页调整（2026-11-14）
+
+使用用户提供的几何图标 SVG，保留原始图形路径、配色及透明背景，统一用于登录页、学生/教师/管理端共用侧栏和浏览器标签图标。公共组件位于 `apps/web/components/BrandLogo.tsx`，资源位于 `apps/web/public/brand/tuheng-logo.svg`。登录页的投影装饰改为共用顶点的 SVG，移除指定的 AI/教师确认提示和本地演示账户说明。
+
+类型、Lint、51 个单元测试、16 个集成测试、7 个 E2E（33.4s）及生产构建全部通过。额外使用生产预览检查 1440×900、1280×720、820×1180 和 390×844 视口，Logo 加载、标签图标、文案移除、投影图边界与无横向溢出均通过，检查了登录后的共用侧栏。桌面与手机截图为 `test-results/login-brand-desktop.png` 和 `test-results/login-brand-mobile.png`。
+
+后续按反馈重绘登录页三投影面装饰：H 作为水平底面，V/W 作为竖直面，三面共用原点，增加低对比网格、半透明面色和同一空间点的正投影连线。组件为 `apps/web/components/LoginProjection.tsx`。装饰在 320px 窄屏按可用宽度缩小，避免覆盖标题；桌面、平板和手机截图位于 `test-results/login-projection-*.png`。
+
+此次重绘后重新执行类型、Lint、51 个单元测试、16 个集成测试、7 个 E2E（33.1s）与生产构建，全部通过。生产预览对 1440、1280、820、390、320px 五种屏宽检查通过。
+
+## GitHub 同步交付（2026-11-14）
+
+最终登录页将投影图放大并固定于深色面板右下角，右侧部分在登录区域边缘裁切，形成被遮挡的层次。标题与说明位于装饰上层；竖屏限制图形相对面板的宽度，手机端继续使用紧凑装饰。README 已补充几何编辑器功能、文档导航、下一轮照片导入范围及 [登录页预览](images/login.png)。
+
+最终类型、Lint、51 个单元测试、16 个集成测试、7 个 E2E（37.8s）和生产构建全部通过。生产预览检查桌面、紧凑桌面、平板、390px 和 320px 手机屏宽，裁切构图、无横向溢出及表单点击均通过。本次提交包含本轮几何编辑器、教学/评分集成、迁移、示例、品牌资源与文档；本机环境文件、依赖数据和 IDE 设置不进入版本库。

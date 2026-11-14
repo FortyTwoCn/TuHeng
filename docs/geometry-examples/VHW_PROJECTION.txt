@@ -1,0 +1,13 @@
+VHW 面投影，单位 mm。计算距离容差 0.05 mm。
+d85afe03-7806-418c-ae8d-f48a2924420e（V，ANSWER_VISIBLE） 点 P1，坐标 (10, 10)，空间坐标未知。
+9e6bf5a5-660c-4ba4-ba0d-67b6b611f5b5（V，ANSWER_VISIBLE） 点 P2，坐标 (30, 10)，空间坐标未知。
+795a3e46-03e9-4000-b5b5-3d4a5539472d（V，ANSWER_VISIBLE） 连接 d85afe03-7806-418c-ae8d-f48a2924420e 与 9e6bf5a5-660c-4ba4-ba0d-67b6b611f5b5，长 20.000 mm，角度 0.000°。
+62038f15-450e-4f92-8c10-c2dddaf11d4b（V，ANSWER_VISIBLE） 点 P3，坐标 (20, 25)，空间坐标未知。
+ddc6ea61-f228-42f8-b982-c56be97e9584（V，ANSWER_VISIBLE） 圆，圆心 62038f15-450e-4f92-8c10-c2dddaf11d4b，半径 5 mm。
+1b45a362-1880-4fbd-98c3-1fade2b83c70（V，ANSWER_VISIBLE） 点 P4，坐标 (50, 25)，空间坐标未知。
+70fe4756-d56f-4315-b710-ee91542d3913（V，ANSWER_VISIBLE） 圆弧，圆心 1b45a362-1880-4fbd-98c3-1fade2b83c70，半径 5 mm，起始角 0°，有向扫角 90°，弧长 7.854 mm。
+f2e546da-2a25-4d37-b18e-002daa5fde41（H，ANSWER_VISIBLE） 点 P5，坐标 (12, -10)，空间坐标未知。
+用户投影关联 e18b9e04-fa73-445b-b046-9f94e6d694a7，对象 d85afe03-7806-418c-ae8d-f48a2924420e、f2e546da-2a25-4d37-b18e-002daa5fde41。
+计算关系 d85afe03-7806-418c-ae8d-f48a2924420e、795a3e46-03e9-4000-b5b5-3d4a5539472d，点位于线的距离容差内。
+计算关系 9e6bf5a5-660c-4ba4-ba0d-67b6b611f5b5、795a3e46-03e9-4000-b5b5-3d4a5539472d，点位于线的距离容差内。
+计算关系 d85afe03-7806-418c-ae8d-f48a2924420e、f2e546da-2a25-4d37-b18e-002daa5fde41，V 与 H 的 x 坐标偏差 2.000 mm。

@@ -6,6 +6,7 @@ import { formatPoints } from '@tuheng/contracts';
 import { ActionButton } from '../components/Actions';
 import { SubmissionEditor } from '../components/SubmissionEditor';
 import { DrawingViewer } from '../components/DrawingViewer';
+import { GeometryEditor } from '@tuheng/geometry-editor';
 import { date, Status } from './shared';
 export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
   const detail = await assignmentDetails(database, a, id);
@@ -58,6 +59,9 @@ export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
                 <span>{item.question.chapter}</span>
               </div>
               {assets.length > 0 && <DrawingViewer assets={assets} />}
+              {teacher && item.question.geometryDocument && (
+                <GeometryEditor value={item.question.geometryDocument} readOnly role="teacher" />
+              )}
               <details>
                 <summary>查看评分细则</summary>
                 <table className="score-table">
@@ -111,7 +115,12 @@ export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
                   )}
                   {item.attempts.length < assignment.maxAttempts &&
                   (assignment.allowLate || new Date() <= assignment.dueAt) ? (
-                    <SubmissionEditor itemId={item.id} initial={draft} />
+                    <SubmissionEditor
+                      itemId={item.id}
+                      initial={draft}
+                      problemGeometry={item.question.geometryDocument}
+                      draftGeometry={own?.draftGeometry}
+                    />
                   ) : (
                     <div className="alert">当前不开放新提交。已有作答和成绩可以继续查看。</div>
                   )}

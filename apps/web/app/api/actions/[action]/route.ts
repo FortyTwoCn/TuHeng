@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GeometryDocument } from '@tuheng/contracts';
 import { database, prisma } from '@tuheng/database';
 import * as domain from '@tuheng/domain';
 import * as infra from '@tuheng/infrastructure';
@@ -12,7 +13,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     checkOrigin(request);
     const a = await actor();
     const { action } = await params;
-    const body = JSON.parse((await limitedBody(request, 150000)).toString());
+    const body = JSON.parse(
+      (
+        await limitedBody(
+          request,
+          ['question', 'draft', 'submit', 'selftest'].includes(action) ? 2_000_000 : 150000,
+        )
+      ).toString(),
+    );
     let result: unknown;
     switch (action) {
       case 'question': {
@@ -52,8 +60,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
         result = await domain.publishAssignment(database, a, z.object({ id }).parse(body).id);
         break;
       case 'draft': {
-        const p = z.object({ itemId: id, assetIds: z.array(id).max(10) }).parse(body);
-        result = await domain.saveDraft(database, a, p.itemId, p.assetIds);
+        const p = z
+          .object({
+            itemId: id,
+            assetIds: z.array(id).max(10),
+            geometry: GeometryDocument.optional(),
+          })
+          .parse(body);
+        result = await domain.saveDraft(database, a, p.itemId, p.assetIds, p.geometry);
         break;
       }
       case 'submit': {
@@ -64,6 +78,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
             reviewEntryId: id.optional(),
             assetIds: z.array(id).max(10),
             idempotencyKey: z.string().uuid(),
+            geometry: GeometryDocument.optional(),
           })
           .parse(body);
         result = await domain.submitAnswer(

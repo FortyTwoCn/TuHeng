@@ -2,7 +2,9 @@
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { useState } from 'react';
-import { Compass, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { BrandLogo } from '../../components/BrandLogo';
+import { LoginProjection } from '../../components/LoginProjection';
 export default function Login() {
   const router = useRouter();
   const [error, setError] = useState(''),
@@ -11,7 +13,7 @@ export default function Login() {
     <main className="login">
       <div className="login-art">
         <div className="brand">
-          <Compass size={36} />
+          <BrandLogo />
           <b>
             图衡 <small>TuHeng</small>
           </b>
@@ -27,15 +29,7 @@ export default function Login() {
           <br />
           让每一步学习都有清晰的方向。
         </p>
-        <div className="projection-art">
-          <i />
-          <i />
-          <i />
-          <span>V</span>
-          <span>H</span>
-          <span>W</span>
-        </div>
-        <div className="login-note">AI 提供分析建议 · 教师确认正式成绩</div>
+        <LoginProjection />
       </div>
       <section className="login-form">
         <span className="tag">欢迎来到图衡</span>
@@ -95,9 +89,6 @@ export default function Login() {
           </button>
         </form>
         <p className="muted small">需要恢复账号？请联系本校管理员重置密码。</p>
-        <div className="demo-note">
-          本地演示账号与初始密码配置见项目 README。演示课程有明确标记，系统不会生成模拟成绩。
-        </div>
       </section>
     </main>
   );

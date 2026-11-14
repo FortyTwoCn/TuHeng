@@ -112,13 +112,13 @@ small,
   font-weight: 700;
   letter-spacing: 3px;
 }
-.brand-mark {
-  height: 44px;
-  width: 44px;
-  background: var(--navy);
-  color: #fff;
-  display: grid;
-  place-items: center;
+.brand-logo {
+  display: block;
+  height: 52px;
+  width: 52px;
+  flex-shrink: 0;
+  object-fit: contain;
+  background: #fff;
   border-radius: 12px;
 }
 .brand small {
@@ -1136,12 +1136,24 @@ footer {
 .login-art {
   background: var(--navy);
   color: #fff;
-  padding: 55px 9%;
+  padding: clamp(32px, 5vh, 55px) 9%;
   position: relative;
   overflow: hidden;
+  isolation: isolate;
+}
+.login-art > .brand,
+.login-art > .eyebrow,
+.login-art > h1,
+.login-art > p {
+  position: relative;
+  z-index: 1;
 }
 .login-art .brand {
-  margin-bottom: 80px;
+  margin-bottom: clamp(32px, 7vh, 72px);
+}
+.login-art .brand-logo {
+  width: 64px;
+  height: 64px;
 }
 .login-art .brand small {
   color: #9bc0c8;
@@ -1162,49 +1174,19 @@ footer {
   line-height: 2;
   font-size: 13px;
 }
-.login-note {
-  position: absolute;
-  bottom: 35px;
-  color: #86a9b8;
-  font-size: 10px;
-  letter-spacing: 2px;
-}
 .projection-art {
   position: absolute;
-  width: 290px;
-  height: 290px;
-  right: -35px;
-  bottom: 70px;
-  opacity: 0.22;
-  transform: rotate(-18deg);
-}
-.projection-art i {
-  position: absolute;
-  border: 1px solid #d0ecee;
-  width: 170px;
-  height: 170px;
-  transform: skewY(30deg);
-}
-.projection-art i:nth-child(2) {
-  left: 80px;
-  transform: skewY(-30deg);
-}
-.projection-art i:nth-child(3) {
-  top: 120px;
-  left: 40px;
-  transform: rotate(30deg) skewY(-30deg);
-}
-.projection-art span {
-  position: absolute;
-  left: 20px;
-  top: 20px;
-}
-.projection-art span:nth-last-child(2) {
-  left: 230px;
-}
-.projection-art span:last-child {
-  top: 230px;
-  left: 120px;
+  display: block;
+  width: min(clamp(560px, 86vh, 980px), 140%);
+  height: auto;
+  max-height: none;
+  right: 0;
+  bottom: clamp(-90px, -8vh, -48px);
+  margin: 0;
+  transform: translateX(30%);
+  opacity: 0.8;
+  z-index: 0;
+  pointer-events: none;
 }
 .login-form {
   align-self: center;
@@ -1236,14 +1218,6 @@ footer {
   color: var(--teal);
   background: var(--teal-light);
   border-radius: 4px;
-}
-.demo-note {
-  font-size: 10px;
-  color: var(--muted);
-  line-height: 1.8;
-  padding-top: 22px;
-  margin-top: 28px;
-  border-top: 1px solid var(--border);
 }
 .status-step {
   display: flex;
@@ -1501,14 +1475,18 @@ footer {
   .login-art .eyebrow {
     font-size: 7px;
   }
-  .login-note {
-    display: none;
+  .login-art .brand-logo {
+    width: 52px;
+    height: 52px;
   }
   .projection-art {
-    width: 160px;
-    height: 160px;
-    bottom: 10px;
-    right: -30px;
+    position: absolute;
+    width: clamp(80px, calc(100vw - 238px), 152px);
+    bottom: 18px;
+    right: 18px;
+    margin: 0;
+    transform: none;
+    opacity: 0.4;
   }
   .login-form {
     padding: 27px;

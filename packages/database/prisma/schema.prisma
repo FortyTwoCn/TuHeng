@@ -122,6 +122,7 @@ model QuestionVersion {
   reference    Json
   rubric       Json
   analysis     Json?
+  geometryDocument Json?
   confirmed    Boolean             @default(false)
   createdAt    DateTime            @default(now())
   question     Question            @relation(fields: [questionId], references: [id])
@@ -168,6 +169,7 @@ model Submission {
   userId        String
   itemId        String
   draftAssetIds String[]
+  draftGeometry Json?
   attempts      SubmissionAttempt[]
   user          User                @relation(fields: [userId], references: [id])
   item          AssignmentItem      @relation(fields: [itemId], references: [id])
@@ -186,6 +188,8 @@ model SubmissionAttempt {
   source              String
   submittedAt         DateTime          @default(now())
   publishedDecisionId String?           @unique
+  geometryAnswer      Json?
+  geometrySchemaVersion String?
   owner               User              @relation(fields: [ownerId], references: [id])
   submission          Submission?       @relation(fields: [submissionId], references: [id])
   questionVersion     QuestionVersion   @relation(fields: [questionVersionId], references: [id])

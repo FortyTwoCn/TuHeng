@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import {
-  Compass,
   LayoutDashboard,
   ClipboardList,
   BookOpen,
@@ -16,6 +15,7 @@ import {
 import type { Actor } from '@tuheng/domain';
 import { hasRole } from '@tuheng/domain';
 import { Logout } from './Actions';
+import { BrandLogo } from './BrandLogo';
 const menus = {
   student: [
     ['dashboard', '学习概览', LayoutDashboard],
@@ -57,9 +57,7 @@ export function Shell({
     <div className="app-shell">
       <aside className="sidebar">
         <Link className="brand" href="/">
-          <span className="brand-mark">
-            <Compass size={27} />
-          </span>
+          <BrandLogo />
           <span>
             图衡<small>TuHeng</small>
           </span>
