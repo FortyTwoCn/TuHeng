@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-15",
+  "baseline": "8867445",
+  "verifiedCodeCommit": "0a4b68c",
+  "branch": "codex/geometry-ux-v2",
+  "runtime": {
+    "node": "26.13.0",
+    "browser": "Chrome 157.0.8103.51",
+    "os": "Windows",
+    "application": "Next.js production build"
+  },
+  "checks": {
+    "typecheck": "passed",
+    "lint": "passed",
+    "unit": {
+      "files": 7,
+      "passed": 99
+    },
+    "integration": {
+      "files": 2,
+      "passed": 16,
+      "isolated": true
+    },
+    "e2e": {
+      "files": 5,
+      "passed": 51,
+      "duration": "1.3m",
+      "output": "test-results/geometry-ux-v2-final",
+      "realMouse": true
+    },
+    "productionBuild": "passed"
+  },
+  "unverified": [
+    "Physical iPad/Pencil and Android stylus",
+    "Safari/WebKit",
+    "Native software keyboards",
+    "Low-end physical devices",
+    "Live AI provider"
+  ],
+  "deployment": "none",
+  "push": "none"
+}

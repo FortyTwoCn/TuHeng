@@ -153,3 +153,13 @@ GeometryDocument 新增 `tuheng.geometry/2.0.0`，v1 原契约、历史快照与
 最终类型、Lint、79 个单元测试、16 个集成测试、19 个生产模式 E2E（43.7s）与生产构建全部通过。19 个浏览器测试包含真实鼠标 down/move/up、5px 合点、鼠标松开前的同步变化、多选一次历史、两级换面、不同缩放手绘圆、三种屏宽、JSON 往返及伪造题干 API 拒绝。模型测试替身仅在自动化测试中使用，未验证真实模型评分质量；笔和触摸为模拟事件/CDP，未完成 Apple Pencil、Android 笔或 Safari 真机验收。
 
 [专项验收报告](GEOMETRY_EDITOR_REPAIR.md) 记录各问题根因、修改文件、失败到通过的回归、实际命令与限制；并链接 [v2 JSON/SVG 样例](geometry-examples/v2/)、[桌面截图](images/editor-repair/sheet-1440.png)、[平板截图](images/editor-repair/operations-1024.png)、[手机截图](images/editor-repair/operations-390.png) 和 [操作录像](images/editor-repair/operations-390.webm)。照片识别仍属于下一轮扩展点。
+
+## Geometry Editor UX v2（2026-11-15）
+
+在已有统一展开图上完成实时尺寸 HUD、实际轴/原点吸附、只读参考轴选择、默认空白 Window/Crossing 框选、对象附近精确属性、分组平行/垂直构造。新建构造和已有线方向调整均有预览/确认；显式有向绑定实际随动，循环与共享端点冲突拒绝。手机抽屉固定确认/取消，并在可视区改变时保留活动输入可见；多实例快捷键、受控回传及外部版本隔离已回归。
+
+GeometryDocument 2.1 增量引入类型化参考关系，兼容 v1/2.0 与旧评分请求。2.1 使用已有 grading-core 的 geometry-review/1.3.0，编辑器不调用模型。服务端仍严格比较题干、基准轴、配置和冻结关系，禁止伪造引用；无 DDL 或历史回填。
+
+实际执行类型、Lint、99 项单元、16 项隔离集成、51 项浏览器测试和生产构建，全部通过。浏览器使用生产构建和真实鼠标 down/move/up，在松手前检查几何与 HUD；教学链路和原图片作答全流程同时通过。真实 Pencil/Android 笔、Safari、低端设备和 OS 软键盘未验证，合成笔/触控与可视区缩小测试单独标注。
+
+根因/文件、命令权限矩阵、UX01–30、性能、截图及 JSON 见 [UX v2 验收报告](GEOMETRY_EDITOR_UX_V2.md)。[桌面](images/geometry-ux-v2/properties-1366.png)、[手机](images/geometry-ux-v2/properties-390.png)、[松手前尺寸](images/geometry-ux-v2/drag-hud-snap.png)、[2.1 引用与合点样例](geometry-examples/ux-v2/)。本轮分支 codex/geometry-ux-v2 只做本地阶段提交，不推送、不部署。

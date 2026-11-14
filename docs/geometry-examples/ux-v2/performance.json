@@ -1,0 +1,16 @@
+{
+  "browser": "157.0.8103.51",
+  "os": "win32",
+  "cpu": "AMD Ryzen 9 8940HX with Radeon Graphics        ",
+  "rendering": "React production fixture, Chrome headless; pointer event to second requestAnimationFrame, includes frame waiting",
+  "entities": 513,
+  "points": 110,
+  "segments": 300,
+  "circles": 50,
+  "arcs": 50,
+  "frames": 3,
+  "samples": 31,
+  "medianMs": 5,
+  "p95Ms": 6.0999999940395355,
+  "maxMs": 6.699999988079071
+}

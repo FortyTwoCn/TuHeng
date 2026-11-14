@@ -6,7 +6,7 @@
 
 几何编辑器支持 VHW、三视图、正等轴测和斜二等轴。登录后访问 `/geometry` 独立作图，或在教师建题时选择几何作答方式。升级需执行 `npm install`、`npm run db:generate`、`npm run db:migrate`。使用与契约见 [几何编辑器架构](docs/GEOMETRY_EDITOR_ARCHITECTURE.md)。
 
-VHW 与三视图现在采用同一张展开图纸、共享原点和镜头。选择拖动实时更新，端点吸附合并实际引用，手绘圆可拟合并恢复原笔迹；v2 文档兼容读取 v1。专项修复的操作证据与限制见 [验收报告](docs/GEOMETRY_EDITOR_REPAIR.md)。
+VHW 与三视图现在采用同一张展开图纸、共享原点和镜头。拖动就地显示长度/角度，点可吸附到基准轴/原点/换面轴；默认选择支持 Window/Crossing 框选，对象附近可精确编辑。平行/垂直构造和方向关系共用内核，端点合并真实引用，电子笔拟合与原笔迹恢复保留。新增参考关系使用 2.1，兼容 v1/2.0 与历史任务。交互、权限、截图/JSON 及设备验证范围见 [UX v2 验收](docs/GEOMETRY_EDITOR_UX_V2.md)。
 
 ## 几何编辑与教学流程
 

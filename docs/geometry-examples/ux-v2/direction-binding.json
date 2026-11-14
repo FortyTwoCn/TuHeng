@@ -1,0 +1,227 @@
+{
+  "schemaVersion": "tuheng.geometry/2.1.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "y"
+      ],
+      "signs": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "y",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "c6f22cea-f0d9-430a-85c6-0cd13895dd5e",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 55,
+        "y": 35
+      },
+      "name": "P1",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "9b440ea0-62c8-4b5b-a84f-87874ce5f24f",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 30,
+        "y": 35
+      },
+      "name": "P2",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "71c77663-9d83-47dc-9c97-a0f602d41dc9",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "c6f22cea-f0d9-430a-85c6-0cd13895dd5e",
+      "endPoint": "9b440ea0-62c8-4b5b-a84f-87874ce5f24f"
+    },
+    {
+      "id": "63741201-9197-4d2f-9450-7b5d2d7b7bc8",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 15
+      },
+      "name": "P3",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "016ef81c-2f1b-4070-93a0-816c309bd249",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": -20,
+        "y": 15
+      },
+      "name": "P4",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "ab07f6f7-ed97-4e6e-9530-38d7d6ff5ccb",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "63741201-9197-4d2f-9450-7b5d2d7b7bc8",
+      "endPoint": "016ef81c-2f1b-4070-93a0-816c309bd249"
+    }
+  ],
+  "constraints": [],
+  "referenceRelations": [
+    {
+      "id": "7a87fc09-7bde-4090-affd-d28599849a90",
+      "targetId": "ab07f6f7-ed97-4e6e-9530-38d7d6ff5ccb",
+      "reference": {
+        "kind": "entity",
+        "entityId": "71c77663-9d83-47dc-9c97-a0f602d41dc9"
+      },
+      "kind": "PARALLEL",
+      "mode": "BINDING",
+      "source": "USER",
+      "status": "SATISFIED"
+    }
+  ],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}
