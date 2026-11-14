@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
 import {
-  deleteProjectionAxis,
-  renameProjectionAxis,
   suggestAxisNames,
   transact,
   type AxisConstruction,
@@ -34,7 +32,7 @@ export function AxisTools({
     replacedId = pair.includes(replaced) ? replaced : pair[0];
   const suggested = suggestAxisNames(doc, replacedId);
   return (
-    <details className="geo-axis-tools">
+    <details className="geo-axis-tools" open>
       <summary>新增投影轴 / 换面</summary>
       {role === 'teacher' && (
         <label>
@@ -144,46 +142,7 @@ export function AxisTools({
       >
         开始定位新轴
       </button>
-      {doc.auxiliarySystems?.map((a) => (
-        <p key={a.id}>
-          {a.name} · {doc.views.find((v) => v.id === a.newViewId)?.name}{' '}
-          <input
-            aria-label={`重命名轴 ${a.name}`}
-            defaultValue={a.name}
-            key={a.name}
-            disabled={role === 'student' && a.owner !== 'STUDENT'}
-            onBlur={(e) => {
-              try {
-                if (e.target.value !== a.name)
-                  commit(
-                    renameProjectionAxis(
-                      doc,
-                      a.id,
-                      e.target.value,
-                      doc.views.find((v) => v.id === a.newViewId)!.name,
-                      role,
-                    ),
-                  );
-              } catch (error) {
-                report((error as Error).message);
-              }
-            }}
-          />
-          <button
-            type="button"
-            disabled={role === 'student' && a.owner !== 'STUDENT'}
-            onClick={() => {
-              try {
-                commit(deleteProjectionAxis(doc, a.id, role));
-              } catch (e) {
-                report((e as Error).message);
-              }
-            }}
-          >
-            删除轴 {a.name}
-          </button>
-        </p>
-      ))}
+      {(doc.auxiliarySystems?.length??0)>0&&<p>已有轴：{doc.auxiliarySystems?.map(a=>a.name).join('、')}。点击图纸上的轴查看属性、重命名或按依赖规则删除。</p>}
     </details>
   );
 }

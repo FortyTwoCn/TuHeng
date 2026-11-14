@@ -7,6 +7,9 @@ import {
   sheetDeltaToLocal,
   moveEntities,
   pointReferences,
+  referenceGeometry,
+  referenceKey,
+  closestReference,
   type Bounds,
 } from '@tuheng/geometry-core';
 export type InteractionState =
@@ -19,9 +22,18 @@ export type InteractionState =
   | 'drawingStroke'
   | 'pinching'
   | 'movingRuler';
+export type SessionInteraction =
+  | InteractionState
+  | 'marqueeSelecting'
+  | 'drawingPrimitive'
+  | 'pickingReference'
+  | 'placingParallel'
+  | 'placingPerpendicular'
+  | 'placingAxis'
+  | 'editingProperties';
 export interface Hit {
   id: string;
-  kind: 'point' | 'endpoint' | 'body';
+  kind: 'point' | 'endpoint' | 'body' | 'reference';
   viewId: string;
 }
 export function hitTarget(
@@ -31,7 +43,21 @@ export function hitTarget(
   box: Bounds,
   hidden: string[],
   selected: string[],
+  axes = true,
+  threshold = 10,
 ): Hit | undefined {
+  return hitTargets(doc, p, scale, box, hidden, selected, axes, threshold)[0];
+}
+export function hitTargets(
+  doc: GeometryDocument,
+  p: Vec2,
+  scale: number,
+  box: Bounds,
+  hidden: string[],
+  selected: string[],
+  axes = true,
+  threshold = 10,
+): Hit[] {
   const visible = doc.entities.filter((e) => !hidden.includes(e.layerId));
   const points = visible
     .filter((e) => e.kind === 'point')
@@ -39,28 +65,36 @@ export function hitTarget(
       e,
       d: e.kind === 'point' ? distance(e.position, sheetToLocal(doc, e.viewId, p)) : Infinity,
     }))
-    .filter((v) => v.d * scale < 10);
+    .filter((v) => v.d * scale < threshold);
   const preferred = (id: string) =>
     selected.includes(id) ||
     doc.entities.some((e) => selected.includes(e.id) && pointReferences(e).includes(id));
   points.sort((a, b) => Number(preferred(b.e.id)) - Number(preferred(a.e.id)) || a.d - b.d);
-  if (points[0]) {
-    const e = points[0].e;
-    return {
-      id: e.id,
-      viewId: e.viewId,
-      kind: doc.entities.some((v) => pointReferences(v).includes(e.id)) ? 'endpoint' : 'point',
-    };
-  }
+  const hits: Hit[] = points.map(({ e }) => ({
+    id: e.id,
+    viewId: e.viewId,
+    kind: doc.entities.some((v) => pointReferences(v).includes(e.id)) ? 'endpoint' : 'point',
+  }));
   const body = visible
     .filter((e) => e.kind !== 'point')
     .map((e) => ({
       e,
       d: hitDistance(doc, e, sheetToLocal(doc, e.viewId, p), localBounds(doc, e.viewId, box)),
     }))
-    .filter((v) => v.d * scale < 8)
-    .sort((a, b) => a.d - b.d)[0]?.e;
-  return body ? { id: body.id, viewId: body.viewId, kind: 'body' } : undefined;
+    .filter((v) => v.d * scale < threshold)
+    .sort((a, b) => a.d - b.d);
+  hits.push(...body.map(({ e }) => ({ id: e.id, viewId: e.viewId, kind: 'body' as const })));
+  if (axes)
+    hits.push(
+      ...referenceGeometry(doc)
+        .filter((r) => distance(p, closestReference(p, r)) * scale < threshold)
+        .map((r) => ({
+          id: referenceKey(r.ref),
+          viewId: doc.views[0].id,
+          kind: 'reference' as const,
+        })),
+    );
+  return hits;
 }
 export function movingIds(doc: GeometryDocument, ids: string[]) {
   const points = new Set(ids);

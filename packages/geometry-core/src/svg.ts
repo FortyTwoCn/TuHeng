@@ -1,4 +1,5 @@
 import type { GeometryDocument } from '@tuheng/contracts';
+import { referenceGeometry, referenceKey, clipReference } from './references';
 import { localToSheet, sheetBounds, viewTransform } from './sheet';
 import { add, sub, angle, point, clipLine, lineGeometry, arcSvgPath, planeOutline } from './math';
 export const semanticLineStyles = {
@@ -21,14 +22,11 @@ export function exportSheetSvg(doc: GeometryDocument) {
     `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" vector-effect="non-scaling-stroke"/>`;
   const label = (x: number, y: number, text: string) =>
     `<text transform="translate(${x} ${y}) scale(1 -1)" font-size="3" fill="currentColor" stroke="none">${escape(text)}</text>`;
-  parts.push(
-    `<g stroke="#64748b">${line({ x: box.x, y: 0 }, { x: box.x + box.width, y: 0 })}${line({ x: 0, y: box.y }, { x: 0, y: box.y + box.height })}</g>`,
-  );
-  for (const a of doc.auxiliarySystems ?? []) {
-    const ends = clipLine({ a: a.anchor, d: a.tangent, finite: false }, box);
+  for (const r of referenceGeometry(doc)) {
+    const ends = clipReference(r, box);
     if (ends)
       parts.push(
-        `<g data-axis-id="${escape(a.id)}" stroke="#0f766e">${line(ends[0], ends[1])}${label(a.anchor.x + 2, a.anchor.y + 2, a.name)}</g>`,
+        `<g data-reference-id="${escape(referenceKey(r.ref))}" ${r.ref.kind === 'projectionAxis' ? `data-axis-id="${escape(r.ref.systemId)}"` : ''} stroke="#64748b">${line(ends[0], ends[1])}${label(r.ref.kind==='baseAxis'?ends[1].x*.9:r.anchor.x+2,r.ref.kind==='baseAxis'?ends[1].y*.9:r.anchor.y+2,r.name)}</g>`,
       );
   }
   for (const e of doc.entities) {

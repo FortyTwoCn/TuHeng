@@ -2,6 +2,7 @@ import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import { pointReferences, editable } from './document';
 import { sheetDeltaToLocal } from './sheet';
 import { add } from './math';
+import { spatialTranslation } from './projections';
 import { evaluateDependencies } from './dependencies';
 // Trusted in-memory input only. No Schema, serialization, history or export in a pointer preview.
 export function previewTransform(
@@ -33,6 +34,10 @@ export function previewTransform(
       if (e.kind === 'point') {
         e.position = add(e.position, d);
         e.spatial = null;
+      }
+      if (e.kind === 'plane') {
+        const shift = spatialTranslation(base, e.viewId, d);
+        e.origin = { x: e.origin.x + shift.x, y: e.origin.y + shift.y, z: e.origin.z + shift.z };
       }
       if (e.kind === 'line') e.anchor = add(e.anchor, d);
       if (e.kind === 'polyline') e.points = e.points.map((p) => add(p, d));

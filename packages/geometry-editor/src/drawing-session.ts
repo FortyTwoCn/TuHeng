@@ -72,6 +72,7 @@ export function finishDrawing(
     reference?: string;
     samples: StrokeSample[];
     scale: number;
+    clickThreshold?: number;
   },
 ): DrawingResult {
   const { tool, viewId, role, start, end, steps, reference, samples, scale } = options;
@@ -165,7 +166,11 @@ export function finishDrawing(
   if (['pan', 'projection', 'select', 'box'].includes(tool))
     throw new Error('当前工具不是绘图工具');
   const positions =
-    tool === 'point' ? [end] : distance(start, end) * scale > 3 ? [start, end] : [end];
+    tool === 'point'
+      ? [end]
+      : distance(start, end) * scale > (options.clickThreshold ?? 3)
+        ? [start, end]
+        : [end];
   return {
     kind: 'document',
     document: addDrawing(

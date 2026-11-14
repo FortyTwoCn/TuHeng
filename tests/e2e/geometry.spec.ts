@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { choose, settings, closePanels, properties } from './editor-controls';
 import { performanceDocument } from '../geometry-fixtures';
 async function login(page: Page, who = 'teacher') {
   await page.goto('/login');
@@ -9,9 +10,7 @@ async function login(page: Page, who = 'teacher') {
   await expect(page).toHaveURL(new RegExp(`/${who}/dashboard`));
 }
 async function draw(page: Page, tool: string, x = 150, y = 130) {
-  if (!(await page.getByRole('button', { name: tool, exact: true }).isVisible()))
-    await page.getByText('辅助与关联工具', { exact: true }).click();
-  await page.getByRole('button', { name: tool, exact: true }).click();
+  await choose(page, tool);
   const svg = page.locator('.geo-active svg');
   await svg.click({ position: { x, y } });
 }
@@ -48,10 +47,9 @@ test('JSON validation, projection links, touch zoom and the multi-object mobile 
   await login(page, 'student');
   await page.goto('/geometry');
   await draw(page, '点', 130, 110);
-  await page.locator('.geo-tabs').getByRole('button', { name: 'H', exact: true }).click();
+  await page.getByLabel('当前作图框架').selectOption({ label: 'H' });
   await draw(page, '点', 130, 210);
-  await page.getByText('辅助与关联工具', { exact: true }).click();
-  await page.getByRole('button', { name: '投影关联', exact: true }).click();
+  await choose(page, '投影关联');
   await page.locator('[data-kind=point]').nth(0).locator('circle').first().click();
   await page.locator('[data-kind=point]').nth(1).locator('circle').first().click();
   await expect(page.locator('.geo-status').first()).toContainText('投影关联已记录');
@@ -82,7 +80,7 @@ test('JSON validation, projection links, touch zoom and the multi-object mobile 
   });
   await expect(page.locator('[data-entity-id]')).toHaveCount(fixture.entities.length);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('.geo-tabs').getByRole('button', { name: 'V', exact: true }).click();
+  await page.getByLabel('当前作图框架').selectOption({ label: 'V' });
   const canvas = page.locator('.geo-active svg'),
     initial = await canvas.getAttribute('viewBox');
   const box = (await canvas.boundingBox())!;
@@ -111,7 +109,8 @@ test('JSON validation, projection links, touch zoom and the multi-object mobile 
   for (const pointerId of [31, 32])
     await canvas.dispatchEvent('pointerup', { pointerId, pointerType: 'touch', button: 0 });
   await expect(page.locator('[data-entity-id]')).toHaveCount(fixture.entities.length);
-  await page.getByRole('button', { name: '适应画布', exact: true }).click();
+  await choose(page, '适应画布');
+  await closePanels(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/geometry-mobile.png', fullPage: true });
   console.log(`Geometry mobile fixture loaded and interacted in ${Date.now() - start} ms`);
@@ -134,9 +133,12 @@ test('four editors load, draw, undo, export, and keep mobile views and raw pen s
     await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(0);
     await page.getByRole('button', { name: '恢复', exact: true }).click();
     await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(1);
+    await properties(page);
     await page.getByRole('combobox', { name: '线型', exact: true }).selectOption('CONSTRUCTION');
+    await choose(page, '确认属性');
     await expect(page.locator('.geo-active [data-kind=line]')).toHaveCount(1);
     await page.getByRole('combobox', { name: '线型', exact: true }).selectOption('ANSWER_VISIBLE');
+    await choose(page, '确认属性');
     await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(1);
     await draw(page, '圆', 220, 80);
     await page.locator('.geo-active svg').click({ position: { x: 250, y: 80 } });
@@ -146,15 +148,18 @@ test('four editors load, draw, undo, export, and keep mobile views and raw pen s
     await page.locator('.geo-active svg').click({ position: { x: 220, y: 190 } });
     await expect(page.locator('.geo-active [data-kind=arc]')).toHaveCount(1);
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: '导出 JSON', exact: true }).click();
+    await choose(page, '导出 JSON');
+    await closePanels(page);
     expect((await download).suggestedFilename()).toBe('tuheng.json');
   }
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await draw(page, '虚线', 100, 100);
   await expect(page.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
-  await page.getByRole('button', { name: '电子笔', exact: true }).click();
+  await choose(page,'电子笔');
+  await settings(page);
   await page.getByLabel('虚拟直尺', { exact: true }).check();
+  await closePanels(page);
   const svg = page.locator('.geo-active svg');
   await svg.scrollIntoViewIfNeeded();
   const rulerPath = await svg.evaluate((el) => {
@@ -191,7 +196,8 @@ test('four editors load, draw, undo, export, and keep mobile views and raw pen s
   });
   await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(3);
   const svgDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: '导出展开图 SVG', exact: true }).click();
+  await choose(page, '导出展开图 SVG');
+  await closePanels(page);
   const exportedSvg = readFileSync((await (await svgDownload).path())!, 'utf8');
   expect(exportedSvg).not.toContain('data-transient');
   expect(exportedSvg).not.toContain('#d97706');
@@ -237,7 +243,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await draw(student, '虚线', 180, 140);
   await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
   await draw(student, '辅助线', 120, 100);
-  await student.getByText('新增投影轴 / 换面', { exact: true }).click();
+  await choose(student, '新增投影轴');
   await student.getByRole('button', { name: '开始定位新轴', exact: true }).click();
   const sheet = student.locator('.geo-active svg');
   await sheet.click({ position: { x: 100, y: 80 } });

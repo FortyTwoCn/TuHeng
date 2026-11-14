@@ -1,5 +1,7 @@
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import type { DrawingTool } from '@tuheng/geometry-core';
+import type { EditorSession, SessionAction } from './session';
+import type { CommandId } from './commands';
 export type Tool = DrawingTool | 'select' | 'pan' | 'box' | 'pen' | 'projection';
 export interface Ruler {
   visible: boolean;
@@ -31,4 +33,12 @@ export interface EditorControls {
   highlighted: string[];
   hiddenLayers: string[];
   fitKey: number;
+  revision: object;
+  axesSnap: boolean;
+  referenceFilter: boolean;
+  session: EditorSession;
+  dispatch: (action: SessionAction) => void;
+  runCommand: (id: CommandId) => void;
+  deleteSelection: () => void;
+  copySelection: () => void;
 }

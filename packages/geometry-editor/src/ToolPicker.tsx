@@ -1,72 +1,65 @@
+import { useState } from 'react';
 import type { Tool } from './types';
-const tools: [Tool, string][] = [
-  ['select', '选择'],
-  ['point', '点'],
-  ['segment', '实线'],
-  ['hidden', '虚线'],
-  ['connect', '连接两点'],
-  ['line', '辅助线'],
-  ['parallel', '平行辅助线'],
-  ['perpendicular', '垂直辅助线'],
-  ['parallel-hidden', '平行虚线'],
-  ['perpendicular-hidden', '垂直虚线'],
-  ['circle', '圆'],
-  ['arc', '圆弧'],
-  ['projection', '投影关联'],
-  ['box', '框选'],
-  ['pan', '平移'],
-  ['pen', '电子笔'],
-];
-
+import { commandRegistry, type CommandId } from './commands';
+import { EditorPopover } from './EditorPopover';
 export function ToolPicker({
   tool,
-  setTool,
-  select,
-  report,
+  run,
+  readOnly,
+  compact=false,
 }: {
   tool: Tool;
-  setTool: (tool: Tool) => void;
-  select: (ids: string[]) => void;
-  report: (s: string) => void;
+  run: (id: CommandId) => void;
+  readOnly: boolean;
+  compact?: boolean;
 }) {
-  const primary = new Set<Tool>([
-    'select',
-    'point',
-    'segment',
-    'hidden',
-    'circle',
-    'arc',
-    'pen',
-    'pan',
-  ]);
-  const buttons = (items: typeof tools) =>
-    items.map(([id, title]) => (
+  const [last, setLast] = useState({ line: 'segment' as CommandId, round: 'circle' as CommandId });
+  const invoke = (id: CommandId) => {
+    const entry = commandRegistry.find((e) => e.id === id)!;
+    if (entry.group === 'line' || entry.group === 'round')
+      setLast((v) => ({ ...v, [entry.group]: id }));
+    run(id);
+  };
+  const button = (id: CommandId) => {
+    const entry = commandRegistry.find((e) => e.id === id)!;
+    return (
       <button
-        type="button"
         key={id}
-        aria-pressed={tool === id}
-        onClick={() => {
-          setTool(id);
-          if (id === 'projection') select([]);
-          report(
-            `${title}工具${id === 'circle' ? '，依次选择圆心和圆周点' : id === 'arc' ? '，依次选择圆心、起点、终点' : id === 'pen' ? '，手指默认平移' : id === 'projection' ? '，依次选择不同视图中的对应点或线段' : ''}`,
-          );
-        }}
+        data-command={id}
+        type="button"
+        disabled={readOnly && entry.requiresEdit}
+        aria-pressed={entry.kind === 'tool' ? tool === id : undefined}
+        onClick={() => invoke(id)}
       >
-        {title}
+        {entry.name}
       </button>
-    ));
+    );
+  };
+  if(compact)return <>{button('select')}<EditorPopover label="绘图">{commandRegistry.filter(e=>['draw','line','round','select'].includes(e.group)&&e.id!=='select').map(e=>button(e.id))}</EditorPopover><EditorPopover label="构造">{commandRegistry.filter(e=>e.group==='construct'||e.group==='relation'||e.id==='line').map(e=>button(e.id))}</EditorPopover></>;
   return (
     <>
-      <div className="geo-toolbar" role="toolbar" aria-label="常用几何工具">
-        {buttons(tools.filter(([id]) => primary.has(id)))}
-      </div>
-      <details className="geo-more-tools">
-        <summary>辅助与关联工具</summary>
-        <div className="geo-toolbar" role="toolbar" aria-label="辅助几何工具">
-          {buttons(tools.filter(([id]) => !primary.has(id)))}
-        </div>
-      </details>
+      {button('select')}
+      {button('point')}
+      {(['line', 'round'] as const).map((group) => (
+        <span className="geo-split" key={group}>
+          {button(last[group])}
+          <EditorPopover label={group === 'line' ? '线工具' : '圆与圆弧'}>
+            {commandRegistry.filter((e) => e.group === group).map((e) => button(e.id))}
+          </EditorPopover>
+        </span>
+      ))}
+      {button('pen')}
+      <EditorPopover label="构造">
+        {commandRegistry
+          .filter((e) => e.group === 'construct' || e.id === 'line')
+          .map((e) => button(e.id))}
+      </EditorPopover>
+      <EditorPopover label="关系">
+        {commandRegistry.filter((e) => e.group === 'relation').map((e) => button(e.id))}
+      </EditorPopover>
+      <EditorPopover label="选择与平移">
+        {commandRegistry.filter((e) => e.group === 'select').map((e) => button(e.id))}
+      </EditorPopover>
     </>
   );
 }

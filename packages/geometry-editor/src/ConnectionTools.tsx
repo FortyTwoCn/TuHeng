@@ -1,5 +1,11 @@
 import type { GeometryDocument } from '@tuheng/contracts';
-import { disconnectEndpoint, pointReferences, editable, transact } from '@tuheng/geometry-core';
+import {
+  disconnectEndpoint,
+  pointReferences,
+  editable,
+  transact,
+  resolveReference,
+} from '@tuheng/geometry-core';
 export function ConnectionTools({
   doc,
   selected,
@@ -32,9 +38,13 @@ export function ConnectionTools({
       {connections.flatMap((line) =>
         pointReferences(line)
           .filter((id) => ids.includes(id))
-          .map((id) => (
+          .map((id, index) => (
             <p key={`${line.id}-${id}`}>
-              {line.id.slice(0, 8)} → {id.slice(0, 8)}{' '}
+              对象 {connections.indexOf(line) + 1} ·{' '}
+              {line.kind === 'segment' ? (index === 0 ? '起点' : '终点') : '圆心'} →{' '}
+              {doc.entities.find((e) => e.id === id)?.kind === 'point'
+                ? (doc.entities.find((e) => e.id === id) as { name: string }).name || '连接点'
+                : '连接点'}{' '}
               <button
                 type="button"
                 onClick={() => attempt(() => disconnectEndpoint(doc, line.id, id, role))}
@@ -44,6 +54,31 @@ export function ConnectionTools({
             </p>
           )),
       )}
+      {(doc.referenceRelations ?? [])
+        .filter((r) => r.targetId === e.id)
+        .map((r) => (
+          <p key={r.id}>
+            {r.kind} · {resolveReference(doc, r.reference).name} ·{' '}
+            {r.mode === 'BINDING' ? '持续绑定' : '本次定位'} · {r.status ?? '待校验'}
+            <button
+              type="button"
+              disabled={!editable(doc, e, role)}
+              onClick={() =>
+                attempt(() =>
+                  transact(
+                    doc,
+                    (d) => {
+                      d.referenceRelations = d.referenceRelations?.filter((v) => v.id !== r.id);
+                    },
+                    role,
+                  ),
+                )
+              }
+            >
+              移除此关系记录
+            </button>
+          </p>
+        ))}
       {doc.constraints
         .filter((c) => c.kind === 'INTERSECTION' && c.entityIds[0] === e.id)
         .map((c) => (

@@ -1,5 +1,5 @@
-import type { GeometryDocument, GeometryTargetRef, Vec2 } from '@tuheng/contracts';
-import { add, sub, dot, scale, unit, lineGeometry } from './math';
+import { GeometryTargetRef, type GeometryDocument, type Vec2 } from '@tuheng/contracts';
+import { add, sub, dot, scale, unit, lineGeometry, clipLine, type Bounds } from './math';
 import { localToSheet, orthographic, viewTransform } from './sheet';
 import { viewAxes } from './projections';
 export type ReferenceGeometry = {
@@ -21,10 +21,7 @@ export function referenceKey(ref: GeometryTargetRef) {
 }
 export function targetFromKey(key: string): GeometryTargetRef {
   if (key.startsWith('axis:'))
-    return {
-      kind: 'baseAxis',
-      axisId: key.slice(5) as Extract<GeometryTargetRef, { kind: 'baseAxis' }>['axisId'],
-    };
+    return GeometryTargetRef.parse({ kind: 'baseAxis', axisId: key.slice(5) });
   if (key.startsWith('origin:')) return { kind: 'origin', frameId: key.slice(7) };
   if (key.startsWith('system:')) return { kind: 'projectionAxis', systemId: key.slice(7) };
   return { kind: 'entity', entityId: key };
@@ -152,4 +149,13 @@ export function targetCapabilities(
     editable: editable && !readOnly,
     deletable: deletable && !readOnly,
   };
+}
+export function clipReference(reference: ReferenceGeometry, box: Bounds): [Vec2, Vec2] | null {
+  if (!reference.direction) return null;
+  const d = reference.direction;
+  const ends = clipLine({ a: reference.anchor, d, finite: reference.extent === 'segment' }, box);
+  if (!ends || reference.extent !== 'ray') return ends;
+  const t = ends.map((p) => dot(sub(p, reference.anchor), d) / dot(d, d));
+  if (Math.max(...t) < 0) return null;
+  return ends.map((p, i) => (t[i] < 0 ? reference.anchor : p)) as [Vec2, Vec2];
 }

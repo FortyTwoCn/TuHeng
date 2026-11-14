@@ -1,0 +1,236 @@
+'use client';
+import { useState } from 'react';
+import type { GeometryDocument } from '@tuheng/contracts';
+import {
+  propertyValues,
+  applyProperties,
+  editable,
+  angle,
+  length,
+  lineGeometry,
+  unbindReferences,
+  bindToReference,
+} from '@tuheng/geometry-core';
+export const entityNames = {
+  point: '点',
+  segment: '线段',
+  line: '无限辅助线',
+  circle: '圆',
+  arc: '圆弧',
+  polyline: '笔迹',
+  plane: '历史空间平面',
+};
+export function PropertyFields({
+  document: doc,
+  selected,
+  role,
+  readOnly,
+  commit,
+  report,
+}: {
+  document: GeometryDocument;
+  selected: string[];
+  role: 'teacher' | 'student';
+  readOnly: boolean;
+  commit: (d: GeometryDocument) => void;
+  report: (s: string) => void;
+}) {
+  const e = doc.entities.find((e) => e.id === selected[0]);
+  const [values, setValues] = useState<Record<string, string>>(() =>
+      e ? propertyValues(doc, e) : {},
+    ),
+    [error, setError] = useState('');
+  const signature = JSON.stringify([e?.id, e ? propertyValues(doc, e) : {}]);
+  const [base, setBase] = useState(signature);
+  if (base !== signature) {
+    setBase(signature);
+    setValues(e ? propertyValues(doc, e) : {});
+    setError('');
+  }
+  if (!e) return null;
+  const locked = readOnly || !editable(doc, e, role);
+  const reset = () => {
+    setValues(propertyValues(doc, e));
+    setError('');
+  };
+  const run = (op: () => GeometryDocument) => {
+    try {
+      commit(op());
+      setError('');
+    } catch (err) {
+      const s = (err as Error).message;
+      setError(s);
+      report(s);
+    }
+  };
+  const field = (key: string, label: string) => (
+    <label key={key}>
+      {label}
+      <input
+        aria-label={label}
+        type="text"
+        inputMode={key === 'name' ? 'text' : 'decimal'}
+        value={values[key] ?? ''}
+        disabled={locked}
+        onChange={(event) => setValues((v) => ({ ...v, [key]: event.target.value }))}
+      />
+    </label>
+  );
+  const bindings =
+    doc.referenceRelations?.filter((r) => r.targetId === e.id && r.mode === 'BINDING') ?? [];
+  const placement = doc.referenceRelations
+    ?.filter((r) => r.targetId === e.id && r.kind === 'POINT_ON_REFERENCE' && r.mode === 'POSITION')
+    .at(-1);
+  return (
+    <div
+      className="geo-property-form"
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return;
+        if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+          event.preventDefault();
+          event.stopPropagation();
+          run(() => applyProperties(doc, e.id, values, role));
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          reset();
+          (event.target as HTMLElement).blur();
+        }
+      }}
+    >
+      <p className="geo-property-summary">
+        {entityNames[e.kind]} · {doc.views.find((v) => v.id === e.viewId)?.name}
+        {locked ? ' · 只读' : ''}
+        {bindings.length ? ' · 已绑定' : ''}
+      </p>
+      <div className="geo-fields">
+        {e.kind === 'point' && (
+          <>
+            {field('name', '点名称')}
+            {field('u', '局部 u (mm)')}
+            {field('v', '局部 v (mm)')}
+          </>
+        )}
+        {e.kind === 'segment' && (
+          <>
+            {field('length', '长度 (mm)')}
+            {field('angle', '局部角度 (°)')}
+            <label>
+              固定端
+              <select
+                aria-label="固定端"
+                value={values.fixed ?? 'start'}
+                disabled={locked}
+                onChange={(event) => setValues((v) => ({ ...v, fixed: event.target.value }))}
+              >
+                <option value="start">固定起点</option>
+                <option value="end">固定终点</option>
+                <option value="midpoint">固定中点</option>
+              </select>
+            </label>
+          </>
+        )}
+        {e.kind === 'line' && (
+          <>
+            {field('angle', '局部角度 (°)')}
+            {field('u', '锚点 u (mm)')}
+            {field('v', '锚点 v (mm)')}
+          </>
+        )}
+        {(e.kind === 'circle' || e.kind === 'arc') && (
+          <>
+            {field('radius', '半径 (mm)')}
+            {field('u', '圆心 u (mm)')}
+            {field('v', '圆心 v (mm)')}
+            <span>直径 {(e.radius * 2).toFixed(2)} mm</span>
+          </>
+        )}
+        {e.kind === 'arc' && (
+          <>
+            {field('startAngle', '起始角 (°)')}
+            {field('sweep', '有向扫角 (°)')}
+            <span>
+              弧长 {(((Math.abs(e.sweep) * Math.PI) / 180) * e.radius).toFixed(2)} mm ·{' '}
+              {e.sweep > 0 ? '逆时针' : '顺时针'}
+            </span>
+            <button
+              type="button"
+              disabled={locked}
+              onClick={() =>
+                setValues((v) => ({
+                  ...v,
+                  sweep: String(
+                    Number(v.sweep) > 0 ? Number(v.sweep) - 360 : Number(v.sweep) + 360,
+                  ),
+                }))
+              }
+            >
+              切换弧方向
+            </button>
+          </>
+        )}
+        <label>
+          线型
+          <select
+            aria-label="线型"
+            value={values.style ?? e.lineStyle}
+            disabled={locked}
+            onChange={(event) => setValues((v) => ({ ...v, style: event.target.value }))}
+          >
+            {(role === 'teacher'
+              ? ['PROBLEM_VISIBLE', 'PROBLEM_HIDDEN', 'CONSTRUCTION']
+              : ['ANSWER_VISIBLE', 'ANSWER_HIDDEN', 'CONSTRUCTION']
+            ).map((style) => (
+              <option key={style} value={style}>
+                {
+                  {
+                    ANSWER_VISIBLE: '答案实线',
+                    ANSWER_HIDDEN: '答案虚线',
+                    CONSTRUCTION: '辅助线',
+                    PROBLEM_VISIBLE: '题干实线',
+                    PROBLEM_HIDDEN: '题干虚线',
+                  }[style]
+                }
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      {!locked && (
+        <div className="geo-form-actions">
+          <button type="button" onClick={() => run(() => applyProperties(doc, e.id, values, role))}>
+            确认属性
+          </button>
+          <button type="button" onClick={reset}>
+            取消输入
+          </button>
+        </div>
+      )}
+      {!locked && bindings.length > 0 && (
+        <button type="button" onClick={() => run(() => unbindReferences(doc, e.id, role))}>
+          解除绑定
+        </button>
+      )}
+      {!locked && e.kind === 'point' && placement && !bindings.length && (
+        <button
+          type="button"
+          onClick={() => run(() => bindToReference(doc, e.id, placement.reference, role))}
+        >
+          保持贴轴
+        </button>
+      )}
+      <details>
+        <summary>高级详情</summary>
+        <code>{e.id}</code>
+        {e.kind === 'segment' && (
+          <p>
+            当前局部方向 {angle(lineGeometry(doc, e).d).toFixed(2)}°，长度{' '}
+            {length(lineGeometry(doc, e).d).toFixed(3)} mm
+          </p>
+        )}
+      </details>
+    </div>
+  );
+}

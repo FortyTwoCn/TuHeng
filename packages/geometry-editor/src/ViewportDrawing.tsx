@@ -1,11 +1,18 @@
 import { useId } from 'react';
 import type { Vec2 } from '@tuheng/contracts';
 import {
-  viewAxes,
+  referenceGeometry,
+  referenceKey,
+  clipReference,
+  sub,
+  add,
+  scale as multiply,
   unit,
-  orthographic,
-  clipLine,
   axisDirection,
+  distance,
+  minorArc,
+  arcSvgPath,
+  viewTransform,
   type AxisConstruction,
   type Bounds,
 } from '@tuheng/geometry-core';
@@ -14,7 +21,6 @@ import { sheetDrawingDocument } from './sheet-drawing';
 import { EntityShape } from './rendering';
 export function ViewportDrawing({
   controls: props,
-  viewId,
   box,
   scale,
   preview,
@@ -32,17 +38,8 @@ export function ViewportDrawing({
   axisDraft: AxisConstruction | null;
 }) {
   const doc = sheetDrawingDocument(props.document);
-  const axes = orthographic(doc)
-    ? { X: { x: -1, y: 0 }, Z: { x: 0, y: 1 }, Y_H: { x: 0, y: -1 }, Y_W: { x: 1, y: 0 } }
-    : viewAxes(doc, viewId);
   const gridId = useId().replaceAll(':', '');
-  const end = (direction: Vec2, inset: number) => {
-    const d = unit(direction);
-    const tx = d.x > 0 ? (box.x + box.width) / d.x : d.x < 0 ? box.x / d.x : Infinity,
-      ty = d.y > 0 ? (box.y + box.height) / d.y : d.y < 0 ? box.y / d.y : Infinity;
-    const extent = Math.max(0, Math.min(tx, ty) - inset / scale);
-    return { x: d.x * extent, y: d.y * extent };
-  };
+  const references = referenceGeometry(props.document);
   return (
     <>
       {' '}
@@ -82,76 +79,87 @@ export function ViewportDrawing({
           fill={props.grid ? `url(#${gridId})` : '#fff'}
         />
         {props.axes &&
-          doc.editorType !== 'THREE_VIEW' &&
-          Object.entries(axes).map(([name, d]) => (
-            <g key={name}>
-              <line
-                x1={0}
-                y1={0}
-                x2={end(d, 35).x}
-                y2={end(d, 35).y}
-                stroke="#64748b"
-                vectorEffect="non-scaling-stroke"
-              />
-              <text
-                transform={`translate(${end(d, 25).x} ${end(d, 25).y}) scale(1 -1)`}
-                textAnchor="middle"
-                fontSize={11 / scale}
+          references.map((r) => {
+            const key = referenceKey(r.ref),
+              selected = props.selected.includes(key) || props.highlighted.includes(key);
+            if (!r.direction)
+              return (
+                <g key={key} data-reference-id={key}>
+                  <circle
+                    cx={r.anchor.x}
+                    cy={r.anchor.y}
+                    r={(selected ? 4 : 2) / scale}
+                    fill="#64748b"
+                  />
+                  <text
+                    transform={`translate(${r.anchor.x + 3 / scale} ${r.anchor.y - 12 / scale}) scale(1 -1)`}
+                    fontSize={11 / scale}
+                  >
+                    O
+                  </text>
+                </g>
+              );
+            const ends = clipReference(r, box);
+            if (!ends) return null;
+            const axis =
+              r.ref.kind === 'projectionAxis'
+                ? doc.auxiliarySystems?.find(
+                    (a) => a.id === (r.ref.kind === 'projectionAxis' ? r.ref.systemId : ''),
+                  )
+                : undefined;
+            const tip = axis
+              ? r.anchor
+              : add(ends[1], multiply(unit(sub(ends[0], ends[1])), 25 / scale));
+            return (
+              <g
+                key={key}
+                data-reference-id={key}
+                data-axis-id={axis?.id}
+                stroke={
+                  selected
+                    ? '#0f766e'
+                    : axis
+                      ? axis.owner === 'STUDENT'
+                        ? '#0f766e'
+                        : '#2563eb'
+                      : '#64748b'
+                }
+                fill="none"
               >
-                {name}
-              </text>
-            </g>
-          ))}
-        {props.axes && (
-          <g>
-            <circle cx={0} cy={0} r={2 / scale} fill="#64748b" />
-            {doc.editorType !== 'THREE_VIEW' && (
-              <text
-                transform={`translate(${3 / scale} ${-12 / scale}) scale(1 -1)`}
-                fontSize={11 / scale}
-              >
-                O
-              </text>
-            )}
-          </g>
-        )}
-        {(doc.auxiliarySystems ?? []).map((a) => {
-          const ends = clipLine({ a: a.anchor, d: a.tangent, finite: false }, box);
-          if (!ends) return null;
-          return (
-            <g
-              key={a.id}
-              data-axis-id={a.id}
-              stroke={a.owner === 'STUDENT' ? '#0f766e' : '#2563eb'}
-              fill="none"
-            >
-              <line
-                x1={ends[0].x}
-                y1={ends[0].y}
-                x2={ends[1].x}
-                y2={ends[1].y}
-                strokeDasharray="10 3 2 3"
-                vectorEffect="non-scaling-stroke"
-              />
-              <line
-                x1={a.anchor.x}
-                y1={a.anchor.y}
-                x2={a.anchor.x + a.positiveNormal.x * 10}
-                y2={a.anchor.y + a.positiveNormal.y * 10}
-                markerEnd={`url(#${gridId}-arrow)`}
-                vectorEffect="non-scaling-stroke"
-              />
-              <text
-                transform={`translate(${a.anchor.x + 3} ${a.anchor.y + 3}) scale(1 -1)`}
-                fill="currentColor"
-                stroke="none"
-                fontSize={12 / scale}
-              >
-                {a.name} · {doc.views.find((v) => v.id === a.newViewId)?.name}
-              </text>
-            </g>
-          );
-        })}
+                <line
+                  x1={ends[0].x}
+                  y1={ends[0].y}
+                  x2={ends[1].x}
+                  y2={ends[1].y}
+                  strokeWidth={selected ? 2 : 1}
+                  strokeDasharray={axis ? '10 3 2 3' : undefined}
+                  vectorEffect="non-scaling-stroke"
+                />
+                {axis && (
+                  <line
+                    x1={axis.anchor.x}
+                    y1={axis.anchor.y}
+                    x2={axis.anchor.x + axis.positiveNormal.x * 10}
+                    y2={axis.anchor.y + axis.positiveNormal.y * 10}
+                    markerEnd={`url(#${gridId}-arrow)`}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+                <text
+                  transform={`translate(${tip.x + 3 / scale} ${tip.y + 3 / scale}) scale(1 -1)`}
+                  fill="currentColor"
+                  stroke="none"
+                  fontSize={11 / scale}
+                >
+                  {axis
+                    ? `${axis.name} · ${doc.views.find((v) => v.id === axis.newViewId)?.name}`
+                    : r.ref.kind === 'baseAxis'
+                      ? r.ref.axisId
+                      : r.name}
+                </text>
+              </g>
+            );
+          })}
         {axisDraft &&
           (() => {
             const t = axisDirection(props.document, axisDraft),
@@ -213,6 +221,41 @@ export function ViewportDrawing({
               selected={props.selected.includes(e.id) || props.highlighted.includes(e.id)}
             />
           ))}
+        {preview.length >= 2 && props.tool === 'circle' && (
+          <circle
+            data-transient="preview-circle"
+            cx={preview[0].x}
+            cy={preview[0].y}
+            r={distance(preview[0], preview[1])}
+            fill="none"
+            stroke="#0f766e"
+            strokeWidth={2 / scale}
+          />
+        )}
+        {preview.length === 3 &&
+          props.tool === 'arc' &&
+          (() => {
+            try {
+              const a = minorArc(preview[0], preview[1], preview[2]),
+                f = viewTransform(
+                  props.document,
+                  props.document.views.find((v) => v.id === props.session.active)?.id ??
+                    props.document.views[0].id,
+                );
+              if (a.sweep === 180) a.sweep *= f.xAxis.x * f.yAxis.y - f.xAxis.y * f.yAxis.x;
+              return (
+                <path
+                  data-transient="preview-arc"
+                  d={arcSvgPath(preview[0], a.radius, a.startAngle, a.sweep)}
+                  fill="none"
+                  stroke="#0f766e"
+                  strokeWidth={2 / scale}
+                />
+              );
+            } catch {
+              return null;
+            }
+          })()}
         {preview.length > 0 && (
           <polyline
             data-transient="preview"

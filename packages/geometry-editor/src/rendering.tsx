@@ -107,7 +107,13 @@ export const EntityShape = memo(function EntityShape({
     }
   }
   return (
-    <g data-entity-id={e.id} data-kind={e.kind} data-style={e.lineStyle} {...style}>
+    <g
+      data-entity-id={e.id}
+      data-selected={selected}
+      data-kind={e.kind}
+      data-style={e.lineStyle}
+      {...style}
+    >
       <title>{e.id}</title>
       {shape}
       {selected && (

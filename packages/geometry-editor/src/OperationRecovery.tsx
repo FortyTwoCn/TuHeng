@@ -1,4 +1,5 @@
 import type { GeometryDocument } from '@tuheng/contracts';
+import { useMemo } from 'react';
 import { addPenStroke, sheetToLocal, type PenOptions } from '@tuheng/geometry-core';
 import { rawStrokeDocument, type StrokeSample } from './drawing-session';
 export interface ReversibleStep {
@@ -48,39 +49,49 @@ export function OperationRecovery({
   setInterrupted: (s: InterruptedStroke | null) => void;
 }) {
   const same = (d: GeometryDocument) => JSON.stringify(doc) === JSON.stringify(d);
+  const snapCurrent = useMemo(
+    () => !!lastSnap && JSON.stringify(doc) === JSON.stringify(lastSnap.next),
+    [doc, lastSnap],
+  );
+  const penCurrent = useMemo(
+    () => !!lastPen && JSON.stringify(doc) === JSON.stringify(lastPen.next),
+    [doc, lastPen],
+  );
   return (
-    <>
-      <div className="geo-toolbar">
-        <button
-          type="button"
-          disabled={!lastSnap || !same(lastSnap.next)}
-          onClick={() => {
-            if (lastSnap) {
-              replace(lastSnap.raw);
-              if (lastPen) setLastPen({ ...lastPen, next: lastSnap.raw });
-              setLastSnap(null);
-              report('已取消自动吸附，保留原始操作');
-            }
-          }}
-        >
-          取消本次吸附
-        </button>
-        <button
-          type="button"
-          disabled={!lastPen || !same(lastPen.next)}
-          onClick={() => {
-            if (lastPen) {
-              replace(lastPen.raw);
-              setLastSnap(null);
-              setLastPen(null);
-              setSuggestion(null);
-              report('已恢复原始笔迹');
-            }
-          }}
-        >
-          恢复原始笔迹
-        </button>
-      </div>
+    <div className="geo-recovery">
+      {(lastSnap || lastPen) && (
+        <div className="geo-toolbar">
+          <button
+            type="button"
+            disabled={!snapCurrent}
+            onClick={() => {
+              if (lastSnap) {
+                replace(lastSnap.raw);
+                if (lastPen) setLastPen({ ...lastPen, next: lastSnap.raw });
+                setLastSnap(null);
+                report('已取消自动吸附，保留原始操作');
+              }
+            }}
+          >
+            取消本次吸附
+          </button>
+          <button
+            type="button"
+            disabled={!penCurrent}
+            onClick={() => {
+              if (lastPen) {
+                replace(lastPen.raw);
+                setLastSnap(null);
+                setLastPen(null);
+                setSuggestion(null);
+                report('已恢复原始笔迹');
+              }
+            }}
+          >
+            恢复原始笔迹
+          </button>
+        </div>
+      )}
       {suggestion && (
         <div className="geo-snap">
           <span>
@@ -135,6 +146,6 @@ export function OperationRecovery({
           恢复中断笔迹
         </button>
       )}
-    </>
+    </div>
   );
 }

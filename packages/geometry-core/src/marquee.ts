@@ -24,8 +24,9 @@ export function entityInMarquee(
   e: GeometryEntity,
   b: Bounds,
   mode: SelectionMode,
+  space: 'sheet' | 'local' = 'sheet',
 ) {
-  const at = (p: Vec2) => localToSheet(doc, e.viewId, p);
+  const at = (p: Vec2) => (space === 'sheet' ? localToSheet(doc, e.viewId, p) : p);
   if (e.kind === 'point') return inside(at(e.position), b);
   if (e.kind === 'segment' || e.kind === 'line') {
     const l = lineGeometry(doc, e),
@@ -37,7 +38,10 @@ export function entityInMarquee(
   }
   if (e.kind === 'circle' || e.kind === 'arc') {
     const c = at(point(doc, e.center)),
-      f = viewTransform(doc, e.viewId),
+      f =
+        space === 'sheet'
+          ? viewTransform(doc, e.viewId)
+          : { origin: { x: 0, y: 0 }, xAxis: { x: 1, y: 0 }, yAxis: { x: 0, y: 1 } },
       determinant = f.xAxis.x * f.yAxis.y - f.xAxis.y * f.yAxis.x;
     const localStart = e.kind === 'arc' ? e.startAngle : 0,
       v = { x: Math.cos((localStart * Math.PI) / 180), y: Math.sin((localStart * Math.PI) / 180) };

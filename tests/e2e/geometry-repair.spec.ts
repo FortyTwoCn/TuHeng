@@ -9,6 +9,7 @@ import {
   mergePoints,
 } from '@tuheng/geometry-core';
 import { standardSheet, connectionSheet, penSample } from '../repair-fixtures';
+import { choose, settings, closePanels } from './editor-controls';
 const evidence = 'test-results/editor-repair';
 async function login(page: Page) {
   await page.goto('/login?callbackUrl=%2Fgeometry');
@@ -27,7 +28,8 @@ async function load(page: Page, doc: GeometryDocument) {
 }
 async function json(page: Page) {
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: '导出 JSON', exact: true }).click();
+  await choose(page, '导出 JSON');
+  await closePanels(page);
   return GeometryDocument.parse(JSON.parse(readFileSync((await (await download).path())!, 'utf8')));
 }
 async function screen(page: Page, p: Vec2) {
@@ -52,8 +54,6 @@ async function drag(page: Page, a: Vec2, b: Vec2, beforeUp?: () => Promise<void>
   if (beforeUp) await beforeUp();
   await page.mouse.up();
 }
-const choose = (page: Page, name: string) =>
-  page.getByRole('button', { name, exact: true }).click();
 test.use({ viewport: { width: 1440, height: 1000 }, video: 'on' });
 test.beforeEach(async ({ page }) => {
   mkdirSync(evidence, { recursive: true });
@@ -66,14 +66,21 @@ test('one sheet and real point drag before pointerup', async ({ page }) => {
   const p = page.locator('[data-kind=point] circle').first();
   await choose(page, '选择');
   await drag(page, { x: -30, y: 40 }, { x: -20, y: 35 }, async () => {
-    await expect(p).toHaveAttribute('cx', '-20');
+    await expect.poll(async () => Number(await p.getAttribute('cx'))).toBeCloseTo(-20, 4);
   });
   const doc = await json(page);
-  expect(localToSheet(doc, 'view-0', point(doc, doc.entities[0].id))).toEqual({ x: -20, y: 35 });
+  expect(localToSheet(doc, 'view-0', point(doc, doc.entities[0].id))).toMatchObject({
+    x: expect.closeTo(-20, 4),
+    y: expect.closeTo(35, 4),
+  });
   await choose(page, '撤销');
-  expect((await json(page)).entities[0]).toMatchObject({ position: { x: 30, y: 40 } });
+  expect((await json(page)).entities[0]).toMatchObject({
+    position: { x: expect.closeTo(30, 4), y: expect.closeTo(40, 4) },
+  });
   await choose(page, '恢复');
-  expect((await json(page)).entities[0]).toMatchObject({ position: { x: 20, y: 35 } });
+  expect((await json(page)).entities[0]).toMatchObject({
+    position: { x: expect.closeTo(20, 4), y: expect.closeTo(35, 4) },
+  });
 });
 test('5px endpoint merge, cancellation, undo/redo and connected point moves both lines', async ({
   page,
@@ -105,11 +112,19 @@ test('5px endpoint merge, cancellation, undo/redo and connected point moves both
   await choose(page, '撤销');
   await drag(page, { x: -30, y: 35 }, rawEnd);
   await drag(page, { x: -10, y: 15 }, { x: 2, y: 20 }, async () => {
-    await expect(page.locator(`[data-entity-id="${lines[0].id}"] line`)).toHaveAttribute('x2', '2');
-    await expect(page.locator(`[data-entity-id="${lines[1].id}"] line`)).toHaveAttribute('x1', '2');
+    await expect
+      .poll(async () =>
+        Number(await page.locator(`[data-entity-id="${lines[0].id}"] line`).getAttribute('x2')),
+      )
+      .toBeCloseTo(0, 4);
+    await expect
+      .poll(async () =>
+        Number(await page.locator(`[data-entity-id="${lines[1].id}"] line`).getAttribute('x1')),
+      )
+      .toBeCloseTo(0, 4);
   });
   d = await json(page);
-  expect(point(d, target)).toEqual({ x: -2, y: 20 });
+  expect(point(d, target)).toEqual({ x: 0, y: expect.closeTo(20, 4) });
   await page.screenshot({ path: `${evidence}/merged-drag.png`, fullPage: true });
 });
 test('endpoint, line body, cancellation and captured pointer outside canvas are transactional', async ({
@@ -121,12 +136,24 @@ test('endpoint, line body, cancellation and captured pointer outside canvas are 
   await load(page, fixture);
   await choose(page, '选择');
   await drag(page, { x: -55, y: 35 }, { x: -60, y: 42 }, async () => {
-    await expect(page.locator(`[data-entity-id="${line.id}"] line`)).toHaveAttribute('x1', '-60');
-    await expect(page.locator(`[data-entity-id="${line.id}"] line`)).toHaveAttribute('x2', '-30');
+    await expect
+      .poll(async () =>
+        Number(await page.locator(`[data-entity-id="${line.id}"] line`).getAttribute('x1')),
+      )
+      .toBeCloseTo(-60, 4);
+    await expect
+      .poll(async () =>
+        Number(await page.locator(`[data-entity-id="${line.id}"] line`).getAttribute('x2')),
+      )
+      .toBeCloseTo(-30, 4);
   });
   await choose(page, '撤销');
   await drag(page, { x: -42.5, y: 35 }, { x: -37.5, y: 40 }, async () => {
-    await expect(page.locator(`[data-entity-id="${line.id}"] line`)).toHaveAttribute('x1', '-50');
+    await expect
+      .poll(async () =>
+        Number(await page.locator(`[data-entity-id="${line.id}"] line`).getAttribute('x1')),
+      )
+      .toBeCloseTo(-50, 4);
   });
   const moved = await json(page);
   await choose(page, '撤销');
@@ -169,18 +196,23 @@ test('real multi-selection drag transforms a shared node once and commits one hi
   await clickAt(page, { x: -10, y: 30 });
   await page.keyboard.up('Shift');
   await drag(page, { x: -32.5, y: 25 }, { x: -26.5, y: 32 }, async () => {
-    await expect(page.locator(`[data-entity-id="${lines[0].id}"] line`)).toHaveAttribute(
-      'x2',
-      '-4',
-    );
-    await expect(page.locator(`[data-entity-id="${lines[1].id}"] line`)).toHaveAttribute(
-      'x1',
-      '-4',
-    );
+    await expect
+      .poll(async () =>
+        Number(await page.locator(`[data-entity-id="${lines[0].id}"] line`).getAttribute('x2')),
+      )
+      .toBeCloseTo(-4, 4);
+    await expect
+      .poll(async () =>
+        Number(await page.locator(`[data-entity-id="${lines[1].id}"] line`).getAttribute('x1')),
+      )
+      .toBeCloseTo(-4, 4);
   });
   const moved = await json(page);
   for (const e of fixture.entities.filter((e) => e.kind === 'point'))
-    expect(point(moved, e.id)).toEqual({ x: e.position.x - 6, y: e.position.y + 7 });
+    expect(point(moved, e.id)).toEqual({
+      x: expect.closeTo(e.position.x - 6, 4),
+      y: expect.closeTo(e.position.y + 7, 4),
+    });
   await choose(page, '撤销');
   expect(await json(page)).toEqual(fixture);
   await choose(page, '恢复');
@@ -205,10 +237,10 @@ test('standard coordinates, two-level parallel/perpendicular axes, reload and re
       String(p.y),
     );
   }
-  await page.locator('.geo-tabs').getByRole('button', { name: 'H', exact: true }).click();
+  await page.getByLabel('当前作图框架').selectOption({ label: 'H' });
   await choose(page, '实线');
   await drag(page, { x: -50, y: -10 }, { x: -20, y: -10 });
-  await page.getByText('新增投影轴 / 换面', { exact: true }).click();
+  await choose(page, '新增投影轴');
   await page.getByLabel('新轴构造').selectOption('PARALLEL');
   await choose(page, '开始定位新轴');
   await clickAt(page, { x: -35, y: -10 });
@@ -221,9 +253,10 @@ test('standard coordinates, two-level parallel/perpendicular axes, reload and re
   const first = d.auxiliarySystems![0];
   expect(first.tangent.y).toBeCloseTo(0);
   expect(first.positiveNormal.y).toBe(-1);
-  await page.locator('.geo-tabs').getByRole('button', { name: 'V1', exact: true }).click();
+  await page.getByLabel('当前作图框架').selectOption({ label: 'V1' });
   await choose(page, '实线');
   await drag(page, { x: -50, y: -45 }, { x: -30, y: -45 });
+  await choose(page, '新增投影轴');
   await page.getByLabel('父投影系').selectOption(first.id);
   await page.getByLabel('新轴构造').selectOption('PERPENDICULAR');
   await choose(page, '开始定位新轴');
@@ -247,6 +280,7 @@ test('standard coordinates, two-level parallel/perpendicular axes, reload and re
     await expect(page.locator('.geo-view svg')).toHaveCount(1);
     const before = await json(page);
     await choose(page, '聚焦当前投影');
+    await closePanels(page);
     expect(await json(page)).toEqual(before);
     await choose(page, '完整展开图');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -260,9 +294,14 @@ test('freehand circles at multiple zooms with ruler off are circle entities and 
 }) => {
   await load(page, createDocument('VHW_PROJECTION'));
   await choose(page, '电子笔');
+  await settings(page);
   await expect(page.getByLabel('虚拟直尺', { exact: true })).not.toBeChecked();
+  await closePanels(page);
   for (const zoom of [1, 2]) {
-    if (zoom === 2) await choose(page, '放大');
+    if (zoom === 2) {
+      await choose(page, '放大');
+      await closePanels(page);
+    }
     const c = await screen(page, { x: -20, y: 25 }),
       samples = penSample(1, zoom === 1 ? 1 : -1);
     const a = samples[0];
@@ -298,7 +337,7 @@ for (const width of [1024, 390])
         Number(await page.locator(`[data-entity-id="${lines[0].id}"] line`).getAttribute('x2')),
       ).toBeCloseTo(-5, 4);
     });
-    await page.getByText('新增投影轴 / 换面', { exact: true }).click();
+    await choose(page, '新增投影轴');
     await choose(page, '开始定位新轴');
     await clickAt(page, { x: 10, y: -10 });
     await clickAt(page, { x: 10, y: -30 });

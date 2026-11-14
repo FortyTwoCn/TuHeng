@@ -1,4 +1,5 @@
 'use client';
+import { primitivePreview, acceptPrimitive } from './primitive-preview';
 import { finishDrawing, rulerSamples } from './drawing-session';
 import { useRef, useState, useEffect, useCallback } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
@@ -11,11 +12,8 @@ import {
   moveEntities,
   snapCandidates,
   confirmSnap,
-  sheetBounds,
   sheetToLocal,
   localToSheet,
-  localBounds,
-  intersectsBox,
   selectionBounds,
   addProjectionAxis,
   axisDirection,
@@ -32,12 +30,32 @@ import {
   type InterruptedStroke,
 } from './OperationRecovery';
 import { AxisTools } from './AxisTools';
+import { ConstructionPanel } from './ConstructionPanel';
+import { FloatingInspector } from './FloatingInspector';
+import { MeasurementOverlay } from './MeasurementOverlay';
+import { textEntry, commandRegistry } from './commands';
+import { useViewportCamera } from './useViewportCamera';
+import {
+  previewTransform,
+  marqueeSelection,
+  interactionThresholds,
+  referenceGeometry,
+  referenceKey,
+  clipReference,
+  targetFromKey,
+  resolveReference,
+  constructLine,
+  adjustDirection,
+  referenceDirection,
+  add,
+  scale as multiply,
+} from '@tuheng/geometry-core';
 import {
   hitTarget,
-  dragDocument,
+  hitTargets,
   movingIds,
   type Hit,
-  type InteractionState,
+  type SessionInteraction as InteractionState,
 } from './interaction-controller';
 import type { EditorControls, Tool } from './types';
 interface Gesture {
@@ -56,6 +74,12 @@ interface Gesture {
   samples: (Vec2 & { pressure: number })[];
   viewId: string;
   additive: boolean;
+  toggle: boolean;
+  revision: object;
+  selection: string[];
+  dragPixels: number;
+  snapSource?: string;
+  pausedSnap?: boolean;
   raw?: GeometryDocument;
   next?: GeometryDocument;
   candidate?: SnapCandidate;
@@ -74,10 +98,15 @@ export function Viewport(
     gesture = useRef<Gesture | null>(null),
     pointers = useRef(new Map<number, Vec2>()),
     space = useRef(false);
-  const [size, setSize] = useState({ width: 800, height: 600 }),
-    [pan, setPan] = useState({ x: 0, y: 0 }),
-    [localZoom, setLocalZoom] = useState(1),
-    [fitted, setFitted] = useState<Bounds>(sheetBounds(doc));
+  const pending = useRef<ReactPointerEvent<SVGSVGElement> | null>(null),
+    frame = useRef<number | null>(null);
+  const [marquee, setMarquee] = useState<{
+      box: Bounds;
+      mode: 'window' | 'crossing';
+      ids: string[];
+    } | null>(null),
+    [overlaps, setOverlaps] = useState<Hit[]>([]);
+  const [constructionPreview, setConstructionPreview] = useState<GeometryDocument | null>(null);
   const [preview, setPreview] = useState<Vec2[]>([]),
     [previewDoc, setPreviewDoc] = useState<GeometryDocument | null>(null),
     [candidate, setCandidate] = useState<SnapCandidate | null>(null),
@@ -93,19 +122,19 @@ export function Viewport(
     spec: AxisConstruction;
     phase: 'reference' | 'anchor' | 'direction' | 'side' | 'confirm';
   } | null>(null);
-  const zoom = props.zoom * localZoom,
-    ratio = size.width / size.height;
-  const height = Math.max(fitted.height, fitted.width / ratio) / zoom,
-    width = height * ratio;
-  const box = {
-    x: fitted.x + fitted.width / 2 - width / 2 + pan.x,
-    y: fitted.y + fitted.height / 2 - height / 2 + pan.y,
-    width,
-    height,
-  };
+  const busy = useCallback(() => !!gesture.current, []);
+  const { size, box, setPan, zoomAt } = useViewportCamera(
+    svg,
+    doc,
+    props.zoom,
+    props.fitKey,
+    props.focusKey,
+    viewId,
+    busy,
+  );
   const cssScale = () => {
     const m = svg.current?.getScreenCTM();
-    return m ? Math.hypot(m.a, m.b) : size.width / width;
+    return m ? Math.hypot(m.a, m.b) : size.width / box.width;
   };
   const cancel = useCallback(() => {
     const g = gesture.current;
@@ -118,27 +147,41 @@ export function Viewport(
     setPreview([]);
     setPreviewDoc(null);
     setCandidate(null);
+    setMarquee(null);
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    pending.current = null;
     setState('idle');
   }, [report]);
   useEffect(() => {
     const el = svg.current;
     if (!el) return;
-    const observer = new ResizeObserver((entries) =>
-      setSize({ width: entries[0].contentRect.width, height: entries[0].contentRect.height }),
-    );
-    observer.observe(el);
-    const wheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (!gesture.current)
-        setLocalZoom((z) => Math.max(0.25, Math.min(8, z * Math.exp(-e.deltaY * 0.001))));
-    };
     const key = (e: KeyboardEvent) => {
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) return;
+      if (
+        !el.closest('.geometry-editor')?.contains(document.activeElement) ||
+        e.isComposing ||
+        textEntry(e.target) ||
+        (e.target instanceof Element &&
+          !!e.target.closest('.geo-popover,.geo-floating-inspector,.geo-panel'))
+      )
+        return;
+      if (e.key === 'Alt' && gesture.current) {
+        gesture.current.pausedSnap = true;
+        if (gesture.current.raw) {
+          gesture.current.next = gesture.current.raw;
+          gesture.current.candidate = undefined;
+          setPreviewDoc(gesture.current.raw);
+          setCandidate(null);
+        }
+      }
       if (e.code === 'Space') {
         space.current = e.type === 'keydown';
         e.preventDefault();
       }
       if (e.key === 'Escape') {
+        if (!gesture.current && !axisDraft && steps.length === 0) return;
+        e.preventDefault();
+        e.stopPropagation();
         cancel();
         setAxisDraft(null);
         setSteps([]);
@@ -148,43 +191,24 @@ export function Viewport(
       space.current = false;
       cancel();
     };
-    el.addEventListener('wheel', wheel, { passive: false });
-    window.addEventListener('keydown', key);
-    window.addEventListener('keyup', key);
+    const owner = el.closest('.geometry-editor')!;
+    owner.addEventListener('keydown', key as EventListener, true);
+    owner.addEventListener('keyup', key as EventListener);
     window.addEventListener('blur', blur);
     return () => {
-      observer.disconnect();
-      el.removeEventListener('wheel', wheel);
-      window.removeEventListener('keydown', key);
-      window.removeEventListener('keyup', key);
+      owner.removeEventListener('keydown', key as EventListener, true);
+      owner.removeEventListener('keyup', key as EventListener);
       window.removeEventListener('blur', blur);
     };
-  }, [cancel]);
-  const [previous, setPrevious] = useState({ tool, fit: props.fitKey, focus: props.focusKey });
-  if (
-    previous.tool !== tool ||
-    previous.fit !== props.fitKey ||
-    previous.focus !== props.focusKey
-  ) {
-    setPrevious({ tool, fit: props.fitKey, focus: props.focusKey });
-    if (previous.tool !== tool) {
-      setSteps([]);
-      setReference(undefined);
-      setAxisDraft(null);
-    }
-    if (previous.fit !== props.fitKey) {
-      setFitted(sheetBounds(doc));
-      setPan({ x: 0, y: 0 });
-      setLocalZoom(1);
-    }
-    if (previous.focus !== props.focusKey) {
-      const v = doc.views.findIndex((v) => v.id === viewId);
-      const center = localToSheet(doc, viewId, { x: 30, y: v === 1 ? -25 : 30 });
-      setPan({
-        x: center.x - (fitted.x + fitted.width / 2),
-        y: center.y - (fitted.y + fitted.height / 2),
-      });
-    }
+  }, [cancel, axisDraft, steps]);
+  const [previousTool, setPreviousTool] = useState(tool);
+  if (previousTool !== tool) {
+    setPreviousTool(tool);
+    setSteps([]);
+    setReference(undefined);
+    setAxisDraft(null);
+    setPreview([]);
+    setPreviewDoc(null);
   }
   function local(
     e: { clientX: number; clientY: number },
@@ -216,14 +240,16 @@ export function Viewport(
     previous?: SnapCandidate,
     origin?: Vec2,
     threshold = 10,
+    paused = false,
   ) {
-    if (!props.snapping || props.skipSnap) return { raw, next: raw };
+    if (!props.snapping || props.skipSnap || paused) return { raw, next: raw };
     const source = raw.entities.find((e) => e.id === sourceId);
     if (source?.kind !== 'point') return { raw, next: raw };
     const candidate = snapCandidates(docBefore, source.viewId, p, scale, origin, {
       exclude,
       threshold,
       hiddenLayers: props.hiddenLayers,
+      axes: props.axes && props.axesSnap,
       grid: props.gridSnap,
       projection: props.projectionSnap,
       previous,
@@ -241,62 +267,157 @@ export function Viewport(
       return { raw, next: raw };
     } // An illegal zero-length connection is never committed.
   }
+  function primitive(
+    g: Pick<
+      Gesture,
+      | 'base'
+      | 'tool'
+      | 'viewId'
+      | 'start'
+      | 'scale'
+      | 'dragPixels'
+      | 'snapPixels'
+      | 'pausedSnap'
+      | 'candidate'
+    >,
+    p: Vec2,
+  ) {
+    const at = (p: Vec2) => sheetToLocal(g.base, g.viewId, p);
+    const positions =
+      g.tool === 'point'
+        ? [at(p)]
+        : g.tool === 'circle' || g.tool === 'arc'
+          ? [...steps, at(p)]
+          : distance(g.start, p) * g.scale > g.dragPixels
+            ? [at(g.start), at(p)]
+            : [at(p), add(at(p), { x: 10, y: 0 })];
+    return primitivePreview(
+      g.base,
+      g.tool,
+      g.viewId,
+      positions,
+      g.scale,
+      props.snapping && !props.skipSnap && !g.pausedSnap,
+      {
+        hiddenLayers: props.hiddenLayers,
+        grid: props.gridSnap,
+        projection: props.projectionSnap,
+        axes: props.axes && props.axesSnap,
+        threshold: g.snapPixels,
+        previous: g.candidate,
+      },
+    );
+  }
   function drag(g: Gesture, p: Vec2) {
-    const raw = dragDocument(g.base, g.ids, sub(p, g.start), role);
+    const raw = previewTransform(g.base, g.ids, sub(p, g.start), role);
+    let next = raw;
+    g.candidate = undefined;
+    g.snapSource = undefined;
     const source = g.ids.length === 1 ? raw.entities.find((e) => e.id === g.ids[0]) : undefined;
-    let result =
-      source?.kind === 'point'
-        ? snap(
-            g.base,
-            raw,
-            source.id,
-            source.position,
-            g.scale,
-            movingIds(g.base, g.ids),
-            g.candidate,
-            undefined,
-            g.snapPixels,
-          )
-        : { raw, next: raw };
-    if (source?.kind === 'segment' && props.snapping && !props.skipSnap) {
-      const exclude = movingIds(g.base, g.ids);
-      const candidates = [source.startPoint, source.endPoint]
-        .flatMap((id) => {
-          const p = raw.entities.find((e) => e.id === id);
-          if (p?.kind !== 'point') return [];
-          return snapCandidates(g.base, p.viewId, p.position, g.scale, undefined, {
-            exclude,
-            hiddenLayers: props.hiddenLayers,
-            threshold: g.snapPixels,
-          })
-            .filter((c) => c.kind === 'COINCIDENT')
-            .map((candidate) => ({ point: p, candidate }));
-        })
-        .sort((a, b) => a.candidate.distance - b.candidate.distance);
-      const chosen = candidates[0];
-      if (chosen)
-        try {
-          const a = localToSheet(raw, chosen.point.viewId, chosen.point.position),
-            b = localToSheet(raw, chosen.point.viewId, chosen.candidate.position);
-          const adjusted = dragDocument(raw, g.ids, sub(b, a), role);
-          result = {
-            raw,
-            next: confirmSnap(g.base, adjusted, chosen.candidate, chosen.point.id, role),
-            candidate: chosen.candidate,
-          };
-        } catch {
-          /* Keep the raw translation if topology would be invalid. */
-        }
+    const excluded = movingIds(g.base, g.ids);
+    if (source && props.snapping && !props.skipSnap && !g.pausedSnap) {
+      const ids =
+        source.kind === 'point'
+          ? [source.id]
+          : source.kind === 'segment'
+            ? [source.startPoint, source.endPoint]
+            : [];
+      const choices = ids.flatMap((id) => {
+        const entity = raw.entities.find((e) => e.id === id);
+        if (entity?.kind !== 'point') return [];
+        const c = snapCandidates(g.base, entity.viewId, entity.position, g.scale, undefined, {
+          exclude: excluded,
+          threshold: g.snapPixels,
+          hiddenLayers: props.hiddenLayers,
+          grid: props.gridSnap,
+          projection: props.projectionSnap,
+          axes: props.axes && props.axesSnap,
+          previous: candidate ?? undefined,
+        })[0];
+        return c && (source.kind === 'point' || c.kind === 'COINCIDENT') ? [{ id, entity, c }] : [];
+      });
+      const chosen = choices.sort((a, b) => a.c.distance - b.c.distance)[0];
+      if (chosen) {
+        const a = localToSheet(raw, chosen.entity.viewId, chosen.entity.position),
+          b = localToSheet(raw, chosen.entity.viewId, chosen.c.position);
+        next = previewTransform(raw, g.ids, sub(b, a), role);
+        g.candidate = chosen.c;
+        g.snapSource = chosen.id;
+      }
     }
     g.raw = raw;
-    g.next = result.next;
-    g.candidate = 'candidate' in result ? result.candidate : undefined;
-    setPreviewDoc(result.next);
+    g.next = next;
+    setPreviewDoc(next);
     setCandidate(g.candidate ?? null);
     setCandidateView(g.hit?.viewId ?? viewId);
-    props.report(
-      `移动 ΔU ${(p.x - g.start.x).toFixed(2)} · ΔT ${(p.y - g.start.y).toFixed(2)} mm${g.candidate ? ' · 松手连接目标' : ''}`,
-    );
+  }
+  function updateMarquee(g: Gesture, p: Vec2) {
+    const first = g.tool === 'box' && steps.length ? steps[0] : g.start;
+    const box = selectionBounds(first, p),
+      mode = p.x >= first.x ? 'window' : 'crossing';
+    const ids = marqueeSelection(g.base, box, mode, props.hiddenLayers);
+    if (props.referenceFilter && props.axes)
+      for (const r of referenceGeometry(g.base)) {
+        if (r.extent === 'point') {
+          if (
+            r.anchor.x >= box.x &&
+            r.anchor.x <= box.x + box.width &&
+            r.anchor.y >= box.y &&
+            r.anchor.y <= box.y + box.height
+          )
+            ids.push(referenceKey(r.ref));
+        } else if (mode === 'crossing' && !!clipReference(r, box)) ids.push(referenceKey(r.ref));
+      }
+    setMarquee({ box, mode, ids });
+    return ids;
+  }
+  function constructionClick(p: Vec2, target?: Hit) {
+    const c = props.session.construction;
+    if (!c) return false;
+    if (c.phase === 'reference') {
+      const reference = target ? targetFromKey(target.id) : undefined;
+      if (!reference || !resolveReference(doc, reference).direction)
+        throw Error('请选择参考线或轴');
+      props.dispatch({
+        type: 'patch',
+        patch: {
+          construction: { ...c, reference, phase: c.mode === 'create' ? 'position' : 'target' },
+        },
+      });
+      props.report(c.mode === 'create' ? '选择通过点或空白位置' : '选择待修改答案线');
+      return true;
+    }
+    if (c.phase === 'target') {
+      const reference = c.reference!;
+      if (!target || target.kind === 'reference') throw Error('请选择待修改的答案线');
+      const next = adjustDirection(doc, target.id, reference, c.spec.directionMode, c.keep, role);
+      setConstructionPreview(next);
+      props.dispatch({
+        type: 'patch',
+        patch: { construction: { ...c, targetId: target.id, phase: 'confirm' } },
+      });
+      props.report('检查方向预览，确认后提交一次；参考线保持不动');
+      return true;
+    }
+    if (c.phase === 'position') {
+      const e = doc.entities.find((e) => e.id === target?.id && e.viewId === viewId),
+        at = e?.kind === 'point' ? e.position : sheetToLocal(doc, viewId, p);
+      accept(
+        constructLine(
+          doc,
+          viewId,
+          c.reference!,
+          at,
+          e?.kind === 'point' ? e.id : undefined,
+          c.spec,
+          role,
+        ),
+      );
+      props.dispatch({ type: 'patch', patch: { construction: null } });
+      setPreview([]);
+      return true;
+    }
+    return true;
   }
   function axisClick(p: Vec2, target?: Hit) {
     if (!axisDraft) return;
@@ -331,19 +452,76 @@ export function Viewport(
   }
   function finish(g: Gesture, p: Vec2) {
     if (g.state === 'panning' || g.state === 'movingRuler') return;
-    const target = hitTarget(g.base, p, g.scale, box, props.hiddenLayers, props.selected);
+    const hits = hitTargets(
+      g.base,
+      p,
+      g.scale,
+      box,
+      props.hiddenLayers,
+      props.selected,
+      props.axes,
+      g.snapPixels,
+    );
+    const target =
+      props.session.construction?.phase === 'reference'
+        ? hits.find((h) => {
+            try {
+              return !!resolveReference(doc, targetFromKey(h.id)).direction;
+            } catch {
+              return false;
+            }
+          })
+        : hits[0];
+    if (constructionClick(p, target)) return;
     if (axisDraft) {
       axisClick(p, target);
       return;
     }
-    if (g.tool === 'select') {
-      if (g.hit && distance(g.start, p) * g.scale > 2 && !readOnly) {
+    if (g.tool === 'select' || g.tool === 'box') {
+      const moved = distance(g.start, p) * g.scale >= g.dragPixels;
+      if ((!g.hit && moved) || g.tool === 'box') {
+        if (g.tool === 'box' && !moved && !steps.length) {
+          setSteps([p]);
+          props.report('点击第二个对角点；从左向右为包含，从右向左为相交');
+          return;
+        }
+        const ids = updateMarquee(g, p);
+        props.select(g.additive ? [...new Set([...g.selection, ...ids])] : ids);
+        setMarquee(null);
+        setSteps([]);
+        return;
+      }
+      if (g.hit && moved && !readOnly) {
+        if (g.hit.kind === 'reference') {
+          props.report('参考轴不能拖移；可在属性中查看或重命名');
+          return;
+        }
         drag(g, p);
-        if (g.next) accept(g.next, g.raw);
-      } else
+        if (g.next) {
+          let next = g.next;
+          if (g.candidate && g.snapSource)
+            try {
+              next = confirmSnap(g.base, next, g.candidate, g.snapSource, role);
+            } catch {
+              next = g.raw!;
+              props.report('本次连接存在拓扑冲突，保留原始拖动');
+            }
+          accept(next, g.raw);
+        }
+      } else {
+        setOverlaps(hits);
         props.select(
-          target ? (g.additive ? [...new Set([...props.selected, target.id])] : [target.id]) : [],
+          target
+            ? g.toggle
+              ? g.selection.includes(target.id)
+                ? g.selection.filter((id) => id !== target.id)
+                : [...g.selection, target.id]
+              : g.additive
+                ? [...new Set([...g.selection, target.id])]
+                : [target.id]
+            : [],
         );
+      }
       return;
     }
     if (g.tool === 'projection') {
@@ -356,19 +534,6 @@ export function Viewport(
           props.report('投影关联已记录，实际坐标保留');
         }
       }
-      return;
-    }
-    if (g.tool === 'box') {
-      const bounds = selectionBounds(g.start, p);
-      props.select(
-        doc.entities
-          .filter(
-            (e) =>
-              !props.hiddenLayers.includes(e.layerId) &&
-              intersectsBox(doc, e, localBounds(doc, e.viewId, bounds)),
-          )
-          .map((e) => e.id),
-      );
       return;
     }
     if (readOnly) return;
@@ -389,6 +554,7 @@ export function Viewport(
       reference,
       samples,
       scale: g.scale,
+      clickThreshold: g.dragPixels,
     });
     if (result.kind === 'steps') {
       setSteps(result.steps);
@@ -398,10 +564,18 @@ export function Viewport(
     }
     const raw = result.document;
     let next = raw;
+    const simple = ['point', 'segment', 'hidden', 'line', 'circle', 'arc'].includes(g.tool);
+    if (simple) {
+      try {
+        next = acceptPrimitive(g.base, raw, primitive(g, p), role);
+      } catch {
+        props.report('本次吸附会产生非法几何，保留原始作图');
+      }
+    }
     const created = raw.entities.filter(
       (e) => e.kind === 'point' && !g.base.entities.some((p) => p.id === e.id),
     );
-    for (const point of created)
+    for (const point of simple ? [] : created)
       if (point.kind === 'point')
         next = snap(
           g.base,
@@ -413,9 +587,10 @@ export function Viewport(
           undefined,
           raw.entities.at(-1)?.kind === 'segment' ? at(g.start) : undefined,
           g.snapPixels,
+          g.pausedSnap,
         ).next;
     const line = raw.entities.at(-1);
-    if (line?.kind === 'line' && props.snapping && !props.skipSnap) {
+    if (!simple && line?.kind === 'line' && props.snapping && !props.skipSnap && !g.pausedSnap) {
       const candidate = snapCandidates(g.base, g.viewId, line.anchor, g.scale, undefined, {
         hiddenLayers: props.hiddenLayers,
         grid: props.gridSnap,
@@ -454,12 +629,24 @@ export function Viewport(
       setState('pinching');
       return;
     }
-    setLastSnap(null);
-    setLastPen(null);
-    setSuggestion(null);
-    setInterrupted(null);
+    if (!['select', 'pan', 'box'].includes(tool)) {
+      setLastSnap(null);
+      setLastPen(null);
+      setSuggestion(null);
+      setInterrupted(null);
+    }
     const p = local(e),
-      hit = hitTarget(doc, p, cssScale(), box, props.hiddenLayers, props.selected),
+      hit = hitTarget(
+        doc,
+        p,
+        cssScale(),
+        box,
+        props.hiddenLayers,
+        props.selected,
+        props.axes,
+        interactionThresholds[(e.pointerType || 'mouse') as keyof typeof interactionThresholds]
+          ?.hit ?? 10,
+      ),
       pan =
         tool === 'pan' ||
         space.current ||
@@ -472,7 +659,15 @@ export function Viewport(
       screen: { x: e.clientX, y: e.clientY },
       inverse: svg.current!.getScreenCTM()!.inverse(),
       scale: cssScale(),
-      snapPixels: e.pointerType === 'touch' ? 16 : 10,
+      snapPixels:
+        interactionThresholds[(e.pointerType || 'mouse') as keyof typeof interactionThresholds]
+          ?.snap ?? 10,
+      dragPixels:
+        interactionThresholds[(e.pointerType || 'mouse') as keyof typeof interactionThresholds]
+          ?.drag ?? 4,
+      revision: props.revision,
+      selection: props.selected,
+      toggle: e.ctrlKey || e.metaKey,
       base: doc,
       tool,
       hit,
@@ -492,27 +687,71 @@ export function Viewport(
       additive: e.shiftKey,
     };
     setState(gesture.current.state);
-    if (tool === 'select' && hit && !props.selected.includes(hit.id))
-      props.select(e.shiftKey ? [...props.selected, hit.id] : [hit.id]);
   }
   function move(e: ReactPointerEvent<SVGSVGElement>) {
-    if (!pointers.current.has(e.pointerId)) return;
+    if (!pointers.current.has(e.pointerId)) {
+      if (steps.length && ['circle', 'arc'].includes(tool)) {
+        const p = local(e),
+          threshold =
+            interactionThresholds[
+              e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse'
+            ];
+        const value = primitive(
+          {
+            base: doc,
+            tool,
+            viewId,
+            start: p,
+            scale: cssScale(),
+            dragPixels: threshold.drag,
+            snapPixels: threshold.snap,
+          },
+          p,
+        );
+        setPreview(value.points.map((p) => localToSheet(doc, viewId, p)));
+        setState('drawingPrimitive');
+        setCandidate(value.candidates.at(-1) ?? null);
+        setCandidateView(viewId);
+      }
+      if (
+        props.session.construction?.phase === 'position' &&
+        props.session.construction.reference
+      ) {
+        const c = props.session.construction,
+          p = local(e),
+          a = sheetToLocal(doc, viewId, p),
+          d = referenceDirection(doc, viewId, c.reference!, c.spec.directionMode);
+        setPreview([
+          p,
+          localToSheet(
+            doc,
+            viewId,
+            add(a, multiply(d, c.spec.geometryExtent === 'segment' ? c.spec.length : 100)),
+          ),
+        ]);
+      }
+      return;
+    }
     const old = [...pointers.current.values()];
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
       const current = [...pointers.current.values()],
         before = distance(old[0], old[1]),
         after = distance(current[0], current[1]);
-      if (before > 1) setLocalZoom((z) => Math.max(0.25, Math.min(8, (z * after) / before)));
-      setPan((v) => ({
-        x: v.x - (current[0].x + current[1].x - old[0].x - old[1].x) / 2 / cssScale(),
-        y: v.y + (current[0].y + current[1].y - old[0].y - old[1].y) / 2 / cssScale(),
-      }));
+      if (before > 1)
+        zoomAt(
+          after / before,
+          { x: (old[0].x + old[1].x) / 2, y: (old[0].y + old[1].y) / 2 },
+          {
+            x: (current[0].x + current[1].x - old[0].x - old[1].x) / 2,
+            y: (current[0].y + current[1].y - old[0].y - old[1].y) / 2,
+          },
+        );
       return;
     }
     const g = gesture.current;
     if (!g || g.id !== e.pointerId) return;
-    if (JSON.stringify(g.base) !== JSON.stringify(doc)) {
+    if (g.revision !== props.revision || g.tool !== tool) {
       cancel();
       props.report('文档已更新，已取消未提交拖动');
       return;
@@ -536,7 +775,35 @@ export function Viewport(
       return;
     }
     try {
+      if (props.session.construction) {
+        const c = props.session.construction;
+        if (c.phase === 'position' && c.reference) {
+          const start = sheetToLocal(doc, viewId, p),
+            d = referenceDirection(doc, viewId, c.reference, c.spec.directionMode),
+            end = add(
+              start,
+              multiply(d, c.spec.geometryExtent === 'segment' ? c.spec.length : 100),
+            );
+          setPreview([localToSheet(doc, viewId, start), localToSheet(doc, viewId, end)]);
+        }
+        return;
+      }
+      if (g.tool === 'box' || (g.tool === 'select' && !g.hit)) {
+        if (distance(g.start, p) * g.scale >= g.dragPixels || steps.length) {
+          g.state = 'marqueeSelecting';
+          setState(g.state);
+          updateMarquee(g, p);
+        }
+        return;
+      }
       if (g.tool === 'select' && g.hit && !readOnly && !axisDraft) {
+        if (g.hit.kind === 'reference' || distance(g.start, p) * g.scale < g.dragPixels) return;
+        if (g.state === 'pressed') {
+          setLastSnap(null);
+          setLastPen(null);
+          setSuggestion(null);
+          setInterrupted(null);
+        }
         g.state =
           g.hit.kind === 'point'
             ? 'draggingPoint'
@@ -544,27 +811,17 @@ export function Viewport(
               ? 'draggingEndpoint'
               : 'draggingSelection';
         setState(g.state);
+        props.select(g.ids);
         drag(g, p);
       } else if (g.tool === 'pen') {
-        const events = e.nativeEvent.getCoalescedEvents?.();
-        for (const sample of events?.length ? events : [e.nativeEvent])
-          appendSample(g, local(sample, g.inverse), sample.pressure);
         setPreview([...g.samples]);
       } else if (!['projection', 'select'].includes(g.tool)) {
-        setPreview([g.start, p]);
-        if (props.snapping && !props.skipSnap) {
-          const candidate = snapCandidates(
-            g.base,
-            g.viewId,
-            sheetToLocal(g.base, g.viewId, p),
-            g.scale,
-            undefined,
-            { hiddenLayers: props.hiddenLayers, grid: props.gridSnap, previous: g.candidate },
-          )[0];
-          g.candidate = candidate;
-          setCandidate(candidate ?? null);
-          setCandidateView(g.viewId);
-        }
+        setState('drawingPrimitive');
+        const value = primitive(g, p);
+        g.candidate = value.candidates.at(-1);
+        setCandidate(g.candidate ?? null);
+        setCandidateView(g.viewId);
+        setPreview(value.points.map((p) => localToSheet(g.base, g.viewId, p)));
       }
       g.last = p;
     } catch (error) {
@@ -576,7 +833,32 @@ export function Viewport(
   function appendSample(g: Gesture, p: Vec2, pressure: number) {
     appendStrokeSample(g.samples, { ...p, pressure }, 0.1 / g.scale);
   }
+  function queueMove(e: ReactPointerEvent<SVGSVGElement>) {
+    if (tool === 'pen' && gesture.current?.state === 'drawingStroke') {
+      const g = gesture.current;
+      if (g.id !== e.pointerId) return;
+      const events = e.nativeEvent.getCoalescedEvents?.();
+      for (const sample of events?.length ? events : [e.nativeEvent])
+        appendSample(g, local(sample, g.inverse), sample.pressure);
+    }
+    pending.current = e;
+    if (frame.current !== null) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      const event = pending.current;
+      pending.current = null;
+      if (event) move(event);
+    });
+  }
   function up(e: ReactPointerEvent<SVGSVGElement>) {
+    if (frame.current !== null) {
+      cancelAnimationFrame(frame.current);
+      frame.current = null;
+    }
+    if (pending.current) {
+      move(pending.current);
+      pending.current = null;
+    }
     const g = gesture.current;
     const wasPinching = pointers.current.size >= 2 || state === 'pinching';
     pointers.current.delete(e.pointerId);
@@ -591,7 +873,7 @@ export function Viewport(
     if (wasPinching) return;
     if (g)
       try {
-        if (JSON.stringify(g.base) !== JSON.stringify(doc))
+        if (g.revision !== props.revision || g.tool !== tool)
           throw new Error('文档已更新，已取消未提交操作');
         const p = local(e, g.inverse);
         if (g.tool === 'pen') appendSample(g, p, e.pressure);
@@ -603,25 +885,62 @@ export function Viewport(
   const scale = size.width / box.width;
   return (
     <section className="geo-view geo-active">
+      {overlaps.length > 1 &&
+        props.selected.length > 0 &&
+        state === 'idle' &&
+        tool === 'select' &&
+        !props.session.construction && (
+          <select
+            className="geo-overlaps"
+            aria-label="重叠对象"
+            value={props.selected[0]}
+            onChange={(e) => props.select([e.target.value])}
+          >
+            {overlaps.map((h, i) => (
+              <option key={h.id} value={h.id}>
+                {h.kind === 'reference'
+                  ? resolveReference(doc, targetFromKey(h.id)).name
+                  : `对象 ${i + 1} · ${doc.entities.find((e) => e.id === h.id)?.kind}`}
+              </option>
+            ))}
+          </select>
+        )}
       <div className="geo-view-title">
-        统一图纸 · 当前作图框架 {doc.views.find((v) => v.id === viewId)?.name}
+        统一图纸 · 当前作图框架 {doc.views.find((v) => v.id === viewId)?.name} · {commandRegistry.find(c=>c.id===tool)?.name}
       </div>
       <svg
         ref={svg}
         tabIndex={0}
         aria-label="统一展开图绘图区"
-        data-interaction={state}
+        data-interaction={
+          props.session.construction
+            ? props.session.construction.phase === 'reference'
+              ? 'pickingReference'
+              : props.session.construction.spec.directionMode === 'PARALLEL'
+                ? 'placingParallel'
+                : 'placingPerpendicular'
+            : axisDraft
+              ? 'placingAxis'
+              : state
+        }
         viewBox={`${box.x} ${-box.y - box.height} ${box.width} ${box.height}`}
         onPointerDown={down}
-        onPointerMove={move}
+        onPointerMove={queueMove}
         onPointerUp={up}
-        onPointerCancel={cancel}
+        onPointerCancel={(e) => {
+          if (gesture.current?.id === e.pointerId || pointers.current.has(e.pointerId)) cancel();
+        }}
         onLostPointerCapture={(e) => {
           if (gesture.current?.id === e.pointerId) cancel();
         }}
       >
         <ViewportDrawing
-          controls={{ ...props, document: previewDoc ?? doc }}
+          controls={{
+            ...props,
+            document:
+              (props.session.construction ? constructionPreview : null) ?? previewDoc ?? doc,
+            highlighted: [...props.highlighted, ...(marquee?.ids ?? [])],
+          }}
           viewId={viewId}
           box={box}
           scale={scale}
@@ -632,7 +951,93 @@ export function Viewport(
             axisDraft && ['side', 'confirm'].includes(axisDraft.phase) ? axisDraft.spec : null
           }
         />
+        {marquee && (
+          <g data-selection-mode={marquee.mode} data-transient="marquee" pointerEvents="none">
+            <rect
+              x={marquee.box.x}
+              y={-marquee.box.y - marquee.box.height}
+              width={marquee.box.width}
+              height={marquee.box.height}
+              fill={marquee.mode === 'window' ? '#0284c71a' : '#16a34a1a'}
+              stroke={marquee.mode === 'window' ? '#0284c7' : '#15803d'}
+              strokeWidth={1 / scale}
+              strokeDasharray={
+                marquee.mode === 'crossing' ? `${5 / scale} ${3 / scale}` : undefined
+              }
+            />
+            <text
+              x={marquee.box.x + 5 / scale}
+              y={-marquee.box.y - marquee.box.height + 16 / scale}
+              fontSize={12 / scale}
+            >
+              {marquee.mode === 'window' ? 'Window · 完全包含' : 'Crossing · 包含或相交'}
+            </text>
+          </g>
+        )}
+        {state !== 'idle' && state !== 'drawingStroke' && !marquee && (
+          <MeasurementOverlay
+            doc={previewDoc ?? doc}
+            ids={state.startsWith('dragging') ? props.selected : []}
+            path={preview}
+            tool={tool}
+            box={box}
+            scale={scale}
+          />
+        )}
       </svg>
+      {candidate && (
+        <div className="geo-snap-feedback" data-snap-feedback="true">
+          吸附：
+          {candidate.label ??
+            {
+              COINCIDENT: '端点',
+              MIDPOINT: '中点',
+              INTERSECTION: '交点',
+              POINT_ON_LINE: '线上点',
+              AXIS_DIRECTION: '沿轴方向',
+              GRID: '网格',
+              PROJECTION_ALIGNMENT: '投影对齐',
+            }[candidate.kind as 'COINCIDENT'] ??
+            candidate.kind}{' '}
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              if (gesture.current) {
+                gesture.current.pausedSnap = true;
+                drag(gesture.current, gesture.current.last);
+              }
+            }}
+          >
+            暂停当前吸附
+          </button>
+          <span>按 Alt 暂停</span>
+        </div>
+      )}
+      {state === 'idle' &&
+        props.selected.length > 0 &&
+        tool === 'select' &&
+        !axisDraft &&
+        !props.session.construction && (
+          <FloatingInspector
+            controls={props}
+            svg={svg}
+            cameraKey={`${box.x},${box.y},${box.width},${box.height}`}
+          />
+        )}
+      {props.session.construction && (
+        <ConstructionPanel
+          construction={props.session.construction}
+          dispatch={props.dispatch}
+          confirm={() => {
+            if (constructionPreview) accept(constructionPreview);
+          }}
+          clearPreview={() => {
+            setConstructionPreview(null);
+            setPreview([]);
+          }}
+        />
+      )}
       {!readOnly && (
         <OperationRecovery
           doc={doc}
@@ -674,20 +1079,29 @@ export function Viewport(
           </button>
         </div>
       )}
-      {!readOnly && orthographic(doc) && (
-        <AxisTools
-          doc={doc}
-          role={role}
-          commit={props.commit}
-          report={props.report}
-          start={(spec) => {
-            cancel();
-            setAxisDraft({ spec, phase: spec.method === 'FREE' ? 'anchor' : 'reference' });
-            props.report(
-              spec.method === 'FREE' ? '点击新轴的第一点' : '点击保留投影中的参考线线身',
-            );
-          }}
-        />
+      {!readOnly && orthographic(doc) && props.session.panel === 'axis' && (
+        <div className="geo-panel" role="dialog" aria-label="新增投影轴">
+          <button
+            type="button"
+            onClick={() => props.dispatch({ type: 'patch', patch: { panel: null } })}
+          >
+            关闭面板
+          </button>
+          <AxisTools
+            doc={doc}
+            role={role}
+            commit={props.commit}
+            report={props.report}
+            start={(spec) => {
+              cancel();
+              props.dispatch({ type: 'patch', patch: { panel: null } });
+              setAxisDraft({ spec, phase: spec.method === 'FREE' ? 'anchor' : 'reference' });
+              props.report(
+                spec.method === 'FREE' ? '点击新轴的第一点' : '点击保留投影中的参考线线身',
+              );
+            }}
+          />
+        </div>
       )}
     </section>
   );

@@ -45,7 +45,7 @@ export function constructLine(
           created.id,
           { kind: 'entity', entityId: pointId },
           'THROUGH_POINT',
-          'BINDING',
+          created.lineStyle.startsWith('PROBLEM') ? 'POSITION' : 'BINDING',
         );
     },
     role,
@@ -100,7 +100,7 @@ export function setSegmentParameters(
         [e.endPoint, end],
       ] as const) {
         const p = d.entities.find((e) => e.id === id);
-        if (p?.kind === 'point') {
+        if (p?.kind === 'point' && (p.position.x !== position.x || p.position.y !== position.y)) {
           p.position = position;
           p.spatial = null;
         }
@@ -206,8 +206,16 @@ export function applyProperties(
     if (!text || !Number.isFinite(Number(text))) throw Error('请输入完整的有限数值');
     return Number(text);
   };
+  const current = propertyValues(doc, e);
+  const geometryChanged = Object.keys(current).some(
+    (key) =>
+      key !== 'style' &&
+      key !== 'fixed' &&
+      key !== 'name' &&
+      (Number(values[key]) !== Number(current[key]) || !values[key]?.trim()),
+  );
   let next =
-    e.kind === 'segment'
+    e.kind === 'segment' && geometryChanged
       ? setSegmentParameters(
           doc,
           id,
@@ -221,13 +229,19 @@ export function applyProperties(
           (d) => {
             const target = d.entities.find((e) => e.id === id)!;
             if (target.kind === 'point') {
-              if (d.referenceRelations?.some((r) => r.targetId === id && r.mode === 'BINDING'))
+              if (
+                geometryChanged &&
+                (d.referenceRelations?.some((r) => r.targetId === id && r.mode === 'BINDING') ||
+                  d.constraints.some((r) => r.mode === 'BINDING' && r.entityIds[0] === id))
+              )
                 throw Error('坐标受绑定控制，请先解除绑定');
               target.position = { x: number('u'), y: number('v') };
               target.name = values.name;
               target.spatial = null;
             }
-            if (target.kind === 'line') {
+            if (target.kind === 'line' && geometryChanged) {
+              if (d.referenceRelations?.some((r) => r.targetId === id && r.mode === 'BINDING'))
+                throw Error('方向或锚点受绑定控制，请先解除绑定');
               target.anchor = { x: number('u'), y: number('v') };
               target.direction = {
                 x: Math.cos((number('angle') * Math.PI) / 180),
