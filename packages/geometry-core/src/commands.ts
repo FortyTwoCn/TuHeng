@@ -249,7 +249,9 @@ export function applyProperties(
               };
             }
             if (target.kind === 'circle' || target.kind === 'arc') {
-              target.radius = number('radius');
+              const radius = number('radius');
+              if (radius <= 0) throw Error('半径必须大于零');
+              target.radius = radius;
               const p = d.entities.find((e) => e.id === target.center);
               if (
                 p?.kind === 'point' &&
@@ -260,7 +262,9 @@ export function applyProperties(
               }
               if (target.kind === 'arc') {
                 target.startAngle = number('startAngle');
-                target.sweep = number('sweep');
+                const sweep = number('sweep');
+                if (!sweep || Math.abs(sweep) > 360) throw Error('扫角须非零且不超过 360°');
+                target.sweep = sweep;
               }
             }
           },

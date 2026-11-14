@@ -1,16 +1,31 @@
+import { resolveReference, point } from '@tuheng/geometry-core';
+import type { GeometryDocument, GeometryTargetRef } from '@tuheng/contracts';
 import type { Dispatch } from 'react';
 import type { ConstructionSession, SessionAction } from './session';
 export function ConstructionPanel({
   construction,
+  document: doc,
   dispatch,
   confirm,
   clearPreview,
 }: {
   construction: ConstructionSession;
+  document: GeometryDocument;
   dispatch: Dispatch<SessionAction>;
   confirm: () => void;
   clearPreview: () => void;
 }) {
+  const describe = (ref: GeometryTargetRef) => {
+    const r = resolveReference(doc, ref);
+    const e = ref.kind === 'entity' ? doc.entities.find((e) => e.id === ref.entityId) : undefined;
+    const at =
+      e?.kind === 'segment' ? point(doc, e.startPoint) : e?.kind === 'line' ? e.anchor : undefined;
+    return (
+      r.name +
+      (e ? ' · ' + doc.views.find((v) => v.id === e.viewId)?.name : '') +
+      (at ? `（起点/锚点 u ${at.x.toFixed(1)}, v ${at.y.toFixed(1)}）` : '')
+    );
+  };
   return (
     <div className="geo-operation-panel" role="dialog" aria-label="构造与关系">
       <strong>
@@ -23,6 +38,12 @@ export function ConstructionPanel({
               ? '选择待修改线'
               : '检查预览'}
       </strong>
+      {construction.reference && <p>参考：{describe(construction.reference)}（保持不动）</p>}
+      {construction.targetId && (
+        <p>
+          待修改：{describe({ kind: 'entity', entityId: construction.targetId })} · 固定起点和长度
+        </p>
+      )}
       <div className="geo-fields">
         {construction.mode === 'create' ? (
           <>

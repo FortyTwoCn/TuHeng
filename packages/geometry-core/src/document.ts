@@ -70,6 +70,12 @@ export function combineAnswer(stem: GeometryDocument, input: unknown): GeometryD
       throw new Error('GEOMETRY_STEM_CHANGED');
   }
   const ids = new Set(locked.map((e) => e.id));
+  if (
+    answer.referenceRelations?.some(
+      (r) => ids.has(r.targetId) && !stem.referenceRelations?.some((p) => p.id === r.id),
+    )
+  )
+    throw new Error('GEOMETRY_STEM_CHANGED');
   if (answer.entities.some((e) => !ids.has(e.id) && !editable(answer, e, 'student')))
     throw new Error('GEOMETRY_STEM_CHANGED');
   for (const key of ['constraints', 'projectionGroups'] as const)
@@ -190,6 +196,15 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
     for (const id of pointReferences(e)) targets.add(id);
   const selected = doc.entities.filter((e) => targets.has(e.id));
   if (selected.some((e) => !editable(doc, e, role))) throw new Error('请仅复制可编辑对象');
+  if (
+    doc.referenceRelations?.some(
+      (r) =>
+        targets.has(r.targetId) &&
+        r.mode === 'BINDING' &&
+        (r.reference.kind !== 'entity' || !targets.has(r.reference.entityId)),
+    )
+  )
+    throw Error('复制涉及外部绑定，请先解除绑定或同时选中参考对象');
   const mapping = new Map(selected.map((e) => [e.id, crypto.randomUUID()]));
   const next = transact(
     doc,
@@ -216,6 +231,22 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
           id: crypto.randomUUID(),
           entityIds: relation.entityIds.map((id) => mapping.get(id)!),
         });
+      for (const r of doc.referenceRelations ?? [])
+        if (mapping.has(r.targetId)) {
+          d.referenceRelations ??= [];
+          d.referenceRelations.push({
+            ...r,
+            id: crypto.randomUUID(),
+            targetId: mapping.get(r.targetId)!,
+            reference:
+              r.reference.kind === 'entity'
+                ? {
+                    kind: 'entity',
+                    entityId: mapping.get(r.reference.entityId) ?? r.reference.entityId,
+                  }
+                : r.reference,
+          });
+        }
       for (const relation of doc.projectionGroups.filter((r) =>
         r.entityIds.every((id) => mapping.has(id)),
       ))

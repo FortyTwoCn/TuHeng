@@ -80,8 +80,14 @@ export function resolveReference(doc: GeometryDocument, ref: GeometryTargetRef):
 }
 export function referenceGeometry(doc: GeometryDocument) {
   const keys = orthographic(doc) ? (['X', 'Z', 'Y_H', 'Y_W'] as const) : (['x', 'y', 'z'] as const);
+  const origins = doc.views.map((v) => resolveReference(doc, { kind: 'origin', frameId: v.id }));
   return [
-    resolveReference(doc, { kind: 'origin', frameId: doc.views[0].id }),
+    ...origins.filter(
+      (r, i) =>
+        origins.findIndex(
+          (p) => Math.hypot(p.anchor.x - r.anchor.x, p.anchor.y - r.anchor.y) < 1e-9,
+        ) === i,
+    ),
     ...keys.map((axisId) => resolveReference(doc, { kind: 'baseAxis', axisId })),
     ...(doc.auxiliarySystems ?? []).map((a) =>
       resolveReference(doc, { kind: 'projectionAxis', systemId: a.id }),
@@ -104,6 +110,23 @@ export function targetCapabilities(
   role: 'teacher' | 'student',
   readOnly = false,
 ) {
+  const absent = {
+    selectable: false,
+    snappable: false,
+    referenceable: false,
+    editable: false,
+    deletable: false,
+  };
+  if (
+    (ref.kind === 'origin' && !doc.views.some((v) => v.id === ref.frameId)) ||
+    (ref.kind === 'projectionAxis' && !doc.auxiliarySystems?.some((a) => a.id === ref.systemId))
+  )
+    return absent;
+  if (
+    ref.kind === 'baseAxis' &&
+    !(orthographic(doc) ? ['X', 'Z', 'Y_H', 'Y_W'] : ['x', 'y', 'z']).includes(ref.axisId)
+  )
+    return absent;
   let editable = false,
     deletable = false;
   if (ref.kind === 'entity') {

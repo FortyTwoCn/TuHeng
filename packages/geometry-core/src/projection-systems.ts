@@ -51,7 +51,12 @@ export function renameProjectionAxis(
   role: 'teacher' | 'student',
 ) {
   const axis = doc.auxiliarySystems?.find((a) => a.id === id);
-  if (!axis || (role === 'student' && axis.owner !== 'STUDENT')) throw new Error('题干轴只读');
+  if (
+    !axis ||
+    (role === 'student' &&
+      (axis.owner !== 'STUDENT' || axis.locked || !doc.sheet?.allowAuxiliaryViews))
+  )
+    throw new Error('题干轴只读');
   return transact(
     doc,
     (d) => {
@@ -149,7 +154,11 @@ export function deleteProjectionAxis(
 ) {
   const axis = doc.auxiliarySystems?.find((a) => a.id === id);
   if (!axis) throw new Error('轴不存在');
-  if (role === 'student' && axis.owner !== 'STUDENT') throw new Error('题干轴只读');
+  if (
+    role === 'student' &&
+    (axis.owner !== 'STUDENT' || axis.locked || !doc.sheet?.allowAuxiliaryViews)
+  )
+    throw new Error('题干轴只读');
   const dependents = (doc.auxiliarySystems ?? []).filter((a) => a.parentId === id);
   const objects = doc.entities.filter((e) => e.viewId === axis.newViewId);
   if (

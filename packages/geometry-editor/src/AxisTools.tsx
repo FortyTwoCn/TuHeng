@@ -1,25 +1,27 @@
 import { useState } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
-import {
-  suggestAxisNames,
-  transact,
-  type AxisConstruction,
-} from '@tuheng/geometry-core';
+import { suggestAxisNames, transact, type AxisConstruction } from '@tuheng/geometry-core';
 export function AxisTools({
   doc,
   role,
   start,
   commit,
   report,
+  initialSystemId = '',
 }: {
   doc: GeometryDocument;
+  initialSystemId?: string;
   role: 'teacher' | 'student';
   start: (spec: AxisConstruction) => void;
   commit: (doc: GeometryDocument) => void;
   report: (text: string) => void;
 }) {
-  const [parent, setParent] = useState(''),
-    [retained, setRetained] = useState(doc.views[1]?.id ?? doc.views[0].id),
+  const [parent, setParent] = useState(initialSystemId),
+    [retained, setRetained] = useState(
+      doc.auxiliarySystems?.find((a) => a.id === initialSystemId)?.newViewId ??
+        doc.views[1]?.id ??
+        doc.views[0].id,
+    ),
     [method, setMethod] = useState<AxisConstruction['method']>('FREE'),
     [name, setName] = useState(''),
     [viewName, setViewName] = useState('');
@@ -142,7 +144,12 @@ export function AxisTools({
       >
         开始定位新轴
       </button>
-      {(doc.auxiliarySystems?.length??0)>0&&<p>已有轴：{doc.auxiliarySystems?.map(a=>a.name).join('、')}。点击图纸上的轴查看属性、重命名或按依赖规则删除。</p>}
+      {(doc.auxiliarySystems?.length ?? 0) > 0 && (
+        <p>
+          已有轴：{doc.auxiliarySystems?.map((a) => a.name).join('、')}
+          。点击图纸上的轴查看属性、重命名或按依赖规则删除。
+        </p>
+      )}
     </details>
   );
 }

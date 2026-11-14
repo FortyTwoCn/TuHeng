@@ -101,8 +101,10 @@ export function OperationRecovery({
           </span>
           <button
             type="button"
+            disabled={!same(suggestion.raw)}
             onClick={() => {
               try {
+                if (!same(suggestion.raw)) throw Error('文档已变化，不能覆盖后续编辑');
                 const next = addPenStroke(
                   suggestion.base,
                   suggestion.viewId,

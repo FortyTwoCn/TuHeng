@@ -29,7 +29,9 @@ async function load(page: Page, document = connectionSheet()) {
     buffer: Buffer.from(JSON.stringify(document)),
   });
   await expect(page.locator('[data-entity-id]')).toHaveCount(document.entities.length);
-  await page.evaluate(()=>new Promise<void>(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r()))));
+  await page.evaluate(
+    () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+  );
 }
 async function screen(page: Page, p: Vec2) {
   const svg = page.locator('.geo-view svg').first();
@@ -50,7 +52,7 @@ async function move(page: Page, p: Vec2) {
 }
 async function json(page: Page) {
   const pending = page.waitForEvent('download');
-  await choose(page,'导出 JSON');
+  await choose(page, '导出 JSON');
   await closePanels(page);
   return GeometryDocument.parse(JSON.parse(readFileSync((await (await pending).path())!, 'utf8')));
 }
@@ -354,6 +356,7 @@ test('UX18/19/20: reference-first finite construction, confirmed direction and m
   expect(await json(page)).toEqual(initial);
   await choose(page, '确认方向调整');
   d = await json(page);
+  writeFileSync(evidence + '/direction-binding.json', JSON.stringify(d, null, 2));
   expect(d.referenceRelations?.at(-1)).toMatchObject({
     kind: 'PARALLEL',
     mode: 'BINDING',
@@ -482,4 +485,97 @@ test('UX22: pause snap preserves original stroke and the next gesture restores t
   const d = await json(page);
   const p = d.entities.at(-1)!;
   if (p.kind === 'point') expect(p.position.x).toBe(0);
+});
+test('UX04/16: invalid circle radius stays in the draft without changing JSON', async ({
+  page,
+}) => {
+  const d = addDrawing(
+    createDocument('VHW_PROJECTION'),
+    'circle',
+    'view-0',
+    [
+      { x: 30, y: 30 },
+      { x: 40, y: 30 },
+    ],
+    'student',
+  );
+  await load(page, d);
+  await click(page, { x: -40, y: 30 });
+  const input = page.getByLabel('半径 (mm)', { exact: true });
+  await input.fill('-');
+  await input.press('Enter');
+  await expect(input).toHaveValue('-');
+  expect(await json(page)).toEqual(d);
+  await input.fill('0');
+  await choose(page, '确认属性');
+  await expect(
+    page.getByRole('dialog', { name: '对象属性', exact: true }).getByRole('alert'),
+  ).toBeVisible();
+  expect(await json(page)).toEqual(d);
+  await input.fill('12.5');
+  await input.press('Enter');
+  expect((await json(page)).entities.at(-1)).toMatchObject({ kind: 'circle', radius: 12.5 });
+  await choose(page, '撤销');
+  expect(await json(page)).toEqual(d);
+});
+test('UX12/13: two-click marquee alternative and Ctrl selection toggles preserve the document', async ({
+  page,
+}) => {
+  const d = standardSheet();
+  await load(page, d);
+  await choose(page, '框选（两次点击）');
+  await click(page, { x: -40, y: 45 });
+  await click(page, { x: -20, y: 30 });
+  await choose(page, '选择');
+  await expect(page.locator('[data-entity-id="A_V"]')).toHaveAttribute('data-selected', 'true');
+  await page.keyboard.down('Control');
+  await click(page, { x: 20, y: 40 });
+  await page.keyboard.up('Control');
+  await expect(page.getByRole('dialog', { name: '对象属性', exact: true })).toContainText(
+    '2 个对象',
+  );
+  await page.keyboard.down('Control');
+  await click(page, { x: 20, y: 40 });
+  await page.keyboard.up('Control');
+  await expect(page.locator('[data-entity-id="A_W"]')).toHaveAttribute('data-selected', 'false');
+  expect(await json(page)).toEqual(d);
+});
+test.describe('DPR 2', () => {
+  test.use({ deviceScaleFactor: 2 });
+  test('UX08: CSS pixel axis snap is independent of device pixels', async ({ page }) => {
+    await load(page, standardSheet());
+    const z = await screen(page, { x: 0, y: 25 });
+    await press(page, { x: -30, y: 40 });
+    await page.mouse.move(z.x - 5, z.y, { steps: 6 });
+    await expect(page.locator('.geo-snap-feedback')).toContainText('Z');
+    await page.screenshot({ path: evidence + '/axis-snap.png' });
+    await page.mouse.up();
+    expect(point(await json(page), 'A_V').x).toBe(0);
+  });
+});
+test('UX17: resized mobile viewport keeps object and property confirmation accessible', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await load(page);
+  await choose(page, '展开编辑');
+  await click(page, { x: -42.5, y: 35 });
+  await choose(page, '编辑属性');
+  const field = page.getByLabel('长度 (mm)', { exact: true });
+  await field.fill('30');
+  // Reduced visual space is a browser simulation; this is not a physical software keyboard test.
+  await page.setViewportSize({ width: 390, height: 500 });
+  await expect(field).toHaveValue('30');
+  const canvas = (await page.locator('.geo-view svg').boundingBox())!;
+  expect(canvas.height).toBeGreaterThan(100);
+  await choose(page, '确认属性');
+  expect(
+    length(
+      lineGeometry(
+        await json(page),
+        (await json(page)).entities.find((e) => e.kind === 'segment')!,
+      ).d,
+    ),
+  ).toBeCloseTo(30);
+  await page.screenshot({ path: evidence + '/mobile-reduced-viewport.png' });
 });

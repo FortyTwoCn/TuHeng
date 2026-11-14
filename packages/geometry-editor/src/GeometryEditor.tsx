@@ -36,7 +36,7 @@ import { ProjectionSettings } from './ProjectionSettings';
 import { RulerControls } from './RulerControls';
 import { EditorToolbar } from './EditorToolbar';
 import { EditorPopover } from './EditorPopover';
-import { commandRegistry, textEntry, type CommandId } from './commands';
+import { commandRegistry, commandUnavailable, textEntry, type CommandId } from './commands';
 import { sessionReducer } from './session';
 import type { Ruler } from './types';
 import './styles.css';
@@ -102,7 +102,10 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       active: doc.views[0].id,
       expanded: false,
     });
-    const { tool, selected, expanded, panel } = session;
+    const { tool, expanded, panel } = session;
+    const selected = session.selected.filter(
+      (id) => targetCapabilities(doc, targetFromKey(id), role, readOnly).selectable,
+    );
     const select = (ids: string[]) => dispatch({ type: 'select', ids });
     const [message, report] = useState('选择对象，或从空白拖动框选');
     const [settings, setSettings] = useState({
@@ -129,8 +132,14 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     });
     const [exported, setExported] = useState('');
     const root = useRef<HTMLDivElement>(null);
-    const [compact,setCompact]=useState(false);
-    useEffect(()=>{const el=root.current;if(!el)return;const observer=new ResizeObserver(([e])=>setCompact(e.contentRect.width<700));observer.observe(el);return()=>observer.disconnect();},[]);
+    const [compact, setCompact] = useState(false);
+    useEffect(() => {
+      const el = root.current;
+      if (!el) return;
+      const observer = new ResizeObserver(([e]) => setCompact(e.contentRect.width < 700));
+      observer.observe(el);
+      return () => observer.disconnect();
+    }, []);
     useEffect(() => {
       if (JSON.stringify(history.current.current) !== fingerprint) {
         history.current = new DocumentHistory(doc);
@@ -251,8 +260,9 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     const runCommand = (id: CommandId) => {
       const entry = commandRegistry.find((e) => e.id === id);
       if (!entry) return;
-      if (readOnly && entry.requiresEdit) {
-        report('当前文档只读');
+      const reason = commandUnavailable(entry, readOnly, doc.editorType);
+      if (reason) {
+        report(reason);
         return;
       }
       if (entry.kind === 'tool') {
@@ -421,7 +431,13 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         </div>
         <EditorToolbar>
           <div className="geo-tool-scroll">
-            <ToolPicker tool={tool} run={runCommand} readOnly={readOnly} compact={compact}/>
+            <ToolPicker
+              editorType={doc.editorType}
+              tool={tool}
+              run={runCommand}
+              readOnly={readOnly}
+              compact={compact}
+            />
           </div>
           <button type="button" disabled={readOnly || !history.current.canUndo} onClick={undo}>
             撤销
@@ -429,97 +445,105 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           <button type="button" disabled={readOnly || !history.current.canRedo} onClick={redo}>
             恢复
           </button>
-          {compact?<EditorPopover label="更多">{/* Shared settings and file commands */}          <button
-            type="button"
-            aria-pressed={settings.snapping}
-            aria-label="吸附开关"
-            onClick={() => setSettings((s) => ({ ...s, snapping: !s.snapping }))}
-          >
-            吸附
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              dispatch({
-                type: 'patch',
-                patch: { panel: panel === 'settings' ? null : 'settings' },
-              })
-            }
-            aria-label="视图/设置"
-          >
-            视图/设置
-          </button>
-
-            <button
-              type="button"
-              disabled={readOnly}
-              onClick={() =>
-                root.current?.querySelector<HTMLInputElement>('.geo-file-input')?.click()
-              }
-            >
-              导入 JSON
-            </button>
-            <button type="button" onClick={() => output('json')}>
-              导出 JSON
-            </button>
-            <button type="button" onClick={() => output('narrative')}>
-              导出关系描述
-            </button>
-            <button type="button" onClick={() => output('svg')}>
-              导出展开图 SVG
-            </button>
-            <button
-              type="button"
-              onClick={() => dispatch({ type: 'patch', patch: { panel: 'file' } })}
-            >
-              查看文档
-            </button></EditorPopover>:<>          <button
-            type="button"
-            aria-pressed={settings.snapping}
-            aria-label="吸附开关"
-            onClick={() => setSettings((s) => ({ ...s, snapping: !s.snapping }))}
-          >
-            吸附
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              dispatch({
-                type: 'patch',
-                patch: { panel: panel === 'settings' ? null : 'settings' },
-              })
-            }
-            aria-label="视图/设置"
-          >
-            视图/设置
-          </button>
-          <EditorPopover label="文件">
-            <button
-              type="button"
-              disabled={readOnly}
-              onClick={() =>
-                root.current?.querySelector<HTMLInputElement>('.geo-file-input')?.click()
-              }
-            >
-              导入 JSON
-            </button>
-            <button type="button" onClick={() => output('json')}>
-              导出 JSON
-            </button>
-            <button type="button" onClick={() => output('narrative')}>
-              导出关系描述
-            </button>
-            <button type="button" onClick={() => output('svg')}>
-              导出展开图 SVG
-            </button>
-            <button
-              type="button"
-              onClick={() => dispatch({ type: 'patch', patch: { panel: 'file' } })}
-            >
-              查看文档
-            </button>
-          </EditorPopover>
-</>}
+          {compact ? (
+            <EditorPopover label="更多">
+              {/* Shared settings and file commands */}{' '}
+              <button
+                type="button"
+                aria-pressed={settings.snapping}
+                aria-label="吸附开关"
+                onClick={() => setSettings((s) => ({ ...s, snapping: !s.snapping }))}
+              >
+                吸附
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  dispatch({
+                    type: 'patch',
+                    patch: { panel: panel === 'settings' ? null : 'settings' },
+                  })
+                }
+                aria-label="视图/设置"
+              >
+                视图/设置
+              </button>
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={() =>
+                  root.current?.querySelector<HTMLInputElement>('.geo-file-input')?.click()
+                }
+              >
+                导入 JSON
+              </button>
+              <button type="button" onClick={() => output('json')}>
+                导出 JSON
+              </button>
+              <button type="button" onClick={() => output('narrative')}>
+                导出关系描述
+              </button>
+              <button type="button" onClick={() => output('svg')}>
+                导出展开图 SVG
+              </button>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'patch', patch: { panel: 'file' } })}
+              >
+                查看文档
+              </button>
+            </EditorPopover>
+          ) : (
+            <>
+              {' '}
+              <button
+                type="button"
+                aria-pressed={settings.snapping}
+                aria-label="吸附开关"
+                onClick={() => setSettings((s) => ({ ...s, snapping: !s.snapping }))}
+              >
+                吸附
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  dispatch({
+                    type: 'patch',
+                    patch: { panel: panel === 'settings' ? null : 'settings' },
+                  })
+                }
+                aria-label="视图/设置"
+              >
+                视图/设置
+              </button>
+              <EditorPopover label="文件">
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() =>
+                    root.current?.querySelector<HTMLInputElement>('.geo-file-input')?.click()
+                  }
+                >
+                  导入 JSON
+                </button>
+                <button type="button" onClick={() => output('json')}>
+                  导出 JSON
+                </button>
+                <button type="button" onClick={() => output('narrative')}>
+                  导出关系描述
+                </button>
+                <button type="button" onClick={() => output('svg')}>
+                  导出展开图 SVG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'patch', patch: { panel: 'file' } })}
+                >
+                  查看文档
+                </button>
+              </EditorPopover>
+            </>
+          )}
           <input
             className="geo-file-input"
             tabIndex={-1}

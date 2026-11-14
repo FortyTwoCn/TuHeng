@@ -59,9 +59,11 @@ export async function scheduleRun(
     imageOptions: { maxDimension: 2000, rotate: 0, crop: null },
     strategyVersion: 'geometry-v1',
     promptVersion: bundle
-      ? bundle.document.schemaVersion === 'tuheng.geometry/2.0.0'
-        ? 'geometry-review/1.2.0'
-        : 'geometry-review/1.1.0'
+      ? bundle.document.schemaVersion === 'tuheng.geometry/2.1.0'
+        ? 'geometry-review/1.3.0'
+        : bundle.document.schemaVersion === 'tuheng.geometry/2.0.0'
+          ? 'geometry-review/1.2.0'
+          : 'geometry-review/1.1.0'
       : 'geometry-review/1.0.0',
     modelConfigId: config.id,
   });

@@ -156,7 +156,7 @@ test('four editors load, draw, undo, export, and keep mobile views and raw pen s
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await draw(page, '虚线', 100, 100);
   await expect(page.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
-  await choose(page,'电子笔');
+  await choose(page, '电子笔');
   await settings(page);
   await page.getByLabel('虚拟直尺', { exact: true }).check();
   await closePanels(page);
@@ -251,6 +251,8 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await sheet.click({ position: { x: 70, y: 110 } });
   await student.getByRole('button', { name: '确认新轴', exact: true }).click();
   await expect(student.locator('[data-axis-id]')).toHaveCount(1);
+  await choose(student, '平行线');
+  await sheet.click({ position: { x: 300, y: 180 } });
   const draftResponse = student.waitForResponse(
     (response) =>
       response.url().endsWith('/api/actions/draft') && response.request().method() === 'POST',
@@ -258,6 +260,18 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await student.getByRole('button', { name: '保存草稿', exact: true }).click();
   const draftRequest = (await draftResponse).request().postDataJSON();
   expect(draftRequest.geometry.auxiliarySystems).toHaveLength(1);
+  expect(draftRequest.geometry.schemaVersion).toBe('tuheng.geometry/2.1.0');
+  expect(draftRequest.geometry.referenceRelations.length).toBeGreaterThan(0);
+  const missingReference = structuredClone(draftRequest);
+  missingReference.geometry.referenceRelations[0].reference = {
+    kind: 'projectionAxis',
+    systemId: 'missing',
+  };
+  const badReference = await student.request.post('/api/actions/draft', {
+    headers: { Origin: 'http://localhost:3000' },
+    data: missingReference,
+  });
+  expect(badReference.status()).toBe(400);
   const forged = structuredClone(draftRequest);
   const stemPoint = forged.geometry.entities.find(
     (e: { kind: string; lineStyle: string }) =>

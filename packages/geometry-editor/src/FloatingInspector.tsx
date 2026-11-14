@@ -5,6 +5,7 @@ import {
   offset,
   flip,
   shift,
+  size,
   type VirtualElement,
 } from '@floating-ui/dom';
 import {
@@ -29,10 +30,12 @@ export function FloatingInspector({
   controls: p,
   svg,
   cameraKey,
+  beginEdit,
 }: {
   controls: EditorControls;
   svg: RefObject<SVGSVGElement | null>;
   cameraKey: string;
+  beginEdit: () => void;
 }) {
   const node = useRef<HTMLDivElement>(null),
     frozen = useRef(false),
@@ -80,8 +83,15 @@ export function FloatingInspector({
         placement: 'bottom',
         middleware: [
           offset(12),
-          flip({ boundary: canvas }),
-          shift({ boundary: canvas, padding: 8 }),
+          flip({ boundary: canvas, fallbackPlacements: ['top', 'right', 'left'] }),
+          shift({ boundary: canvas, padding: 8, crossAxis: true }),
+          size({
+            boundary: canvas,
+            padding: 8,
+            apply({ availableHeight, elements }) {
+              elements.floating.style.maxHeight = `${Math.max(100, Math.min(availableHeight, innerHeight * 0.6, canvas.getBoundingClientRect().height - 16))}px`;
+            },
+          }),
         ],
       }).then(({ x, y }) => Object.assign(el.style, { left: `${x}px`, top: `${y}px` }));
     };
@@ -124,7 +134,10 @@ export function FloatingInspector({
       className={`geo-floating-inspector ${expanded ? 'geo-properties-expanded' : ''}`}
       onPointerDown={(e) => e.stopPropagation()}
       onFocusCapture={(e) => {
-        if (e.target instanceof HTMLInputElement) frozen.current = true;
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) {
+          frozen.current = true;
+          if (!e.target.disabled) beginEdit();
+        }
       }}
       onBlurCapture={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) frozen.current = false;
@@ -317,6 +330,15 @@ export function FloatingInspector({
             {command('relation-perpendicular')}
           </div>
         )}
+        {!entity &&
+          ref.kind !== 'origin' &&
+          !p.readOnly &&
+          doc.editorType !== 'ISOMETRIC' &&
+          doc.editorType !== 'OBLIQUE_DIMETRIC' && (
+            <button type="button" onClick={() => p.runCommand('new-axis')}>
+              新增投影轴
+            </button>
+          )}
         <div className="geo-context-actions">
           {eligible.length === p.selected.length && entity && (
             <button type="button" onClick={p.copySelection}>

@@ -161,7 +161,11 @@ export function PropertyFields({
                 setValues((v) => ({
                   ...v,
                   sweep: String(
-                    Number(v.sweep) > 0 ? Number(v.sweep) - 360 : Number(v.sweep) + 360,
+                    Math.abs(Number(v.sweep)) === 360
+                      ? -Number(v.sweep)
+                      : Number(v.sweep) > 0
+                        ? Number(v.sweep) - 360
+                        : Number(v.sweep) + 360,
                   ),
                 }))
               }

@@ -113,6 +113,7 @@ export const GradingRequest = z
       'geometry-review/1.0.0',
       'geometry-review/1.1.0',
       'geometry-review/1.2.0',
+      'geometry-review/1.3.0',
     ]),
     modelConfigId: z.string(),
     teacherRequirements: z.string().max(4000).optional(),
@@ -130,14 +131,22 @@ export const GradingRequest = z
   .refine(
     (r) =>
       !r.geometryEvidence ||
-      ['geometry-review/1.1.0', 'geometry-review/1.2.0'].includes(r.promptVersion),
+      ['geometry-review/1.1.0', 'geometry-review/1.2.0', 'geometry-review/1.3.0'].includes(
+        r.promptVersion,
+      ),
     '几何证据需要新版提示词',
   )
   .refine(
     (r) =>
       r.geometryEvidence?.schemaVersion !== 'tuheng.geometry/2.0.0' ||
-      r.promptVersion === 'geometry-review/1.2.0',
+      ['geometry-review/1.2.0', 'geometry-review/1.3.0'].includes(r.promptVersion),
     'v2 展开图需要兼容的提示词版本',
+  )
+  .refine(
+    (r) =>
+      r.geometryEvidence?.schemaVersion !== 'tuheng.geometry/2.1.0' ||
+      r.promptVersion === 'geometry-review/1.3.0',
+    'v2.1 参考关系需要兼容的提示词版本',
   );
 export type GradingRequest = z.infer<typeof GradingRequest>;
 export const Analysis = z.object({

@@ -10,7 +10,13 @@ import {
   type Actor,
 } from '@tuheng/domain';
 import { GradingRequest, GradingResult } from '@tuheng/contracts';
-import { addDrawing, createDocument, moveEntities, addProjectionAxis } from '@tuheng/geometry-core';
+import {
+  addDrawing,
+  createDocument,
+  moveEntities,
+  addProjectionAxis,
+  constructLine,
+} from '@tuheng/geometry-core';
 import { executeGradingRun } from '../../packages/infrastructure/src/grading-runner';
 import { MockVisionProvider } from '@tuheng/ai-providers';
 import { requestFixture, evaluationFixture } from '../fixtures';
@@ -81,9 +87,43 @@ it('freezes pure geometry answers, denies stem tampering and cross-student acces
     },
     'student',
   );
+  answer = constructLine(
+    answer,
+    'view-1',
+    { kind: 'projectionAxis', systemId: answer.auxiliarySystems![0].id },
+    { x: 30, y: 15 },
+    undefined,
+    {
+      directionMode: 'PERPENDICULAR',
+      geometryExtent: 'segment',
+      semanticStyle: 'visible',
+      length: 10,
+    },
+    'student',
+  );
+  expect(answer.schemaVersion).toBe('tuheng.geometry/2.1.0');
+  const badReference = structuredClone(answer);
+  badReference.referenceRelations![0].reference = {
+    kind: 'projectionAxis',
+    systemId: 'does-not-exist',
+  };
+  await expect(saveDraft(db, student, item.id, [], badReference)).rejects.toThrow();
   const forgedAxis = structuredClone(answer);
   forgedAxis.views[0].transform!.origin.x = 3;
   await expect(saveDraft(db, student, item.id, [], forgedAxis)).rejects.toMatchObject({
+    code: 'GEOMETRY_STEM_CHANGED',
+  });
+  const forgedRelation = structuredClone(answer);
+  forgedRelation.referenceRelations!.push({
+    id: crypto.randomUUID(),
+    kind: 'POINT_ON_REFERENCE',
+    targetId: stem.entities[0].id,
+    reference: { kind: 'baseAxis', axisId: 'X' },
+    mode: 'POSITION',
+    source: 'USER',
+    status: 'SATISFIED',
+  });
+  await expect(saveDraft(db, student, item.id, [], forgedRelation)).rejects.toMatchObject({
     code: 'GEOMETRY_STEM_CHANGED',
   });
   const submission = await saveDraft(db, student, item.id, [], answer);
@@ -157,7 +197,10 @@ it('freezes pure geometry answers, denies stem tampering and cross-student acces
   const suggestion = (await db.list('gradingSuggestion', { runId: run.id }))[0];
   const result = GradingResult.parse(suggestion.result);
   expect(result.geometryAnnotations).toHaveLength(1);
-  expect(result.versions.prompt).toBe('geometry-review/1.2.0');
+  expect(result.versions.prompt).toBe('geometry-review/1.3.0');
+  expect(request.geometryEvidence?.answerDocument.referenceRelations?.[0].reference).toMatchObject({
+    kind: 'projectionAxis',
+  });
   expect((await db.get('submissionAttempt', attempt.id))?.publishedDecisionId).toBeNull();
   expect(await db.list('gradeDecision', { attemptId: attempt.id })).toHaveLength(0);
 });

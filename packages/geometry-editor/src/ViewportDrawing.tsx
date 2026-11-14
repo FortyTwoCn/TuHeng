@@ -95,7 +95,7 @@ export function ViewportDrawing({
                     transform={`translate(${r.anchor.x + 3 / scale} ${r.anchor.y - 12 / scale}) scale(1 -1)`}
                     fontSize={11 / scale}
                   >
-                    O
+                    {r.name === '原点 O' ? 'O' : r.name}
                   </text>
                 </g>
               );

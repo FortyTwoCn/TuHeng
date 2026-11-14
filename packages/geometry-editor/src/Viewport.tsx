@@ -629,7 +629,7 @@ export function Viewport(
       setState('pinching');
       return;
     }
-    if (!['select', 'pan', 'box'].includes(tool)) {
+    if (!['select', 'pan', 'box'].includes(tool) || props.session.construction || axisDraft) {
       setLastSnap(null);
       setLastPen(null);
       setSuggestion(null);
@@ -717,18 +717,23 @@ export function Viewport(
         props.session.construction?.phase === 'position' &&
         props.session.construction.reference
       ) {
-        const c = props.session.construction,
-          p = local(e),
-          a = sheetToLocal(doc, viewId, p),
-          d = referenceDirection(doc, viewId, c.reference!, c.spec.directionMode);
-        setPreview([
-          p,
-          localToSheet(
-            doc,
-            viewId,
-            add(a, multiply(d, c.spec.geometryExtent === 'segment' ? c.spec.length : 100)),
-          ),
-        ]);
+        try {
+          const c = props.session.construction,
+            p = local(e),
+            a = sheetToLocal(doc, viewId, p),
+            d = referenceDirection(doc, viewId, c.reference!, c.spec.directionMode);
+          setPreview([
+            p,
+            localToSheet(
+              doc,
+              viewId,
+              add(a, multiply(d, c.spec.geometryExtent === 'segment' ? c.spec.length : 100)),
+            ),
+          ]);
+        } catch (error) {
+          setPreview([]);
+          fail(error);
+        }
       }
       return;
     }
@@ -906,7 +911,8 @@ export function Viewport(
           </select>
         )}
       <div className="geo-view-title">
-        统一图纸 · 当前作图框架 {doc.views.find((v) => v.id === viewId)?.name} · {commandRegistry.find(c=>c.id===tool)?.name}
+        统一图纸 · 当前作图框架 {doc.views.find((v) => v.id === viewId)?.name} ·{' '}
+        {commandRegistry.find((c) => c.id === tool)?.name}
       </div>
       <svg
         ref={svg}
@@ -938,14 +944,16 @@ export function Viewport(
           controls={{
             ...props,
             document:
-              (props.session.construction ? constructionPreview : null) ?? previewDoc ?? doc,
+              (props.session.construction?.phase === 'confirm' ? constructionPreview : null) ??
+              previewDoc ??
+              doc,
             highlighted: [...props.highlighted, ...(marquee?.ids ?? [])],
           }}
           viewId={viewId}
           box={box}
           scale={scale}
           preview={preview}
-          steps={steps.map((p) => localToSheet(doc, viewId, p))}
+          steps={tool === 'box' ? steps : steps.map((p) => localToSheet(doc, viewId, p))}
           candidate={candidate ? localToSheet(doc, candidateView, candidate.position) : null}
           axisDraft={
             axisDraft && ['side', 'confirm'].includes(axisDraft.phase) ? axisDraft.spec : null
@@ -1023,11 +1031,18 @@ export function Viewport(
             controls={props}
             svg={svg}
             cameraKey={`${box.x},${box.y},${box.width},${box.height}`}
+            beginEdit={() => {
+              setLastSnap(null);
+              setLastPen(null);
+              setSuggestion(null);
+              setInterrupted(null);
+            }}
           />
         )}
       {props.session.construction && (
         <ConstructionPanel
           construction={props.session.construction}
+          document={doc}
           dispatch={props.dispatch}
           confirm={() => {
             if (constructionPreview) accept(constructionPreview);
@@ -1092,6 +1107,10 @@ export function Viewport(
             role={role}
             commit={props.commit}
             report={props.report}
+            initialSystemId={
+              props.selected.map((id) => targetFromKey(id)).find((r) => r.kind === 'projectionAxis')
+                ?.systemId
+            }
             start={(spec) => {
               cancel();
               props.dispatch({ type: 'patch', patch: { panel: null } });

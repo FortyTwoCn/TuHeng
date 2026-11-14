@@ -1,17 +1,20 @@
 import { useState } from 'react';
+import type { GeometryDocument } from '@tuheng/contracts';
 import type { Tool } from './types';
-import { commandRegistry, type CommandId } from './commands';
+import { commandRegistry, commandUnavailable, type CommandId } from './commands';
 import { EditorPopover } from './EditorPopover';
 export function ToolPicker({
   tool,
   run,
   readOnly,
-  compact=false,
+  compact = false,
+  editorType,
 }: {
   tool: Tool;
   run: (id: CommandId) => void;
   readOnly: boolean;
   compact?: boolean;
+  editorType: GeometryDocument['editorType'];
 }) {
   const [last, setLast] = useState({ line: 'segment' as CommandId, round: 'circle' as CommandId });
   const invoke = (id: CommandId) => {
@@ -22,12 +25,14 @@ export function ToolPicker({
   };
   const button = (id: CommandId) => {
     const entry = commandRegistry.find((e) => e.id === id)!;
+    const reason = commandUnavailable(entry, readOnly, editorType);
     return (
       <button
         key={id}
         data-command={id}
         type="button"
-        disabled={readOnly && entry.requiresEdit}
+        disabled={!!reason}
+        title={reason}
         aria-pressed={entry.kind === 'tool' ? tool === id : undefined}
         onClick={() => invoke(id)}
       >
@@ -35,7 +40,24 @@ export function ToolPicker({
       </button>
     );
   };
-  if(compact)return <>{button('select')}<EditorPopover label="绘图">{commandRegistry.filter(e=>['draw','line','round','select'].includes(e.group)&&e.id!=='select').map(e=>button(e.id))}</EditorPopover><EditorPopover label="构造">{commandRegistry.filter(e=>e.group==='construct'||e.group==='relation'||e.id==='line').map(e=>button(e.id))}</EditorPopover></>;
+  if (compact)
+    return (
+      <>
+        {button('select')}
+        <EditorPopover label="绘图">
+          {commandRegistry
+            .filter(
+              (e) => ['draw', 'line', 'round', 'select'].includes(e.group) && e.id !== 'select',
+            )
+            .map((e) => button(e.id))}
+        </EditorPopover>
+        <EditorPopover label="构造">
+          {commandRegistry
+            .filter((e) => e.group === 'construct' || e.group === 'relation' || e.id === 'line')
+            .map((e) => button(e.id))}
+        </EditorPopover>
+      </>
+    );
   return (
     <>
       {button('select')}

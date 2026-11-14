@@ -129,6 +129,7 @@ test('UX performance: real pointer preview with 100 points 300 segments and 100 
   await page.mouse.move(p.x, p.y);
   await page.mouse.down();
   for (let i = 1; i <= 30; i++) await page.mouse.move(p.x + i * 0.8, p.y - i * 0.4);
+  await expect(first.locator('[data-measurement-hud]')).toBeVisible();
   await page.mouse.up();
   await page.waitForTimeout(100);
   const samples = await page.evaluate(() => window.frameSamples),
