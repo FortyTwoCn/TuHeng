@@ -106,7 +106,10 @@ export function Viewport(
       ids: string[];
     } | null>(null),
     [overlaps, setOverlaps] = useState<Hit[]>([]);
-  const [constructionPreview, setConstructionPreview] = useState<GeometryDocument | null>(null);
+  const [constructionPreview, setConstructionPreview] = useState<{
+    revision: object;
+    next: GeometryDocument;
+  } | null>(null);
   const [preview, setPreview] = useState<Vec2[]>([]),
     [previewDoc, setPreviewDoc] = useState<GeometryDocument | null>(null),
     [candidate, setCandidate] = useState<SnapCandidate | null>(null),
@@ -201,6 +204,17 @@ export function Viewport(
       window.removeEventListener('blur', blur);
     };
   }, [cancel, axisDraft, steps]);
+  const [previousRevision, setPreviousRevision] = useState(props.revision);
+  if (previousRevision !== props.revision) {
+    setPreviousRevision(props.revision);
+    setConstructionPreview(null);
+    setAxisDraft(null);
+    setSteps([]);
+    setReference(undefined);
+    setPreview([]);
+    setPreviewDoc(null);
+    setCandidate(null);
+  }
   const [previousTool, setPreviousTool] = useState(tool);
   if (previousTool !== tool) {
     setPreviousTool(tool);
@@ -391,7 +405,7 @@ export function Viewport(
       const reference = c.reference!;
       if (!target || target.kind === 'reference') throw Error('请选择待修改的答案线');
       const next = adjustDirection(doc, target.id, reference, c.spec.directionMode, c.keep, role);
-      setConstructionPreview(next);
+      setConstructionPreview({ revision: props.revision, next });
       props.dispatch({
         type: 'patch',
         patch: { construction: { ...c, targetId: target.id, phase: 'confirm' } },
@@ -402,8 +416,9 @@ export function Viewport(
     if (c.phase === 'position') {
       const e = doc.entities.find((e) => e.id === target?.id && e.viewId === viewId),
         at = e?.kind === 'point' ? e.position : sheetToLocal(doc, viewId, p);
-      accept(
-        constructLine(
+      setConstructionPreview({
+        revision: props.revision,
+        next: constructLine(
           doc,
           viewId,
           c.reference!,
@@ -412,8 +427,9 @@ export function Viewport(
           c.spec,
           role,
         ),
-      );
-      props.dispatch({ type: 'patch', patch: { construction: null } });
+      });
+      props.dispatch({ type: 'patch', patch: { construction: { ...c, phase: 'confirm' } } });
+      props.report('检查构造预览，确认后创建；可重新选择通过点');
       setPreview([]);
       return true;
     }
@@ -944,7 +960,10 @@ export function Viewport(
           controls={{
             ...props,
             document:
-              (props.session.construction?.phase === 'confirm' ? constructionPreview : null) ??
+              (props.session.construction?.phase === 'confirm' &&
+              constructionPreview?.revision === props.revision
+                ? constructionPreview.next
+                : null) ??
               previewDoc ??
               doc,
             highlighted: [...props.highlighted, ...(marquee?.ids ?? [])],
@@ -1044,8 +1063,9 @@ export function Viewport(
           construction={props.session.construction}
           document={doc}
           dispatch={props.dispatch}
+          validPreview={!!constructionPreview && constructionPreview.revision === props.revision}
           confirm={() => {
-            if (constructionPreview) accept(constructionPreview);
+            if (constructionPreview?.revision === props.revision) accept(constructionPreview.next);
           }}
           clearPreview={() => {
             setConstructionPreview(null);

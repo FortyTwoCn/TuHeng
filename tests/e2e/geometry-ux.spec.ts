@@ -97,6 +97,21 @@ test('UX15: clicking an entity opens its nearby editable inspector', async ({ pa
   await expect(page.getByRole('dialog', { name: '对象属性', exact: true })).toBeVisible({
     timeout: 1500,
   });
+  const card = page.getByRole('dialog', { name: '对象属性', exact: true }),
+    before = (await card.boundingBox())!;
+  await page.mouse.move(1100, 300);
+  const still = (await card.boundingBox())!;
+  expect(Math.hypot(still.x - before.x, still.y - before.y)).toBeLessThan(1);
+  const p = await screen(page, { x: 40, y: 40 });
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.wheel(0, -300);
+  await expect
+    .poll(async () => {
+      const b = (await card.boundingBox())!;
+      return Math.hypot(b.x - before.x, b.y - before.y);
+    })
+    .toBeGreaterThan(1);
+  await expect(card).toBeVisible();
 });
 test('UX30: construction is reachable from a named primary group', async ({ page }) => {
   await load(page);
@@ -267,6 +282,8 @@ test('UX07/10/18: offset new axis is a real snapping and construction reference'
   await expect(page.getByRole('dialog', { name: '对象属性', exact: true })).toContainText('X1');
   await choose(page, '平行线');
   await click(page, { x: -20, y: 50 });
+  expect(await json(page)).toEqual(after);
+  await choose(page, '确认创建');
   d = await json(page);
   const line = d.entities.at(-1)!;
   expect(line.kind).toBe('line');
@@ -343,6 +360,8 @@ test('UX18/19/20: reference-first finite construction, confirmed direction and m
   await page.getByLabel('几何范围').selectOption('segment');
   await page.getByLabel('构造长度 (mm)').fill('12');
   await click(page, { x: -55, y: 35 });
+  expect(await json(page)).toEqual(initial);
+  await choose(page, '确认创建');
   let d = await json(page);
   const made = d.entities.at(-1)!;
   expect(made).toMatchObject({ kind: 'segment', startPoint: lines[0].startPoint });
@@ -568,6 +587,25 @@ test('UX17: resized mobile viewport keeps object and property confirmation acces
   await expect(field).toHaveValue('30');
   const canvas = (await page.locator('.geo-view svg').boundingBox())!;
   expect(canvas.height).toBeGreaterThan(100);
+  for (const target of [
+    field,
+    page.getByRole('button', { name: '确认属性', exact: true }),
+    page.getByRole('button', { name: '取消输入', exact: true }),
+  ]) {
+    await expect
+      .poll(() =>
+        target.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return (
+            r.top >= 0 &&
+            r.bottom <= innerHeight &&
+            el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2))
+          );
+        }),
+      )
+      .toBe(true);
+  }
+  await page.screenshot({ path: evidence + '/mobile-reduced-viewport.png' });
   await choose(page, '确认属性');
   expect(
     length(
@@ -577,5 +615,39 @@ test('UX17: resized mobile viewport keeps object and property confirmation acces
       ).d,
     ),
   ).toBeCloseTo(30);
-  await page.screenshot({ path: evidence + '/mobile-reduced-viewport.png' });
+});
+test('UX18: teacher stem is a read-only reference for confirmed finite hidden construction', async ({
+  page,
+}) => {
+  const d = addDrawing(
+    createDocument('VHW_PROJECTION'),
+    'segment',
+    'view-0',
+    [
+      { x: 30, y: 45 },
+      { x: 55, y: 45 },
+    ],
+    'teacher',
+  );
+  const reference = d.entities.find((e) => e.kind === 'segment')!;
+  await load(page, d);
+  await choose(page, '垂直线');
+  await click(page, { x: -42.5, y: 45 });
+  const panel = page.getByRole('dialog', { name: '构造与关系' });
+  await panel.getByLabel('几何范围').selectOption('segment');
+  await panel.getByRole('combobox', { name: '线型', exact: true }).selectOption('hidden');
+  await panel.getByLabel('构造长度 (mm)').fill('14');
+  await click(page, { x: -20, y: 20 });
+  expect(await json(page)).toEqual(d);
+  await choose(page, '确认创建');
+  const next = await json(page),
+    line = next.entities.at(-1)!;
+  expect(line).toMatchObject({ kind: 'segment', lineStyle: 'ANSWER_HIDDEN' });
+  expect(next.entities.slice(0, d.entities.length)).toEqual(d.entities);
+  const a = lineGeometry(next, reference).d,
+    b = lineGeometry(next, line).d;
+  expect(a.x * b.x + a.y * b.y).toBeCloseTo(0);
+  expect(length(b)).toBeCloseTo(14);
+  await choose(page, '撤销');
+  expect(await json(page)).toEqual(d);
 });

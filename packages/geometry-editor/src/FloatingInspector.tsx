@@ -76,29 +76,49 @@ export function FloatingInspector({
         return new DOMRect(q.x, q.y, 1, 1);
       },
     };
+    let inputFrame: number | undefined;
     const update = () => {
-      if (frozen.current || expanded) return;
+      if (expanded) {
+        if (inputFrame !== undefined) cancelAnimationFrame(inputFrame);
+        inputFrame = requestAnimationFrame(() => {
+          if (!el.isConnected) return;
+          const active = document.activeElement,
+            pane = el.querySelector<HTMLElement>('.geo-card-details');
+          if (!(active instanceof HTMLElement) || !pane?.contains(active)) return;
+          const a = active.getBoundingClientRect(),
+            b = pane.getBoundingClientRect(),
+            actions = pane.querySelector('.geo-form-actions')?.getBoundingClientRect(),
+            bottom = Math.min(b.bottom, actions?.top ?? b.bottom) - 4;
+          if (a.bottom > bottom) pane.scrollTop += a.bottom - bottom;
+          else if (a.top < b.top + 4) pane.scrollTop += a.top - b.top - 4;
+        });
+        return;
+      }
+      if (frozen.current) return;
       void computePosition(virtual, el, {
         strategy: 'fixed',
         placement: 'bottom',
         middleware: [
           offset(12),
-          flip({ boundary: canvas, fallbackPlacements: ['top', 'right', 'left'] }),
-          shift({ boundary: canvas, padding: 8, crossAxis: true }),
           size({
             boundary: canvas,
             padding: 8,
             apply({ availableHeight, elements }) {
-              elements.floating.style.maxHeight = `${Math.max(100, Math.min(availableHeight, innerHeight * 0.6, canvas.getBoundingClientRect().height - 16))}px`;
+              elements.floating.style.maxHeight = `${Math.max(160, Math.min(availableHeight, 320, innerHeight * 0.45, canvas.getBoundingClientRect().height - 16))}px`;
             },
           }),
+          flip({ boundary: canvas, fallbackPlacements: ['top', 'left', 'right'] }),
+          shift({ boundary: canvas, padding: 8, crossAxis: true }),
         ],
       }).then(({ x, y }) => Object.assign(el.style, { left: `${x}px`, top: `${y}px` }));
     };
     const cleanup = autoUpdate(virtual, el, update);
     window.visualViewport?.addEventListener('resize', update);
+    el.addEventListener('focusin', update);
     return () => {
       cleanup();
+      if (inputFrame !== undefined) cancelAnimationFrame(inputFrame);
+      el.removeEventListener('focusin', update);
       window.visualViewport?.removeEventListener('resize', update);
     };
   }, [doc, key, svg, cameraKey, expanded]);

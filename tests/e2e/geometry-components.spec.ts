@@ -163,3 +163,25 @@ test('UX performance: real pointer preview with 100 points 300 segments and 100 
     ),
   );
 });
+test('UX24/26: pending construction cannot overwrite an external document revision', async ({
+  page,
+}) => {
+  await setup(page);
+  const first = page.locator('[data-editor=a]'),
+    svg = first.locator('.geo-view svg');
+  await first.getByRole('button', { name: '构造', exact: true }).click();
+  await first.getByRole('button', { name: '平行线', exact: true }).click();
+  const r = await at(svg, 0, 25);
+  await page.mouse.click(r.x, r.y);
+  const p = await at(svg, -45, 15);
+  await page.mouse.click(p.x, p.y);
+  const confirm = first.getByRole('button', { name: '确认创建', exact: true });
+  await expect(confirm).toBeEnabled();
+  await page.evaluate(() => window.editorFixture.echo());
+  await expect(confirm).toBeEnabled();
+  await page.evaluate(() => window.editorFixture.external());
+  const external = await page.evaluate(() => window.editorFixture.documents());
+  await expect(confirm).toHaveCount(0);
+  await expect(first.getByRole('dialog', { name: '构造与关系' })).toHaveCount(0);
+  expect(await page.evaluate(() => window.editorFixture.documents())).toEqual(external);
+});

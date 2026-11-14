@@ -253,6 +253,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await expect(student.locator('[data-axis-id]')).toHaveCount(1);
   await choose(student, '平行线');
   await sheet.click({ position: { x: 300, y: 180 } });
+  await choose(student, '确认创建');
   const draftResponse = student.waitForResponse(
     (response) =>
       response.url().endsWith('/api/actions/draft') && response.request().method() === 'POST',

@@ -8,12 +8,14 @@ export function ConstructionPanel({
   dispatch,
   confirm,
   clearPreview,
+  validPreview,
 }: {
   construction: ConstructionSession;
   document: GeometryDocument;
   dispatch: Dispatch<SessionAction>;
   confirm: () => void;
   clearPreview: () => void;
+  validPreview: boolean;
 }) {
   const describe = (ref: GeometryTargetRef) => {
     const r = resolveReference(doc, ref);
@@ -44,7 +46,7 @@ export function ConstructionPanel({
           待修改：{describe({ kind: 'entity', entityId: construction.targetId })} · 固定起点和长度
         </p>
       )}
-      <div className="geo-fields">
+      <fieldset className="geo-fields" disabled={construction.phase === 'confirm'}>
         {construction.mode === 'create' ? (
           <>
             <label>
@@ -138,18 +140,39 @@ export function ConstructionPanel({
             保持关系（有向绑定）
           </label>
         )}
-      </div>
+      </fieldset>
       {construction.phase === 'confirm' && (
-        <button
-          type="button"
-          onClick={() => {
-            confirm();
-            clearPreview();
-            dispatch({ type: 'patch', patch: { construction: null } });
-          }}
-        >
-          确认方向调整
-        </button>
+        <>
+          {!validPreview && <p>文档已更新，请重新选择位置或目标。</p>}
+          <button
+            type="button"
+            onClick={() => {
+              clearPreview();
+              dispatch({
+                type: 'patch',
+                patch: {
+                  construction: {
+                    ...construction,
+                    phase: construction.mode === 'create' ? 'position' : 'target',
+                  },
+                },
+              });
+            }}
+          >
+            重新选择
+          </button>
+          <button
+            type="button"
+            disabled={!validPreview}
+            onClick={() => {
+              confirm();
+              clearPreview();
+              dispatch({ type: 'patch', patch: { construction: null } });
+            }}
+          >
+            {construction.mode === 'create' ? '确认创建' : '确认方向调整'}
+          </button>
+        </>
       )}
       <button
         type="button"
