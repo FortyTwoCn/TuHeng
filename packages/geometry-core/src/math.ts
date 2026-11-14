@@ -2,7 +2,7 @@ import type { GeometryDocument, GeometryEntity, Vec2, Vec3 } from '@tuheng/contr
 import { projectPoint } from './projections';
 export const add = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x + b.x, y: a.y + b.y });
 export const sub = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x - b.x, y: a.y - b.y });
-export const scale = (a: Vec2, n: number): Vec2 => ({ x: a.x * n, y: a.y * n });
+export const scale = (a: Vec2, n: number): Vec2 => ({ x: a.x * n || 0, y: a.y * n || 0 });
 export const dot = (a: Vec2, b: Vec2) => a.x * b.x + a.y * b.y;
 export const cross = (a: Vec2, b: Vec2) => a.x * b.y - a.y * b.x;
 export const length = (a: Vec2) => Math.hypot(a.x, a.y);

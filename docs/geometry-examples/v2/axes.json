@@ -1,0 +1,390 @@
+{
+  "schemaVersion": "tuheng.geometry/2.0.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [
+    {
+      "id": "40eb7f20-05c9-41f5-9d47-c2144ad85326",
+      "name": "X1",
+      "version": 1,
+      "owner": "STUDENT",
+      "locked": false,
+      "referenceStatus": "SATISFIED",
+      "parentId": null,
+      "retainedViewId": "view-1",
+      "replacedViewId": "view-0",
+      "newViewId": "6bc2a978-5135-4139-a7c4-a2ae9a335518",
+      "anchor": {
+        "x": -50,
+        "y": -35
+      },
+      "tangent": {
+        "x": 1,
+        "y": 0
+      },
+      "side": -1,
+      "positiveNormal": {
+        "x": 0,
+        "y": -1
+      },
+      "oldAxis": {
+        "anchor": {
+          "x": 0,
+          "y": 0
+        },
+        "tangent": {
+          "x": -1,
+          "y": 0
+        },
+        "positiveNormal": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "method": "PARALLEL",
+      "referenceEntityId": "f189606e-941e-4a37-930a-158c77f3d5bb"
+    },
+    {
+      "id": "0fede6f9-c60b-4c69-a3fc-4f661ef36325",
+      "name": "X2",
+      "version": 1,
+      "owner": "STUDENT",
+      "locked": false,
+      "referenceStatus": "SATISFIED",
+      "parentId": "40eb7f20-05c9-41f5-9d47-c2144ad85326",
+      "retainedViewId": "6bc2a978-5135-4139-a7c4-a2ae9a335518",
+      "replacedViewId": "view-1",
+      "newViewId": "63e79d73-4652-49a3-9ec8-0f5439230446",
+      "anchor": {
+        "x": -65,
+        "y": -30
+      },
+      "tangent": {
+        "x": 0,
+        "y": 1
+      },
+      "side": 1,
+      "positiveNormal": {
+        "x": -1,
+        "y": 0
+      },
+      "oldAxis": {
+        "anchor": {
+          "x": -50,
+          "y": -35
+        },
+        "tangent": {
+          "x": 1,
+          "y": 0
+        },
+        "positiveNormal": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "method": "PERPENDICULAR",
+      "referenceEntityId": "98eeab12-b95e-4e89-8e76-012fa2adaad5"
+    }
+  ],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "y"
+      ],
+      "signs": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "y",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "6bc2a978-5135-4139-a7c4-a2ae9a335518",
+      "name": "V1",
+      "transform": {
+        "origin": {
+          "x": -50,
+          "y": -35
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": -1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "63e79d73-4652-49a3-9ec8-0f5439230446",
+      "name": "H1",
+      "transform": {
+        "origin": {
+          "x": -65,
+          "y": -30
+        },
+        "xAxis": {
+          "x": 0,
+          "y": 1
+        },
+        "yAxis": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "A_V",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 30,
+        "y": 40
+      },
+      "name": "a′",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "A_H",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 30,
+        "y": -20
+      },
+      "name": "a",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "A_W",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 20,
+        "y": 40
+      },
+      "name": "a″",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "dae5b39f-9336-4a51-8ad2-8bf076dfcafa",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 50,
+        "y": -10
+      },
+      "name": "P4",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "879a7ebc-9276-4838-8e59-3d599c390bc3",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 20,
+        "y": -10
+      },
+      "name": "P5",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "f189606e-941e-4a37-930a-158c77f3d5bb",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "dae5b39f-9336-4a51-8ad2-8bf076dfcafa",
+      "endPoint": "879a7ebc-9276-4838-8e59-3d599c390bc3"
+    },
+    {
+      "id": "db8f832a-117e-43e7-94e5-4ef0d184c870",
+      "viewId": "6bc2a978-5135-4139-a7c4-a2ae9a335518",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 10
+      },
+      "name": "P6",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "81d619fb-6ecf-4bb4-b2e1-e613d06a7423",
+      "viewId": "6bc2a978-5135-4139-a7c4-a2ae9a335518",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 20,
+        "y": 10
+      },
+      "name": "P7",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "98eeab12-b95e-4e89-8e76-012fa2adaad5",
+      "viewId": "6bc2a978-5135-4139-a7c4-a2ae9a335518",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "db8f832a-117e-43e7-94e5-4ef0d184c870",
+      "endPoint": "81d619fb-6ecf-4bb4-b2e1-e613d06a7423"
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

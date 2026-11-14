@@ -1,0 +1,189 @@
+import { useState } from 'react';
+import type { GeometryDocument } from '@tuheng/contracts';
+import {
+  deleteProjectionAxis,
+  renameProjectionAxis,
+  suggestAxisNames,
+  transact,
+  type AxisConstruction,
+} from '@tuheng/geometry-core';
+export function AxisTools({
+  doc,
+  role,
+  start,
+  commit,
+  report,
+}: {
+  doc: GeometryDocument;
+  role: 'teacher' | 'student';
+  start: (spec: AxisConstruction) => void;
+  commit: (doc: GeometryDocument) => void;
+  report: (text: string) => void;
+}) {
+  const [parent, setParent] = useState(''),
+    [retained, setRetained] = useState(doc.views[1]?.id ?? doc.views[0].id),
+    [method, setMethod] = useState<AxisConstruction['method']>('FREE'),
+    [name, setName] = useState(''),
+    [viewName, setViewName] = useState('');
+  const system = doc.auxiliarySystems?.find((a) => a.id === parent),
+    pair = system
+      ? [system.retainedViewId, system.newViewId]
+      : doc.views.slice(0, 3).map((v) => v.id);
+  const [replaced, setReplaced] = useState(doc.views[0].id);
+  const retainedId = pair.includes(retained) ? retained : (pair[1] ?? pair[0]),
+    replacedId = pair.includes(replaced) ? replaced : pair[0];
+  const suggested = suggestAxisNames(doc, replacedId);
+  return (
+    <details className="geo-axis-tools">
+      <summary>新增投影轴 / 换面</summary>
+      {role === 'teacher' && (
+        <label>
+          <input
+            type="checkbox"
+            checked={doc.sheet?.allowAuxiliaryViews ?? false}
+            onChange={(e) =>
+              commit(
+                transact(doc, (d) => {
+                  d.sheet!.allowAuxiliaryViews = e.target.checked;
+                }),
+              )
+            }
+          />
+          允许学生新增换面轴
+        </label>
+      )}
+      <div className="geo-fields">
+        <label>
+          父投影系
+          <select
+            value={system?.id ?? ''}
+            onChange={(e) => {
+              setParent(e.target.value);
+              const a = doc.auxiliarySystems?.find((a) => a.id === e.target.value);
+              setRetained(a?.newViewId ?? doc.views[1].id);
+              setReplaced(a?.retainedViewId ?? doc.views[0].id);
+            }}
+          >
+            <option value="">基准投影系</option>
+            {doc.auxiliarySystems?.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          保留投影面
+          <select value={retainedId} onChange={(e) => setRetained(e.target.value)}>
+            {pair.map((id) => (
+              <option key={id} value={id}>
+                {doc.views.find((v) => v.id === id)?.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          替换投影面
+          <select value={replacedId} onChange={(e) => setReplaced(e.target.value)}>
+            {pair.map((id) => (
+              <option key={id} value={id}>
+                {doc.views.find((v) => v.id === id)?.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          新轴构造
+          <select
+            value={method}
+            onChange={(e) => setMethod(e.target.value as AxisConstruction['method'])}
+          >
+            <option value="FREE">普通 · 两点定轴</option>
+            <option value="PARALLEL">平行参考线</option>
+            <option value="PERPENDICULAR">垂直参考线</option>
+          </select>
+        </label>
+        <label>
+          轴名称
+          <input
+            value={name}
+            placeholder={suggested.name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <label>
+          新面名称
+          <input
+            value={viewName}
+            placeholder={suggested.viewName}
+            onChange={(e) => setViewName(e.target.value)}
+          />
+        </label>
+      </div>
+      <button
+        type="button"
+        disabled={role === 'student' && !doc.sheet?.allowAuxiliaryViews}
+        onClick={() => {
+          if (retainedId === replacedId) {
+            report('保留面与替换面必须不同');
+            return;
+          }
+          start({
+            name: name || suggested.name,
+            viewName: viewName || suggested.viewName,
+            parentId: system?.id ?? null,
+            retainedViewId: retainedId,
+            replacedViewId: replacedId,
+            method,
+            referenceEntityId: null,
+            anchor: { x: 0, y: 0 },
+            through: { x: 1, y: 0 },
+            side: 1,
+          });
+        }}
+      >
+        开始定位新轴
+      </button>
+      {doc.auxiliarySystems?.map((a) => (
+        <p key={a.id}>
+          {a.name} · {doc.views.find((v) => v.id === a.newViewId)?.name}{' '}
+          <input
+            aria-label={`重命名轴 ${a.name}`}
+            defaultValue={a.name}
+            key={a.name}
+            disabled={role === 'student' && a.owner !== 'STUDENT'}
+            onBlur={(e) => {
+              try {
+                if (e.target.value !== a.name)
+                  commit(
+                    renameProjectionAxis(
+                      doc,
+                      a.id,
+                      e.target.value,
+                      doc.views.find((v) => v.id === a.newViewId)!.name,
+                      role,
+                    ),
+                  );
+              } catch (error) {
+                report((error as Error).message);
+              }
+            }}
+          />
+          <button
+            type="button"
+            disabled={role === 'student' && a.owner !== 'STUDENT'}
+            onClick={() => {
+              try {
+                commit(deleteProjectionAxis(doc, a.id, role));
+              } catch (e) {
+                report((e as Error).message);
+              }
+            }}
+          >
+            删除轴 {a.name}
+          </button>
+        </p>
+      ))}
+    </details>
+  );
+}

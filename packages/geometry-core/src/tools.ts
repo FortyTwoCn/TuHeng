@@ -1,7 +1,9 @@
 import type { GeometryDocument, GeometryEntity, Vec2 } from '@tuheng/contracts';
 import { transact } from './document';
 import { distance, minorArc, point, sub, unit, scale, add, lineGeometry } from './math';
-import { fitStroke } from './pen';
+import { viewTransform } from './sheet';
+import { PenStrokeRecord } from '@tuheng/contracts';
+import { fitStroke, type PenOptions } from './pen';
 export type DrawingTool =
   | 'point'
   | 'segment'
@@ -52,7 +54,7 @@ export function addDrawing(
           position: p,
           spatial: null,
           name: `P${d.entities.filter((e) => e.kind === 'point').length + 1}`,
-          labelVisible: true,
+          labelVisible: tool === 'point',
         });
         return id;
       }
@@ -84,6 +86,7 @@ export function addDrawing(
           anchor: a,
           direction: unit(direction),
           referenceEntityId: referenceId ?? null,
+          ...(lineStyle === 'CONSTRUCTION' ? { scope: 'SHEET' as const } : {}),
         });
       else
         d.entities.push({
@@ -109,8 +112,9 @@ export function addPenStroke(
   viewId: string,
   samples: (Vec2 & { pressure: number })[],
   role: 'teacher' | 'student',
+  options: PenOptions = { cssPixelsPerMm: 4 },
 ) {
-  const fit = fitStroke(samples);
+  const fit = fitStroke(samples, options);
   let next: GeometryDocument;
   if (fit.kind === 'segment') next = addDrawing(doc, 'segment', viewId, [fit.start, fit.end], role);
   else if (fit.kind === 'circle' || fit.kind === 'arc') {
@@ -155,7 +159,10 @@ export function addPenStroke(
     next,
     (d) => {
       const e = d.entities[d.entities.length - 1];
-      if (e.kind !== 'point' && e.kind !== 'line' && e.kind !== 'plane') e.samples = samples;
+      if (e.kind !== 'point' && e.kind !== 'line' && e.kind !== 'plane') {
+        e.samples = samples;
+        e.sampling = { cssPixelsPerMm: options.cssPixelsPerMm, ...viewTransform(doc, viewId) };
+      }
     },
     role,
   );
@@ -274,4 +281,14 @@ export function setLineStyle(
     },
     role,
   );
+}
+
+export function importPenStroke(
+  doc: GeometryDocument,
+  input: unknown,
+  viewId: string,
+  role: 'teacher' | 'student',
+) {
+  const record = PenStrokeRecord.parse(input);
+  return addPenStroke(doc, viewId, record.samples, role, { cssPixelsPerMm: record.cssPixelsPerMm });
 }

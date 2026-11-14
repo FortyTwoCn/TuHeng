@@ -17,6 +17,8 @@ export interface EditorControls {
   commit: (doc: GeometryDocument) => void;
   report: (message: string) => void;
   snapping: boolean;
+  gridSnap: boolean;
+  projectionSnap: boolean;
   skipSnap: boolean;
   consumeSnap: () => void;
   fingerDraw: boolean;

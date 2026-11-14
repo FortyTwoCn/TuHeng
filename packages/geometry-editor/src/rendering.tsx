@@ -9,13 +9,8 @@ import {
   projectPoint,
   type Bounds,
 } from '@tuheng/geometry-core';
-export const lineStyles = {
-  CONSTRUCTION: { stroke: '#9ca3af', strokeDasharray: '5 5' },
-  ANSWER_VISIBLE: { stroke: '#17212f' },
-  ANSWER_HIDDEN: { stroke: '#17212f', strokeDasharray: '7 4' },
-  PROBLEM_VISIBLE: { stroke: '#2563eb' },
-  PROBLEM_HIDDEN: { stroke: '#2563eb', strokeDasharray: '7 4' },
-};
+import { semanticLineStyles } from '@tuheng/geometry-core';
+export const lineStyles = semanticLineStyles;
 export const EntityShape = memo(function EntityShape({
   document: doc,
   entity: e,
@@ -37,7 +32,7 @@ export const EntityShape = memo(function EntityShape({
     fill: 'none',
     vectorEffect: 'non-scaling-stroke' as const,
   };
-  if (selected) style.stroke = '#d97706';
+
   let shape;
   if (e.kind === 'point')
     shape = (
@@ -115,6 +110,26 @@ export const EntityShape = memo(function EntityShape({
     <g data-entity-id={e.id} data-kind={e.kind} data-style={e.lineStyle} {...style}>
       <title>{e.id}</title>
       {shape}
+      {selected && (
+        <g data-transient="handles" stroke="#0f766e" fill="#ffffff80">
+          {(e.kind === 'point'
+            ? [e.position]
+            : e.kind === 'segment'
+              ? [point(doc, e.startPoint), point(doc, e.endPoint)]
+              : []
+          ).map((p, i) => (
+            <circle
+              data-transient="handle"
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r={5 / scale}
+              strokeWidth={1.2}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </g>
+      )}
     </g>
   );
 });

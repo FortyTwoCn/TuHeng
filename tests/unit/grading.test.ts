@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { GradingRequest, GradingResult, Rubric } from '@tuheng/contracts';
 import { validateEvaluation, GeometryGradingEngine } from '@tuheng/grading-core';
@@ -17,6 +18,26 @@ const response = (data: unknown) => ({
   outputTokens: 20,
 });
 describe('independent grading core', () => {
+  it('continues to parse historical v1 geometry requests and their original prompt', () => {
+    const answer = JSON.parse(readFileSync('docs/geometry-examples/ISOMETRIC.json', 'utf8'));
+    const problem = { ...answer, entities: [], constraints: [], projectionGroups: [] };
+    const evidence = {
+      schemaVersion: answer.schemaVersion,
+      editorType: answer.editorType,
+      problemDocument: problem,
+      answerDocument: answer,
+      derivedRelations: [],
+      narrative: '历史快照',
+    };
+    expect(
+      GradingRequest.parse({
+        ...requestFixture(),
+        submissionAssets: [],
+        promptVersion: 'geometry-review/1.1.0',
+        geometryEvidence: evidence,
+      }).geometryEvidence?.answerDocument,
+    ).toEqual(answer);
+  });
   it('sends pure geometry as structured text through the existing provider', async () => {
     const problem = createDocument('ISOMETRIC');
     const answer = addDrawing(problem, 'segment', 'view-0', [{ x: 0, y: 0 }], 'student');
@@ -24,7 +45,7 @@ describe('independent grading core', () => {
     const request = GradingRequest.parse({
       ...requestFixture(),
       submissionAssets: [],
-      promptVersion: 'geometry-review/1.1.0',
+      promptVersion: 'geometry-review/1.2.0',
       geometryEvidence: {
         schemaVersion: answer.schemaVersion,
         editorType: answer.editorType,

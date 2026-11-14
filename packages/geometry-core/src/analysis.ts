@@ -1,3 +1,6 @@
+import { localToSheet } from './sheet';
+import { changedPlaneProjection } from './projection-systems';
+import { evaluateDependencies } from './dependencies';
 import type { GeometryDocument, GeometryEntity, GeometryRelation } from '@tuheng/contracts';
 import {
   angle,
@@ -88,6 +91,7 @@ export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation
             : e.kind === 'segment'
               ? [point(doc, e.startPoint), point(doc, e.endPoint)]
               : [];
+        if (doc.auxiliarySystems?.some((a) => [v.id, w.id].includes(a.newViewId))) continue;
         for (const axis of v.mapping.filter((a) => w.mapping.includes(a))) {
           const vi = v.mapping.indexOf(axis),
             wi = w.mapping.indexOf(axis);
@@ -107,22 +111,50 @@ export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation
         }
       }
   }
+  for (const axis of doc.auxiliarySystems ?? [])
+    for (const group of doc.projectionGroups.filter((g) => g.kind === 'POINT')) {
+      const members = group.entityIds.map((id) => doc.entities.find((e) => e.id === id)!);
+      const retained = members.find((e) => e.viewId === axis.retainedViewId),
+        replaced = members.find((e) => e.viewId === axis.replacedViewId),
+        next = members.find((e) => e.viewId === axis.newViewId);
+      if (retained?.kind !== 'point' || replaced?.kind !== 'point' || next?.kind !== 'point')
+        continue;
+      const expected = changedPlaneProjection(
+          localToSheet(doc, retained.viewId, retained.position),
+          localToSheet(doc, replaced.viewId, replaced.position),
+          axis,
+        ),
+        actual = localToSheet(doc, next.viewId, next.position),
+        deviation = distance(expected, actual);
+      record(
+        'PROJECTION_ALIGNMENT',
+        [retained.id, replaced.id, next.id],
+        deviation,
+        `换面 ${axis.name} 实际偏差 ${deviation.toFixed(3)} mm`,
+      );
+    }
   return relations;
 }
 export function exportGeometryNarrative(
   doc: GeometryDocument,
   relations = analyzeGeometryDocument(doc),
 ) {
+  doc = structuredClone(doc);
+  evaluateDependencies(doc, { resolveBindings: false });
   const lines = [
     `${editorRegistry[doc.editorType].name}，单位 mm。计算距离容差 ${doc.settings.tolerance} mm。`,
   ];
   if (relations.length === 3000)
     lines.push('计算关系达到 3000 条上限，以下仅列出部分关系。原始几何对象完整保留。');
+  for (const a of doc.auxiliarySystems ?? [])
+    lines.push(
+      `换面轴 ${a.name}（${a.id}），保留 ${a.retainedViewId}，替换 ${a.replacedViewId}，新面 ${a.newViewId}，轴锚点 ${JSON.stringify(a.anchor)}，切向 ${JSON.stringify(a.tangent)}，正法向 ${JSON.stringify(a.positiveNormal)}；参考方向当前校验 ${a.referenceStatus ?? 'UNVERIFIED'}；创建轴不代表已完成投影。`,
+    );
   for (const e of doc.entities) {
     const prefix = `${e.id}（${doc.views.find((v) => v.id === e.viewId)?.name}，${e.lineStyle}）`;
     if (e.kind === 'point')
       lines.push(
-        `${prefix} 点 ${e.name}，坐标 (${e.position.x}, ${e.position.y})，空间坐标${e.spatial ? JSON.stringify(e.spatial) : '未知'}。`,
+        `${prefix} 点 ${e.name}，局部坐标 (${e.position.x}, ${e.position.y})，图纸坐标 ${JSON.stringify(localToSheet(doc, e.viewId, e.position))}，空间坐标${e.spatial ? JSON.stringify(e.spatial) : '未知'}。`,
       );
     if (e.kind === 'segment') {
       const d = sub(point(doc, e.endPoint), point(doc, e.startPoint));
@@ -146,7 +178,7 @@ export function exportGeometryNarrative(
   }
   for (const c of doc.constraints)
     lines.push(
-      `${c.source === 'USER' ? '用户显式关系' : '用户确认吸附'} ${c.kind}，对象 ${c.entityIds.join('、')}。`,
+      `${c.source === 'USER' ? '用户显式关系' : '用户确认吸附'} ${c.kind}，对象 ${c.entityIds.join('、')}，当前校验 ${c.status ?? 'UNVERIFIED'}（声明关系不代表实际满足）。`,
     );
   for (const g of doc.projectionGroups)
     lines.push(`用户投影关联 ${g.id}，对象 ${g.entityIds.join('、')}。`);

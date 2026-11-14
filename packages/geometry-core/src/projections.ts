@@ -1,3 +1,4 @@
+import { upgradeGeometryDocument } from './sheet';
 import type { EditorType, GeometryDocument, Vec2, Vec3 } from '@tuheng/contracts';
 export const editorRegistry = {
   VHW_PROJECTION: { name: 'VHW 面投影', labels: true, views: ['V', 'H', 'W'] },
@@ -17,7 +18,7 @@ export function viewAxes(doc: GeometryDocument, viewId: string): Record<string, 
 }
 export function createDocument(editorType: EditorType): GeometryDocument {
   const def = editorRegistry[editorType];
-  return {
+  return upgradeGeometryDocument({
     schemaVersion: 'tuheng.geometry/1.0.0',
     editorType,
     units: 'mm',
@@ -56,7 +57,7 @@ export function createDocument(editorType: EditorType): GeometryDocument {
     projectionGroups: [],
     settings: { grid: 5, tolerance: 0.05, labels: def.labels },
     metadata: { title: '' },
-  };
+  });
 }
 export function projectPoint(doc: GeometryDocument, point: Vec3, viewId: string): Vec2 {
   if (doc.editorType === 'VHW_PROJECTION' || doc.editorType === 'THREE_VIEW') {

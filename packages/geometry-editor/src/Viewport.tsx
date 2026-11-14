@@ -1,420 +1,693 @@
 'use client';
-import { useRef, useState, useEffect } from 'react';
+import { finishDrawing, rulerSamples } from './drawing-session';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { Vec2, GeometryDocument } from '@tuheng/contracts';
 import {
-  add,
-  addDrawing,
-  addPenStroke,
+  sub,
+  appendStrokeSample,
   distance,
-  hitDistance,
   linkProjection,
   moveEntities,
   snapCandidates,
   confirmSnap,
-  contentBounds,
+  sheetBounds,
+  sheetToLocal,
+  localToSheet,
+  localBounds,
   intersectsBox,
   selectionBounds,
-  sub,
-  foot,
+  addProjectionAxis,
+  axisDirection,
+  orthographic,
   type Bounds,
+  type SnapCandidate,
+  type AxisConstruction,
 } from '@tuheng/geometry-core';
 import { ViewportDrawing } from './ViewportDrawing';
-import type { EditorControls } from './types';
+import {
+  OperationRecovery,
+  type ReversibleStep,
+  type PenSuggestion,
+  type InterruptedStroke,
+} from './OperationRecovery';
+import { AxisTools } from './AxisTools';
+import {
+  hitTarget,
+  dragDocument,
+  movingIds,
+  type Hit,
+  type InteractionState,
+} from './interaction-controller';
+import type { EditorControls, Tool } from './types';
 interface Gesture {
+  id: number;
   start: Vec2;
   last: Vec2;
+  screen: Vec2;
+  inverse: DOMMatrix;
+  scale: number;
+  snapPixels: number;
+  base: GeometryDocument;
+  tool: Tool;
+  hit?: Hit;
+  ids: string[];
+  state: InteractionState;
   samples: (Vec2 & { pressure: number })[];
-  id: number;
-  hit?: string;
-  pan: boolean;
-  ruler: boolean;
+  viewId: string;
   additive: boolean;
+  raw?: GeometryDocument;
+  next?: GeometryDocument;
+  candidate?: SnapCandidate;
 }
 export function Viewport(
-  props: EditorControls & { viewId: string; active: boolean; activate: () => void },
+  props: EditorControls & {
+    viewId: string;
+    active: boolean;
+    activate: () => void;
+    focusKey: number;
+    replace: (doc: GeometryDocument) => void;
+  },
 ) {
-  const { document: doc, viewId, tool, readOnly, role } = props;
+  const { document: doc, viewId, tool, role, readOnly, report } = props;
   const svg = useRef<SVGSVGElement>(null),
     gesture = useRef<Gesture | null>(null),
     pointers = useRef(new Map<number, Vec2>()),
-    pinch = useRef<number | null>(null);
-  const [width, setWidth] = useState(400),
+    space = useRef(false);
+  const [size, setSize] = useState({ width: 800, height: 600 }),
     [pan, setPan] = useState({ x: 0, y: 0 }),
     [localZoom, setLocalZoom] = useState(1),
-    [preview, setPreview] = useState<Vec2[]>([]),
-    [steps, setSteps] = useState<Vec2[]>([]),
+    [fitted, setFitted] = useState<Bounds>(sheetBounds(doc));
+  const [preview, setPreview] = useState<Vec2[]>([]),
+    [previewDoc, setPreviewDoc] = useState<GeometryDocument | null>(null),
+    [candidate, setCandidate] = useState<SnapCandidate | null>(null),
+    [candidateView, setCandidateView] = useState(viewId);
+  const [steps, setSteps] = useState<Vec2[]>([]),
     [reference, setReference] = useState<string>(),
-    [pending, setPending] = useState<{
-      base: GeometryDocument;
-      raw: GeometryDocument;
-      snapped: GeometryDocument;
-      label: string;
-    } | null>(null);
-  const zoom = props.zoom * localZoom;
-  const [fitted, setFitted] = useState<Bounds>({ x: -20, y: -30, width: 120, height: 90 });
-  const scale = (width / fitted.width) * zoom;
-  const box: Bounds = {
-    x: fitted.x + pan.x,
-    y: fitted.y + pan.y,
-    width: fitted.width / zoom,
-    height: fitted.height / zoom,
+    [state, setState] = useState<InteractionState>('idle');
+  const [lastSnap, setLastSnap] = useState<ReversibleStep | null>(null),
+    [lastPen, setLastPen] = useState<ReversibleStep | null>(null),
+    [suggestion, setSuggestion] = useState<PenSuggestion | null>(null),
+    [interrupted, setInterrupted] = useState<InterruptedStroke | null>(null);
+  const [axisDraft, setAxisDraft] = useState<{
+    spec: AxisConstruction;
+    phase: 'reference' | 'anchor' | 'direction' | 'side' | 'confirm';
+  } | null>(null);
+  const zoom = props.zoom * localZoom,
+    ratio = size.width / size.height;
+  const height = Math.max(fitted.height, fitted.width / ratio) / zoom,
+    width = height * ratio;
+  const box = {
+    x: fitted.x + fitted.width / 2 - width / 2 + pan.x,
+    y: fitted.y + fitted.height / 2 - height / 2 + pan.y,
+    width,
+    height,
   };
+  const cssScale = () => {
+    const m = svg.current?.getScreenCTM();
+    return m ? Math.hypot(m.a, m.b) : size.width / width;
+  };
+  const cancel = useCallback(() => {
+    const g = gesture.current;
+    if (g?.state === 'drawingStroke' && g.samples.length >= 2) {
+      setInterrupted(g);
+      report('笔迹输入中断，可恢复已采集轨迹');
+    }
+    gesture.current = null;
+    pointers.current.clear();
+    setPreview([]);
+    setPreviewDoc(null);
+    setCandidate(null);
+    setState('idle');
+  }, [report]);
   useEffect(() => {
-    const element = svg.current;
-    if (!element) return;
-    const observer = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width));
-    observer.observe(element);
-    const wheel = (event: WheelEvent) => {
-      event.preventDefault();
-      setLocalZoom((z) => Math.max(0.25, Math.min(8, z * Math.exp(-event.deltaY * 0.001))));
+    const el = svg.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) =>
+      setSize({ width: entries[0].contentRect.width, height: entries[0].contentRect.height }),
+    );
+    observer.observe(el);
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (!gesture.current)
+        setLocalZoom((z) => Math.max(0.25, Math.min(8, z * Math.exp(-e.deltaY * 0.001))));
     };
-    element.addEventListener('wheel', wheel, { passive: false });
+    const key = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) return;
+      if (e.code === 'Space') {
+        space.current = e.type === 'keydown';
+        e.preventDefault();
+      }
+      if (e.key === 'Escape') {
+        cancel();
+        setAxisDraft(null);
+        setSteps([]);
+      }
+    };
+    const blur = () => {
+      space.current = false;
+      cancel();
+    };
+    el.addEventListener('wheel', wheel, { passive: false });
+    window.addEventListener('keydown', key);
+    window.addEventListener('keyup', key);
+    window.addEventListener('blur', blur);
     return () => {
       observer.disconnect();
-      element.removeEventListener('wheel', wheel);
+      el.removeEventListener('wheel', wheel);
+      window.removeEventListener('keydown', key);
+      window.removeEventListener('keyup', key);
+      window.removeEventListener('blur', blur);
     };
-  }, []);
-  const [previousTool, setPreviousTool] = useState(tool);
-  if (previousTool !== tool) {
-    setPreviousTool(tool);
-    setSteps([]);
-    setReference(undefined);
-    setPreview([]);
-    setPending(null);
+  }, [cancel]);
+  const [previous, setPrevious] = useState({ tool, fit: props.fitKey, focus: props.focusKey });
+  if (
+    previous.tool !== tool ||
+    previous.fit !== props.fitKey ||
+    previous.focus !== props.focusKey
+  ) {
+    setPrevious({ tool, fit: props.fitKey, focus: props.focusKey });
+    if (previous.tool !== tool) {
+      setSteps([]);
+      setReference(undefined);
+      setAxisDraft(null);
+    }
+    if (previous.fit !== props.fitKey) {
+      setFitted(sheetBounds(doc));
+      setPan({ x: 0, y: 0 });
+      setLocalZoom(1);
+    }
+    if (previous.focus !== props.focusKey) {
+      const v = doc.views.findIndex((v) => v.id === viewId);
+      const center = localToSheet(doc, viewId, { x: 30, y: v === 1 ? -25 : 30 });
+      setPan({
+        x: center.x - (fitted.x + fitted.width / 2),
+        y: center.y - (fitted.y + fitted.height / 2),
+      });
+    }
   }
-  const [previousFit, setPreviousFit] = useState(props.fitKey);
-  if (previousFit !== props.fitKey) {
-    setPreviousFit(props.fitKey);
-    setPan({ x: 0, y: 0 });
-    setLocalZoom(1);
-    setFitted(contentBounds(doc, viewId));
-  }
-  const local = (e: { clientX: number; clientY: number }): Vec2 => {
-    const matrix = svg.current?.getScreenCTM();
-    if (!matrix) return { x: 0, y: 0 };
-    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(matrix.inverse());
+  function local(
+    e: { clientX: number; clientY: number },
+    inverse = svg.current?.getScreenCTM()?.inverse(),
+  ): Vec2 {
+    if (!inverse) return { x: 0, y: 0 };
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(inverse);
     return { x: p.x, y: -p.y };
-  };
-  const hit = (p: Vec2) =>
-    doc.entities
-      .filter((e) => e.viewId === viewId && !props.hiddenLayers.includes(e.layerId))
-      .map((e) => ({ e, d: hitDistance(doc, e, p, box) }))
-      .filter((v) => v.d < 22 / scale)
-      .sort((a, b) => a.d - b.d)[0]?.e;
-  const accept = (next: GeometryDocument) => {
+  }
+  const fail = (e: unknown) => props.report(e instanceof Error ? e.message : '几何操作失败');
+  function accept(next: GeometryDocument, raw?: GeometryDocument) {
     props.commit(next);
-    const existing = new Set(doc.entities.map((e) => e.id));
-    const created = next.entities.filter((e) => !existing.has(e.id));
-    if (created.length) props.select([created[created.length - 1].id]);
     props.consumeSnap();
     setSteps([]);
     setPreview([]);
-  };
-  const cancel = () => {
-    gesture.current = null;
-    setPreview([]);
-    pinch.current = null;
-    pointers.current.clear();
-  };
+    setPreviewDoc(null);
+    setCandidate(null);
+    setLastSnap(raw && JSON.stringify(raw) !== JSON.stringify(next) ? { raw, next } : null);
+    const created = next.entities.filter((e) => !doc.entities.some((p) => p.id === e.id));
+    if (created.length) props.select([created.at(-1)!.id]);
+  }
+  function snap(
+    docBefore: GeometryDocument,
+    raw: GeometryDocument,
+    sourceId: string,
+    p: Vec2,
+    scale: number,
+    exclude: string[] = [],
+    previous?: SnapCandidate,
+    origin?: Vec2,
+    threshold = 10,
+  ) {
+    if (!props.snapping || props.skipSnap) return { raw, next: raw };
+    const source = raw.entities.find((e) => e.id === sourceId);
+    if (source?.kind !== 'point') return { raw, next: raw };
+    const candidate = snapCandidates(docBefore, source.viewId, p, scale, origin, {
+      exclude,
+      threshold,
+      hiddenLayers: props.hiddenLayers,
+      grid: props.gridSnap,
+      projection: props.projectionSnap,
+      previous,
+    })[0];
+    if (!candidate) return { raw, next: raw };
+    try {
+      const adjusted = moveEntities(
+        raw,
+        [sourceId],
+        sub(candidate.position, source.position),
+        role,
+      );
+      return { raw, next: confirmSnap(docBefore, adjusted, candidate, sourceId, role), candidate };
+    } catch {
+      return { raw, next: raw };
+    } // An illegal zero-length connection is never committed.
+  }
+  function drag(g: Gesture, p: Vec2) {
+    const raw = dragDocument(g.base, g.ids, sub(p, g.start), role);
+    const source = g.ids.length === 1 ? raw.entities.find((e) => e.id === g.ids[0]) : undefined;
+    let result =
+      source?.kind === 'point'
+        ? snap(
+            g.base,
+            raw,
+            source.id,
+            source.position,
+            g.scale,
+            movingIds(g.base, g.ids),
+            g.candidate,
+            undefined,
+            g.snapPixels,
+          )
+        : { raw, next: raw };
+    if (source?.kind === 'segment' && props.snapping && !props.skipSnap) {
+      const exclude = movingIds(g.base, g.ids);
+      const candidates = [source.startPoint, source.endPoint]
+        .flatMap((id) => {
+          const p = raw.entities.find((e) => e.id === id);
+          if (p?.kind !== 'point') return [];
+          return snapCandidates(g.base, p.viewId, p.position, g.scale, undefined, {
+            exclude,
+            hiddenLayers: props.hiddenLayers,
+            threshold: g.snapPixels,
+          })
+            .filter((c) => c.kind === 'COINCIDENT')
+            .map((candidate) => ({ point: p, candidate }));
+        })
+        .sort((a, b) => a.candidate.distance - b.candidate.distance);
+      const chosen = candidates[0];
+      if (chosen)
+        try {
+          const a = localToSheet(raw, chosen.point.viewId, chosen.point.position),
+            b = localToSheet(raw, chosen.point.viewId, chosen.candidate.position);
+          const adjusted = dragDocument(raw, g.ids, sub(b, a), role);
+          result = {
+            raw,
+            next: confirmSnap(g.base, adjusted, chosen.candidate, chosen.point.id, role),
+            candidate: chosen.candidate,
+          };
+        } catch {
+          /* Keep the raw translation if topology would be invalid. */
+        }
+    }
+    g.raw = raw;
+    g.next = result.next;
+    g.candidate = 'candidate' in result ? result.candidate : undefined;
+    setPreviewDoc(result.next);
+    setCandidate(g.candidate ?? null);
+    setCandidateView(g.hit?.viewId ?? viewId);
+    props.report(
+      `移动 ΔU ${(p.x - g.start.x).toFixed(2)} · ΔT ${(p.y - g.start.y).toFixed(2)} mm${g.candidate ? ' · 松手连接目标' : ''}`,
+    );
+  }
+  function axisClick(p: Vec2, target?: Hit) {
+    if (!axisDraft) return;
+    const { spec, phase } = axisDraft;
+    if (phase === 'reference') {
+      const e = doc.entities.find((e) => e.id === target?.id);
+      if (!e || !['line', 'segment'].includes(e.kind) || e.viewId !== spec.retainedViewId)
+        throw new Error('请点击保留面中的参考线线身');
+      setAxisDraft({ spec: { ...spec, referenceEntityId: e.id }, phase: 'anchor' });
+      props.report('点击新轴通过的位置');
+    }
+    if (phase === 'anchor') {
+      setAxisDraft({
+        spec: { ...spec, anchor: p },
+        phase: spec.method === 'FREE' ? 'direction' : 'side',
+      });
+      props.report(spec.method === 'FREE' ? '点击轴上第二点' : '点击新轴一侧，选择展开方向');
+    }
+    if (phase === 'direction') {
+      if (distance(p, spec.anchor) < 1e-6) throw new Error('轴的两点不能重合');
+      setAxisDraft({ spec: { ...spec, through: p }, phase: 'side' });
+      props.report('点击新轴一侧，选择展开方向');
+    }
+    if (phase === 'side' || phase === 'confirm') {
+      const t = axisDirection(doc, spec),
+        d = sub(p, spec.anchor),
+        cross = t.x * d.y - t.y * d.x;
+      if (Math.abs(cross) < 1e-5) throw new Error('请点击轴的一侧');
+      setAxisDraft({ spec: { ...spec, side: cross > 0 ? 1 : -1 }, phase: 'confirm' });
+      props.report('检查半透明展开侧，确认创建新轴');
+    }
+  }
   function finish(g: Gesture, p: Vec2) {
-    if (g.pan || g.ruler) return;
-    const target = hit(p);
-    if (tool === 'projection') {
-      if (!target) return;
-      const ids = [...new Set([...props.selected, target.id])];
-      props.select(ids);
-      if (ids.length >= 2) {
-        accept(linkProjection(doc, ids));
-        props.report('投影关联已记录');
-        props.select([]);
-      }
+    if (g.state === 'panning' || g.state === 'movingRuler') return;
+    const target = hitTarget(g.base, p, g.scale, box, props.hiddenLayers, props.selected);
+    if (axisDraft) {
+      axisClick(p, target);
       return;
     }
-    if (tool === 'select') {
-      if (g.hit && distance(g.start, p) > 1 / scale)
-        accept(
-          moveEntities(
-            doc,
-            props.selected.includes(g.hit) ? props.selected : [g.hit],
-            sub(p, g.start),
-            role,
-          ),
-        );
-      else
+    if (g.tool === 'select') {
+      if (g.hit && distance(g.start, p) * g.scale > 2 && !readOnly) {
+        drag(g, p);
+        if (g.next) accept(g.next, g.raw);
+      } else
         props.select(
           target ? (g.additive ? [...new Set([...props.selected, target.id])] : [target.id]) : [],
         );
       return;
     }
-    if (tool === 'box') {
+    if (g.tool === 'projection') {
+      if (target) {
+        const ids = [...new Set([...props.selected, target.id])];
+        props.select(ids);
+        if (ids.length >= 2) {
+          accept(linkProjection(doc, ids));
+          props.select([]);
+          props.report('投影关联已记录，实际坐标保留');
+        }
+      }
+      return;
+    }
+    if (g.tool === 'box') {
       const bounds = selectionBounds(g.start, p);
       props.select(
         doc.entities
           .filter(
             (e) =>
-              e.viewId === viewId &&
               !props.hiddenLayers.includes(e.layerId) &&
-              intersectsBox(doc, e, bounds),
+              intersectsBox(doc, e, localBounds(doc, e.viewId, bounds)),
           )
           .map((e) => e.id),
       );
       return;
     }
     if (readOnly) return;
-    if (tool === 'pen') {
-      if (g.samples.length >= 2) {
-        const raw = addPenStroke(doc, viewId, g.samples, role);
-        const segment = raw.entities.at(-1);
-        if (segment?.kind === 'segment' && props.snapping && !props.skipSnap) {
-          const start = raw.entities.find((e) => e.id === segment.startPoint),
-            end = raw.entities.find((e) => e.id === segment.endPoint);
-          if (start?.kind === 'point' && end?.kind === 'point') {
-            const candidate = snapCandidates(doc, viewId, end.position, scale, start.position)[0];
-            if (candidate) {
-              const snapped = confirmSnap(
-                doc,
-                moveEntities(raw, [end.id], sub(candidate.position, end.position), role),
-                candidate,
-              );
-              setPending({ base: doc, raw, snapped, label: candidate.kind });
-              return;
-            }
-          }
-        }
-        accept(raw);
-      }
+    const at = (p: Vec2) => sheetToLocal(g.base, g.viewId, p);
+    const samples = rulerSamples(g.samples, props.ruler, g.scale).map((p) => ({
+      ...at(p),
+      pressure: p.pressure,
+    }));
+    if (g.tool === 'pen' && samples.length < 2) return;
+    const result = finishDrawing(g.base, {
+      tool: g.tool,
+      viewId: g.viewId,
+      role,
+      start: at(g.start),
+      end: at(p),
+      targetId: target?.id,
+      steps,
+      reference,
+      samples,
+      scale: g.scale,
+    });
+    if (result.kind === 'steps') {
+      setSteps(result.steps);
+      setReference(result.reference);
+      props.report(result.message);
       return;
     }
-    if (tool === 'pan') return;
-    if (
-      ['parallel', 'perpendicular', 'parallel-hidden', 'perpendicular-hidden'].includes(tool) &&
-      !reference
-    ) {
-      if (target?.kind === 'line' || target?.kind === 'segment') {
-        setReference(target.id);
-        props.report('参考线已选，点击新线通过的位置');
-      }
-      return;
-    }
-    if (tool === 'connect') {
-      if (target?.kind !== 'point') throw new Error('连接工具需要依次选择两个已有点');
-      if (!reference) {
-        setReference(target.id);
-        setSteps([target.position]);
-        props.report('选择另一个点');
-        return;
-      }
-      accept(
-        addDrawing(doc, 'connect', viewId, [steps[0], target.position], role, undefined, [
-          reference,
-          target.id,
-        ]),
-      );
-      setReference(undefined);
-      return;
-    }
-    if (tool === 'circle' || tool === 'arc') {
-      const count = tool === 'circle' ? 2 : 3;
-      if (steps.length < count - 1) {
-        if (steps.length === 0 && target?.kind === 'point') setReference(target.id);
-        setSteps([...steps, steps.length === 0 && target?.kind === 'point' ? target.position : p]);
-        props.report(tool === 'circle' ? '选择圆周点' : '依次选择圆弧起点、终点');
-        return;
-      }
-      accept(
-        addDrawing(
-          doc,
-          tool,
-          viewId,
-          [...steps, p],
-          role,
+    const raw = result.document;
+    let next = raw;
+    const created = raw.entities.filter(
+      (e) => e.kind === 'point' && !g.base.entities.some((p) => p.id === e.id),
+    );
+    for (const point of created)
+      if (point.kind === 'point')
+        next = snap(
+          g.base,
+          next,
+          point.id,
+          point.position,
+          g.scale,
+          [],
           undefined,
-          reference ? [reference] : undefined,
-        ),
-      );
-      setReference(undefined);
-      return;
+          raw.entities.at(-1)?.kind === 'segment' ? at(g.start) : undefined,
+          g.snapPixels,
+        ).next;
+    const line = raw.entities.at(-1);
+    if (line?.kind === 'line' && props.snapping && !props.skipSnap) {
+      const candidate = snapCandidates(g.base, g.viewId, line.anchor, g.scale, undefined, {
+        hiddenLayers: props.hiddenLayers,
+        grid: props.gridSnap,
+        threshold: g.snapPixels,
+      })[0];
+      if (candidate)
+        next = moveEntities(raw, [line.id], sub(candidate.position, line.anchor), role);
     }
-    const positions =
-      tool === 'point' ? [p] : distance(g.start, p) > 3 / scale ? [g.start, p] : [p];
-    const raw = addDrawing(doc, tool, viewId, positions, role, reference);
-    const candidates =
-      props.snapping && !props.skipSnap
-        ? snapCandidates(
-            doc,
-            viewId,
-            positions[positions.length - 1],
-            scale,
-            positions.length > 1 ? positions[0] : undefined,
-          )
-        : [];
-    if (candidates.length) {
-      const candidate = candidates[0],
-        adjusted = [...positions];
-      adjusted[adjusted.length - 1] = candidate.position;
-      const snapped = addDrawing(doc, tool, viewId, adjusted, role, reference);
-      setPending({
-        base: doc,
-        raw,
-        snapped: confirmSnap(doc, snapped, candidate),
-        label: `${candidate.kind} · ${candidate.entityIds.join('、') || '网格或轴向'}`,
-      });
-      props.report('确认吸附或保留原位置');
-    } else accept(raw);
+    accept(next, raw);
     setReference(undefined);
+    if (result.rawStroke) setLastPen({ raw: result.rawStroke, next });
+    if (result.suggestion && result.rawStroke)
+      setSuggestion({
+        base: g.base,
+        raw: result.rawStroke,
+        samples,
+        viewId: g.viewId,
+        scale: g.scale,
+        options: result.suggestion,
+      });
+    if (result.message) props.report(result.message);
   }
+
   function down(e: ReactPointerEvent<SVGSVGElement>) {
     if (e.button !== 0) return;
-    if (pending) {
-      props.report('请先确认吸附或保留原位置');
-      return;
-    }
     e.preventDefault();
-    props.activate();
+    svg.current?.focus({ preventScroll: true });
+    // A pen stroke owns its transform until up/cancel. Palm/touch cannot change its camera.
+    if (gesture.current?.state === 'drawingStroke' && e.pointerType === 'touch') return;
     if (e.isTrusted) svg.current?.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.current.size === 2) {
+    if (pointers.current.size >= 2) {
       gesture.current = null;
+      setPreviewDoc(null);
       setPreview([]);
-      pinch.current = distance(...([...pointers.current.values()] as [Vec2, Vec2]));
+      setState('pinching');
       return;
     }
+    setLastSnap(null);
+    setLastPen(null);
+    setSuggestion(null);
+    setInterrupted(null);
     const p = local(e),
-      target = hit(p);
-    const ruler =
-      props.ruler.visible &&
-      (e.altKey ||
-        ((e.target as Element).getAttribute('data-ruler') === 'true' &&
-          e.pointerType !== 'pen' &&
-          !(tool === 'pen' && props.fingerDraw)));
+      hit = hitTarget(doc, p, cssScale(), box, props.hiddenLayers, props.selected),
+      pan =
+        tool === 'pan' ||
+        space.current ||
+        (tool === 'pen' && e.pointerType === 'touch' && !props.fingerDraw);
+    const ids = hit ? (props.selected.includes(hit.id) ? props.selected : [hit.id]) : [];
     gesture.current = {
+      id: e.pointerId,
       start: p,
       last: p,
-      samples: [{ ...(tool === 'pen' && !ruler ? rulerPoint(p) : p), pressure: e.pressure }],
-      id: e.pointerId,
-      hit: target?.id,
-      pan: tool === 'pan' || (tool === 'pen' && e.pointerType === 'touch' && !props.fingerDraw),
-      ruler,
+      screen: { x: e.clientX, y: e.clientY },
+      inverse: svg.current!.getScreenCTM()!.inverse(),
+      scale: cssScale(),
+      snapPixels: e.pointerType === 'touch' ? 16 : 10,
+      base: doc,
+      tool,
+      hit,
+      ids,
+      viewId,
+      state:
+        props.ruler.visible &&
+        (e.altKey ||
+          (tool !== 'pen' && (e.target as Element).getAttribute('data-ruler') === 'true'))
+          ? 'movingRuler'
+          : pan
+            ? 'panning'
+            : tool === 'pen'
+              ? 'drawingStroke'
+              : 'pressed',
+      samples: [{ ...p, pressure: e.pressure }],
       additive: e.shiftKey,
     };
-    if (tool === 'select' && target && !props.selected.includes(target.id))
-      props.select(e.shiftKey ? [...props.selected, target.id] : [target.id]);
-  }
-  function rulerPoint(p: Vec2): Vec2 {
-    if (!props.ruler.visible) return p;
-    const angle = (props.ruler.angle * Math.PI) / 180;
-    return foot(p, {
-      a: props.ruler.origin,
-      d: { x: Math.cos(angle) * props.ruler.length, y: Math.sin(angle) * props.ruler.length },
-      finite: true,
-    });
+    setState(gesture.current.state);
+    if (tool === 'select' && hit && !props.selected.includes(hit.id))
+      props.select(e.shiftKey ? [...props.selected, hit.id] : [hit.id]);
   }
   function move(e: ReactPointerEvent<SVGSVGElement>) {
     if (!pointers.current.has(e.pointerId)) return;
-    const oldTouches = [...pointers.current.values()];
+    const old = [...pointers.current.values()];
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
-      const newTouches = [...pointers.current.values()];
-      const dx = (newTouches[0].x + newTouches[1].x - oldTouches[0].x - oldTouches[1].x) / 2;
-      const dy = (newTouches[0].y + newTouches[1].y - oldTouches[0].y - oldTouches[1].y) / 2;
-      setPan((v) => ({ x: v.x - dx / scale, y: v.y + dy / scale }));
-      const size = distance(...([...pointers.current.values()] as [Vec2, Vec2]));
-      if (pinch.current)
-        setLocalZoom((z) => Math.min(8, Math.max(0.25, (z * size) / pinch.current!)));
-      pinch.current = size;
+      const current = [...pointers.current.values()],
+        before = distance(old[0], old[1]),
+        after = distance(current[0], current[1]);
+      if (before > 1) setLocalZoom((z) => Math.max(0.25, Math.min(8, (z * after) / before)));
+      setPan((v) => ({
+        x: v.x - (current[0].x + current[1].x - old[0].x - old[1].x) / 2 / cssScale(),
+        y: v.y + (current[0].y + current[1].y - old[0].y - old[1].y) / 2 / cssScale(),
+      }));
       return;
     }
     const g = gesture.current;
-    if (!g) return;
-    let p = local(e);
-    if (g.pan) {
-      setPan((v) => sub(v, sub(p, g.last)));
+    if (!g || g.id !== e.pointerId) return;
+    if (JSON.stringify(g.base) !== JSON.stringify(doc)) {
+      cancel();
+      props.report('文档已更新，已取消未提交拖动');
       return;
     }
-    if (g.ruler) {
-      props.onRulerChange({ ...props.ruler, origin: add(props.ruler.origin, sub(p, g.last)) });
+    const p = local(e, g.inverse);
+    if (g.state === 'movingRuler') {
+      props.onRulerChange({
+        ...props.ruler,
+        origin: {
+          x: props.ruler.origin.x + p.x - g.last.x,
+          y: props.ruler.origin.y + p.y - g.last.y,
+        },
+      });
       g.last = p;
       return;
     }
-    if (tool === 'pen') {
-      const coalesced = e.nativeEvent.getCoalescedEvents?.();
-      const events = coalesced?.length ? coalesced : [e.nativeEvent];
-      for (const sample of events) {
-        p = rulerPoint(local(sample));
-        if (g.samples.length < 4096) g.samples.push({ ...p, pressure: sample.pressure });
+    if (g.state === 'panning') {
+      const delta = sub({ x: e.clientX, y: e.clientY }, g.screen);
+      setPan((v) => ({ x: v.x - delta.x / g.scale, y: v.y + delta.y / g.scale }));
+      g.screen = { x: e.clientX, y: e.clientY };
+      return;
+    }
+    try {
+      if (g.tool === 'select' && g.hit && !readOnly && !axisDraft) {
+        g.state =
+          g.hit.kind === 'point'
+            ? 'draggingPoint'
+            : g.hit.kind === 'endpoint'
+              ? 'draggingEndpoint'
+              : 'draggingSelection';
+        setState(g.state);
+        drag(g, p);
+      } else if (g.tool === 'pen') {
+        const events = e.nativeEvent.getCoalescedEvents?.();
+        for (const sample of events?.length ? events : [e.nativeEvent])
+          appendSample(g, local(sample, g.inverse), sample.pressure);
+        setPreview([...g.samples]);
+      } else if (!['projection', 'select'].includes(g.tool)) {
+        setPreview([g.start, p]);
+        if (props.snapping && !props.skipSnap) {
+          const candidate = snapCandidates(
+            g.base,
+            g.viewId,
+            sheetToLocal(g.base, g.viewId, p),
+            g.scale,
+            undefined,
+            { hiddenLayers: props.hiddenLayers, grid: props.gridSnap, previous: g.candidate },
+          )[0];
+          g.candidate = candidate;
+          setCandidate(candidate ?? null);
+          setCandidateView(g.viewId);
+        }
       }
-      setPreview([...g.samples]);
-    } else setPreview([g.start, p]);
-    g.last = p;
+      g.last = p;
+    } catch (error) {
+      setPreviewDoc(null);
+      g.next = undefined;
+      fail(error);
+    }
+  }
+  function appendSample(g: Gesture, p: Vec2, pressure: number) {
+    appendStrokeSample(g.samples, { ...p, pressure }, 0.1 / g.scale);
   }
   function up(e: ReactPointerEvent<SVGSVGElement>) {
     const g = gesture.current;
+    const wasPinching = pointers.current.size >= 2 || state === 'pinching';
     pointers.current.delete(e.pointerId);
-    if (svg.current?.hasPointerCapture(e.pointerId)) svg.current.releasePointerCapture(e.pointerId);
-    if (pinch.current !== null) {
-      if (!pointers.current.size) pinch.current = null;
-      return;
-    }
+    if (g && g.id !== e.pointerId) return;
     gesture.current = null;
     setPreview([]);
+    setPreviewDoc(null);
+    setCandidate(null);
+    setState('idle');
+    // Clear the transaction before releasing capture: the normal lostcapture event is not cancellation.
+    if (svg.current?.hasPointerCapture(e.pointerId)) svg.current.releasePointerCapture(e.pointerId);
+    if (wasPinching) return;
     if (g)
       try {
-        finish(g, local(e));
+        if (JSON.stringify(g.base) !== JSON.stringify(doc))
+          throw new Error('文档已更新，已取消未提交操作');
+        const p = local(e, g.inverse);
+        if (g.tool === 'pen') appendSample(g, p, e.pressure);
+        finish(g, p);
       } catch (error) {
-        props.report(error instanceof Error ? error.message : '几何操作失败');
+        fail(error);
       }
   }
+  const scale = size.width / box.width;
   return (
-    <section className={`geo-view ${props.active ? 'geo-active' : ''}`}>
-      <button type="button" className="geo-view-title" onClick={props.activate}>
-        {doc.views.find((v) => v.id === viewId)?.name}
-      </button>
+    <section className="geo-view geo-active">
+      <div className="geo-view-title">
+        统一图纸 · 当前作图框架 {doc.views.find((v) => v.id === viewId)?.name}
+      </div>
       <svg
         ref={svg}
-        aria-label={`${doc.views.find((v) => v.id === viewId)?.name}绘图区`}
+        tabIndex={0}
+        aria-label="统一展开图绘图区"
+        data-interaction={state}
         viewBox={`${box.x} ${-box.y - box.height} ${box.width} ${box.height}`}
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}
         onPointerCancel={cancel}
-        onLostPointerCapture={() => {
-          if (gesture.current) cancel();
+        onLostPointerCapture={(e) => {
+          if (gesture.current?.id === e.pointerId) cancel();
         }}
       >
         <ViewportDrawing
-          controls={props}
+          controls={{ ...props, document: previewDoc ?? doc }}
           viewId={viewId}
           box={box}
           scale={scale}
           preview={preview}
-          steps={steps}
+          steps={steps.map((p) => localToSheet(doc, viewId, p))}
+          candidate={candidate ? localToSheet(doc, candidateView, candidate.position) : null}
+          axisDraft={
+            axisDraft && ['side', 'confirm'].includes(axisDraft.phase) ? axisDraft.spec : null
+          }
         />
       </svg>
-      {pending && (
+      {!readOnly && (
+        <OperationRecovery
+          doc={doc}
+          role={role}
+          lastSnap={lastSnap}
+          lastPen={lastPen}
+          suggestion={suggestion}
+          interrupted={interrupted}
+          replace={props.replace}
+          commit={accept}
+          report={props.report}
+          setLastSnap={setLastSnap}
+          setLastPen={setLastPen}
+          setSuggestion={setSuggestion}
+          setInterrupted={setInterrupted}
+        />
+      )}
+      {axisDraft && (
         <div className="geo-snap" role="status">
-          <span>候选 {pending.label}</span>
+          新轴 {axisDraft.spec.name} ·{' '}
+          {axisDraft.phase === 'confirm' ? '检查展开侧后确认' : '在图纸上定位'}
           <button
             type="button"
+            disabled={axisDraft.phase !== 'confirm'}
             onClick={() => {
-              if (doc === pending.base) accept(pending.snapped);
-              else props.report('文档已更改，请重新执行此次作图');
-              setPending(null);
+              try {
+                accept(addProjectionAxis(doc, axisDraft.spec, role));
+                setAxisDraft(null);
+                props.report('新轴已创建；学生投影点由学生自行作图');
+              } catch (e) {
+                fail(e);
+              }
             }}
           >
-            确认吸附
+            确认新轴
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (doc === pending.base) accept(pending.raw);
-              else props.report('文档已更改，请重新执行此次作图');
-              setPending(null);
-            }}
-          >
-            保留原位置
+          <button type="button" onClick={() => setAxisDraft(null)}>
+            取消新轴
           </button>
         </div>
+      )}
+      {!readOnly && orthographic(doc) && (
+        <AxisTools
+          doc={doc}
+          role={role}
+          commit={props.commit}
+          report={props.report}
+          start={(spec) => {
+            cancel();
+            setAxisDraft({ spec, phase: spec.method === 'FREE' ? 'anchor' : 'reference' });
+            props.report(
+              spec.method === 'FREE' ? '点击新轴的第一点' : '点击保留投影中的参考线线身',
+            );
+          }}
+        />
       )}
     </section>
   );

@@ -1,13 +1,13 @@
 # 几何评分证据
 
-旧图片请求继续使用 contractVersion 1 和 geometry-review/1.0.0。几何请求使用兼容扩展的 contractVersion 1、独立 geometryEvidence 字段和新增 geometry-review/1.1.0 提示词。旧快照与旧提示词继续解析。
+继续使用原 `contractVersion: 1`、geometryEvidence、Provider、队列和教师复核。图片请求保留 `geometry-review/1.0.0`；旧 v1 几何快照保留 `1.1.0`；新 v2 展开图使用 `1.2.0`，明确说明局部坐标变换、换面距离及失效约束语义。运行时校验文档版本与证据版本、提示词兼容性，不重写旧请求。
 
-geometryEvidence 包含冻结题干、实际作答、公共模块分析的关系及确定性中文描述。至少提供有效图片或非空几何答案。仅有题干不构成答案。纯几何输入通过同一 Provider 文本消息发送。
+geometryEvidence 包含冻结题干、实际作答、公共分析关系和中文描述。至少有有效图片或非空几何答案，仅有题干不算答案。纯几何输入通过同一 Provider 文本消息发送，不新增评分系统。
 
-几何批注使用 entityIds 和 relationIds，程序校验对象、关系和错误 ID。无效定位被过滤并标记复核。教师仍通过 GradeDecision 确认和发布成绩。
+`exportGeometryBundle` 在现有提交事务中产生证据并保存到 GradingRun.request，重试读取快照。叙述同时给出局部/图纸坐标、换面轴及依赖、声明约束与当前校验状态。换面分析按旧轴带符号距离计算偏差，创建轴不补齐答案。INVALID/UNVERIFIED 声明不作为实际满足关系的证据。
 
-geometry-core 的 exportGeometryBundle 返回 document、derivedRelations、narrative。scheduleRun 在提交事务内生成证据并保存到 GradingRun.request，重试直接读取该快照。geometry-core 完全不依赖模型。
+提交校验和分析只重算关系状态，不执行交互中的绑定位移。即使客户端声明交点绑定或 SATISFIED，提交点仍按其实际坐标评估；不会在生成评分证据时替学生修正作答。
 
-自然语言示例文件为 geometry-examples/VHW_PROJECTION.txt。示例的 V、H 投影 x 坐标分别为 10 和 12，导出明确记录 2.000mm 偏差。未知空间坐标写为“未知”。约束声明与计算关系分别标注来源。
+批注仍使用 entityIds/relationIds，程序校验对象、关系和错误 ID；无效定位过滤并进入复核。正式成绩只由教师 GradeDecision 确认发布。四类编辑器、图片作答与历史提交使用同一教学流程。
 
-geometry-review/1.0.0 的模型输出 Schema 保留旧字段集合，1.1.0 的 Schema 要求 geometryAnnotations 数组，兼容严格 JSON Schema Provider。运行时结果读取允许旧记录缺少该数组。
+自动化集成测试使用真实 PostgreSQL、Redis、对象存储及现有评分执行用例；模型是明确标识的测试替身。真实模型的几何评分准确性尚未验收，不能将自动化链路通过等同于真实模型质量通过。

@@ -109,7 +109,11 @@ export const GradingRequest = z
         .nullable(),
     }),
     strategyVersion: z.literal('geometry-v1'),
-    promptVersion: z.enum(['geometry-review/1.0.0', 'geometry-review/1.1.0']),
+    promptVersion: z.enum([
+      'geometry-review/1.0.0',
+      'geometry-review/1.1.0',
+      'geometry-review/1.2.0',
+    ]),
     modelConfigId: z.string(),
     teacherRequirements: z.string().max(4000).optional(),
   })
@@ -124,8 +128,16 @@ export const GradingRequest = z
     '至少需要图片或几何作答',
   )
   .refine(
-    (r) => !r.geometryEvidence || r.promptVersion === 'geometry-review/1.1.0',
+    (r) =>
+      !r.geometryEvidence ||
+      ['geometry-review/1.1.0', 'geometry-review/1.2.0'].includes(r.promptVersion),
     '几何证据需要新版提示词',
+  )
+  .refine(
+    (r) =>
+      r.geometryEvidence?.schemaVersion !== 'tuheng.geometry/2.0.0' ||
+      r.promptVersion === 'geometry-review/1.2.0',
+    'v2 展开图需要兼容的提示词版本',
   );
 export type GradingRequest = z.infer<typeof GradingRequest>;
 export const Analysis = z.object({

@@ -7,3 +7,9 @@ export * from './snapping';
 export * from './tools';
 export * from './selection';
 export * from './planes';
+
+export * from './sheet';
+export * from './projection-systems';
+export * from './topology';
+export * from './dependencies';
+export * from './svg';

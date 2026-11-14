@@ -10,7 +10,7 @@ import {
   type Actor,
 } from '@tuheng/domain';
 import { GradingRequest, GradingResult } from '@tuheng/contracts';
-import { addDrawing, createDocument, moveEntities } from '@tuheng/geometry-core';
+import { addDrawing, createDocument, moveEntities, addProjectionAxis } from '@tuheng/geometry-core';
 import { executeGradingRun } from '../../packages/infrastructure/src/grading-runner';
 import { MockVisionProvider } from '@tuheng/ai-providers';
 import { requestFixture, evaluationFixture } from '../fixtures';
@@ -55,7 +55,7 @@ it('freezes pure geometry answers, denies stem tampering and cross-student acces
   });
   await publishAssignment(db, teacher, assignment.id);
   const item = (await db.list('assignmentItem', { assignmentId: assignment.id }))[0];
-  const answer = addDrawing(
+  let answer = addDrawing(
     stem,
     'hidden',
     'view-1',
@@ -65,6 +65,27 @@ it('freezes pure geometry answers, denies stem tampering and cross-student acces
     ],
     'student',
   );
+  answer = addProjectionAxis(
+    answer,
+    {
+      name: 'X1',
+      viewName: 'V1',
+      retainedViewId: 'view-1',
+      replacedViewId: 'view-0',
+      parentId: null,
+      method: 'PARALLEL',
+      referenceEntityId: answer.entities.at(-1)!.id,
+      anchor: { x: -40, y: -20 },
+      through: { x: -20, y: -20 },
+      side: 1,
+    },
+    'student',
+  );
+  const forgedAxis = structuredClone(answer);
+  forgedAxis.views[0].transform!.origin.x = 3;
+  await expect(saveDraft(db, student, item.id, [], forgedAxis)).rejects.toMatchObject({
+    code: 'GEOMETRY_STEM_CHANGED',
+  });
   const submission = await saveDraft(db, student, item.id, [], answer);
   expect(submission.draftGeometry).toEqual(answer);
   const tampered = moveEntities(answer, [stem.entities[0].id], { x: 2, y: 0 }, 'teacher');
@@ -136,7 +157,7 @@ it('freezes pure geometry answers, denies stem tampering and cross-student acces
   const suggestion = (await db.list('gradingSuggestion', { runId: run.id }))[0];
   const result = GradingResult.parse(suggestion.result);
   expect(result.geometryAnnotations).toHaveLength(1);
-  expect(result.versions.prompt).toBe('geometry-review/1.1.0');
+  expect(result.versions.prompt).toBe('geometry-review/1.2.0');
   expect((await db.get('submissionAttempt', attempt.id))?.publishedDecisionId).toBeNull();
   expect(await db.list('gradeDecision', { attemptId: attempt.id })).toHaveLength(0);
 });

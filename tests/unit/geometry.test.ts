@@ -153,7 +153,8 @@ describe('versioned geometry kernel', () => {
       addDrawing(before, 'point', 'view-0', [candidate.position], 'student'),
       candidate,
     );
-    expect(snapped.constraints[0].source).toBe('SNAP_CONFIRMED');
+    expect(snapped.entities.filter((e) => e.kind === 'point')).toHaveLength(1);
+    expect(snapped.entities[0]).toMatchObject({ mergedFrom: expect.any(Array) });
     expect(raw.constraints).toHaveLength(0);
     expect(raw.entities.at(-1)).toMatchObject({ position: { x: 4.1, y: 4.1 } });
   });

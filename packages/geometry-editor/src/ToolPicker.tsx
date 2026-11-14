@@ -29,24 +29,44 @@ export function ToolPicker({
   select: (ids: string[]) => void;
   report: (s: string) => void;
 }) {
+  const primary = new Set<Tool>([
+    'select',
+    'point',
+    'segment',
+    'hidden',
+    'circle',
+    'arc',
+    'pen',
+    'pan',
+  ]);
+  const buttons = (items: typeof tools) =>
+    items.map(([id, title]) => (
+      <button
+        type="button"
+        key={id}
+        aria-pressed={tool === id}
+        onClick={() => {
+          setTool(id);
+          if (id === 'projection') select([]);
+          report(
+            `${title}工具${id === 'circle' ? '，依次选择圆心和圆周点' : id === 'arc' ? '，依次选择圆心、起点、终点' : id === 'pen' ? '，手指默认平移' : id === 'projection' ? '，依次选择不同视图中的对应点或线段' : ''}`,
+          );
+        }}
+      >
+        {title}
+      </button>
+    ));
   return (
-    <div className="geo-toolbar" role="toolbar" aria-label="几何工具">
-      {tools.map(([id, title]) => (
-        <button
-          type="button"
-          key={id}
-          aria-pressed={tool === id}
-          onClick={() => {
-            setTool(id);
-            if (id === 'projection') select([]);
-            report(
-              `${title}工具${id === 'circle' ? '，依次选择圆心和圆周点' : id === 'arc' ? '，依次选择圆心、起点、终点' : id === 'pen' ? '，手指默认平移' : id === 'projection' ? '，依次选择不同视图中的对应点或线段' : ''}`,
-            );
-          }}
-        >
-          {title}
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="geo-toolbar" role="toolbar" aria-label="常用几何工具">
+        {buttons(tools.filter(([id]) => primary.has(id)))}
+      </div>
+      <details className="geo-more-tools">
+        <summary>辅助与关联工具</summary>
+        <div className="geo-toolbar" role="toolbar" aria-label="辅助几何工具">
+          {buttons(tools.filter(([id]) => !primary.has(id)))}
+        </div>
+      </details>
+    </>
   );
 }

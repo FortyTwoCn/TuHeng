@@ -1,4 +1,6 @@
 import { GeometryDocument, type GeometryEntity, type Vec2 } from '@tuheng/contracts';
+import { upgradeGeometryDocument } from './sheet';
+import { evaluateDependencies } from './dependencies';
 import { add } from './math';
 import { spatialTranslation } from './projections';
 export const validateGeometryDocument = (input: unknown) => GeometryDocument.safeParse(input);
@@ -9,22 +11,53 @@ export function loadGeometryDocument(text: string) {
 export const serializeGeometryDocument = (doc: GeometryDocument) =>
   JSON.stringify(GeometryDocument.parse(doc), null, 2);
 export function editable(doc: GeometryDocument, e: GeometryEntity, role: 'teacher' | 'student') {
-  return role === 'teacher' || doc.layers.find((l) => l.id === e.layerId)?.role !== 'PROBLEM_STEM';
+  return (
+    !(e.kind === 'plane' && e.legacyReadOnly) &&
+    (role === 'teacher' || doc.layers.find((l) => l.id === e.layerId)?.role !== 'PROBLEM_STEM')
+  );
 }
 export function combineAnswer(stem: GeometryDocument, input: unknown): GeometryDocument {
   stem = GeometryDocument.parse(stem);
   const answer = GeometryDocument.parse(input);
+  if (answer.schemaVersion === 'tuheng.geometry/2.0.0') {
+    stem = upgradeGeometryDocument(stem);
+    // Derived statuses are recomputed on new copies, never trusted or compared to absent v1 fields.
+    // Submission validation must not silently move a student's point to satisfy a declared binding.
+    evaluateDependencies(stem, { resolveBindings: false });
+    evaluateDependencies(answer, { resolveBindings: false });
+  }
   for (const key of [
     'editorType',
-    'views',
     'layers',
     'projectionConfig',
     'coordinateSystem',
     'units',
+    'sheet',
   ] as const) {
     if (JSON.stringify(answer[key]) !== JSON.stringify(stem[key]))
       throw new Error('GEOMETRY_STEM_CHANGED');
   }
+  for (const key of ['views', 'auxiliarySystems'] as const) {
+    const originals = stem[key] ?? [],
+      values = answer[key] ?? [];
+    for (const original of originals)
+      if (JSON.stringify(values.find((v) => v.id === original.id)) !== JSON.stringify(original))
+        throw new Error('GEOMETRY_STEM_CHANGED');
+  }
+  const extraAxes = (answer.auxiliarySystems ?? []).filter(
+    (a) => !(stem.auxiliarySystems ?? []).some((b) => b.id === a.id),
+  );
+  if (
+    extraAxes.some((a) => a.owner !== 'STUDENT' || a.locked) ||
+    (extraAxes.length && !stem.sheet?.allowAuxiliaryViews)
+  )
+    throw new Error('GEOMETRY_STEM_CHANGED');
+  const extraViews = answer.views.filter((v) => !stem.views.some((w) => w.id === v.id));
+  if (
+    extraViews.length !== extraAxes.length ||
+    extraViews.some((v) => !extraAxes.some((a) => a.newViewId === v.id))
+  )
+    throw new Error('GEOMETRY_STEM_CHANGED');
   const locked = stem.entities;
   for (const entity of locked) {
     if (JSON.stringify(answer.entities.find((e) => e.id === entity.id)) !== JSON.stringify(entity))
@@ -50,8 +83,10 @@ export function transact(
   change: (draft: GeometryDocument) => void,
   role: 'teacher' | 'student' = 'teacher',
 ) {
+  doc = upgradeGeometryDocument(doc);
   const draft = structuredClone(doc);
   change(draft);
+  if (draft.schemaVersion === 'tuheng.geometry/2.0.0') evaluateDependencies(draft);
   const next = GeometryDocument.parse(draft);
   if (role === 'student') {
     for (const entity of doc.entities.filter((e) => !editable(doc, e, role))) {
@@ -98,6 +133,8 @@ export function moveEntities(
   );
 }
 export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
+  if (doc.auxiliarySystems?.some((a) => ids.includes(a.referenceEntityId ?? '')))
+    throw new Error('参考线被换面轴依赖，请先处理该轴');
   const removed = new Set(ids);
   let added = true;
   while (added) {
@@ -192,6 +229,11 @@ export class DocumentHistory {
     this.future = [];
     this.current = next;
     return next;
+  }
+  replaceCurrent(next: GeometryDocument) {
+    this.current = GeometryDocument.parse(next);
+    this.future = [];
+    return this.current;
   }
   undo() {
     const next = this.past.pop();

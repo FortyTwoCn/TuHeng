@@ -184,3 +184,34 @@
     overflow: auto;
   }
 }
+/* One sheet, one camera on every breakpoint. */
+.geo-views {
+  display: block;
+}
+.geo-view,
+.geo-view.geo-active {
+  width: 100%;
+}
+.geo-view svg {
+  aspect-ratio: auto;
+  height: clamp(340px, 60vh, 640px);
+}
+.geo-view-title {
+  padding: 8px 12px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+.geo-axis-tools {
+  padding: 0 12px;
+}
+@media (max-width: 700px) {
+  .geo-view svg {
+    height: 440px;
+  }
+  .geo-toolbar {
+    padding: 4px 0;
+  }
+  .geometry-editor button {
+    padding: 6px 10px;
+  }
+}
