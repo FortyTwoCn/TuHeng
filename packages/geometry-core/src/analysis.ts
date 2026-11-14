@@ -141,7 +141,12 @@ export function exportGeometryNarrative(
 ) {
   doc = structuredClone(doc);
   evaluateDependencies(doc, { resolveBindings: false });
+  const referenceDescriptions = (doc.referenceRelations ?? []).map(
+    (r) =>
+      `参考关系 ${r.id}：对象 ${r.targetId}，${r.kind}，参考 ${JSON.stringify(r.reference)}，${r.mode === 'BINDING' ? '持续有向绑定' : '本次定位/方向调整'}，实际校验 ${r.status}。`,
+  );
   const lines = [
+    ...referenceDescriptions,
     `${editorRegistry[doc.editorType].name}，单位 mm。计算距离容差 ${doc.settings.tolerance} mm。`,
   ];
   if (relations.length === 3000)

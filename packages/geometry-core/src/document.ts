@@ -19,7 +19,7 @@ export function editable(doc: GeometryDocument, e: GeometryEntity, role: 'teache
 export function combineAnswer(stem: GeometryDocument, input: unknown): GeometryDocument {
   stem = GeometryDocument.parse(stem);
   const answer = GeometryDocument.parse(input);
-  if (answer.schemaVersion === 'tuheng.geometry/2.0.0') {
+  if (answer.schemaVersion !== 'tuheng.geometry/1.0.0') {
     stem = upgradeGeometryDocument(stem);
     // Derived statuses are recomputed on new copies, never trusted or compared to absent v1 fields.
     // Submission validation must not silently move a student's point to satisfy a declared binding.
@@ -59,6 +59,12 @@ export function combineAnswer(stem: GeometryDocument, input: unknown): GeometryD
   )
     throw new Error('GEOMETRY_STEM_CHANGED');
   const locked = stem.entities;
+  for (const relation of stem.referenceRelations ?? [])
+    if (
+      JSON.stringify(answer.referenceRelations?.find((r) => r.id === relation.id)) !==
+      JSON.stringify(relation)
+    )
+      throw new Error('GEOMETRY_STEM_CHANGED');
   for (const entity of locked) {
     if (JSON.stringify(answer.entities.find((e) => e.id === entity.id)) !== JSON.stringify(entity))
       throw new Error('GEOMETRY_STEM_CHANGED');
@@ -86,7 +92,7 @@ export function transact(
   doc = upgradeGeometryDocument(doc);
   const draft = structuredClone(doc);
   change(draft);
-  if (draft.schemaVersion === 'tuheng.geometry/2.0.0') evaluateDependencies(draft);
+  if (draft.schemaVersion !== 'tuheng.geometry/1.0.0') evaluateDependencies(draft);
   const next = GeometryDocument.parse(draft);
   if (role === 'student') {
     for (const entity of doc.entities.filter((e) => !editable(doc, e, role))) {
@@ -147,6 +153,15 @@ export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teac
   }
   if (doc.entities.some((e) => removed.has(e.id) && !editable(doc, e, role)))
     throw new Error('题干对象只读');
+  if (
+    doc.referenceRelations?.some(
+      (r) =>
+        !removed.has(r.targetId) &&
+        r.reference.kind === 'entity' &&
+        removed.has(r.reference.entityId),
+    )
+  )
+    throw new Error('参考对象被关系依赖，请先解除关系');
   return transact(
     doc,
     (d) => {
@@ -160,6 +175,8 @@ export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teac
               : e,
         );
       d.constraints = d.constraints.filter((r) => r.entityIds.every((id) => !removed.has(id)));
+      if (d.referenceRelations)
+        d.referenceRelations = d.referenceRelations.filter((r) => !removed.has(r.targetId));
       d.projectionGroups = d.projectionGroups.filter((r) =>
         r.entityIds.every((id) => !removed.has(id)),
       );
@@ -215,6 +232,12 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
 export class DocumentHistory {
   private past: GeometryDocument[] = [];
   private future: GeometryDocument[] = [];
+  get canUndo() {
+    return this.past.length > 0;
+  }
+  get canRedo() {
+    return this.future.length > 0;
+  }
   constructor(
     public current: GeometryDocument,
     private limit = 100,

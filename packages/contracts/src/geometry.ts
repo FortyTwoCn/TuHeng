@@ -18,6 +18,30 @@ const id = z
   .max(100)
   .regex(/^[\w.-]+$/);
 const scalar = z.number().finite().min(-10000).max(10000);
+export const GeometryTargetRef = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('entity'), entityId: id }).strict(),
+  z
+    .object({
+      kind: z.literal('baseAxis'),
+      axisId: z.enum(['X', 'Z', 'Y_H', 'Y_W', 'x', 'y', 'z']),
+    })
+    .strict(),
+  z.object({ kind: z.literal('projectionAxis'), systemId: id }).strict(),
+  z.object({ kind: z.literal('origin'), frameId: id }).strict(),
+]);
+export type GeometryTargetRef = z.infer<typeof GeometryTargetRef>;
+export const ReferenceRelation = z
+  .object({
+    id,
+    targetId: id,
+    reference: GeometryTargetRef,
+    kind: z.enum(['POINT_ON_REFERENCE', 'THROUGH_POINT', 'PARALLEL', 'PERPENDICULAR']),
+    mode: z.enum(['POSITION', 'BINDING']),
+    source: z.enum(['USER', 'SNAP_CONFIRMED']),
+    status: z.enum(['SATISFIED', 'INVALID', 'UNVERIFIED']).optional(),
+  })
+  .strict();
+export type ReferenceRelation = z.infer<typeof ReferenceRelation>;
 export const Vec2 = z.object({ x: scalar, y: scalar }).strict();
 export type Vec2 = z.infer<typeof Vec2>;
 export const Vec3 = Vec2.extend({ z: scalar });
@@ -202,7 +226,11 @@ export const ProjectionAxis = z
 export type ProjectionAxis = z.infer<typeof ProjectionAxis>;
 export const GeometryDocument = z
   .object({
-    schemaVersion: z.enum(['tuheng.geometry/1.0.0', 'tuheng.geometry/2.0.0']),
+    schemaVersion: z.enum([
+      'tuheng.geometry/1.0.0',
+      'tuheng.geometry/2.0.0',
+      'tuheng.geometry/2.1.0',
+    ]),
     editorType: EditorType,
     units: z.literal('mm'),
     coordinateSystem: z.enum(['VIEW_LOCAL_X_RIGHT_Y_UP', 'VIEW_LOCAL_WITH_SHEET_TRANSFORM']),
@@ -239,6 +267,7 @@ export const GeometryDocument = z
       .max(3),
     entities: z.array(GeometryEntity).max(2000),
     constraints: z.array(GeometryConstraint).max(1000),
+    referenceRelations: z.array(ReferenceRelation).max(1000).optional(),
     projectionGroups: z.array(ProjectionGroup).max(500),
     settings: z
       .object({
@@ -268,6 +297,7 @@ export const GeometryDocument = z
         fail('基准原点必须为零');
     }
     const all = [
+      ...(doc.referenceRelations ?? []),
       ...(doc.auxiliarySystems ?? []),
       ...doc.views,
       ...doc.layers,
@@ -278,6 +308,8 @@ export const GeometryDocument = z
     if (new Set(all.map((e) => e.id)).size !== all.length) fail('对象或关系 ID 重复');
     if (new Set(doc.layers.map((l) => l.role)).size !== 3) fail('图层角色必须唯一');
     const orthographic = ['VHW_PROJECTION', 'THREE_VIEW'].includes(doc.editorType);
+    if (doc.referenceRelations && doc.schemaVersion !== 'tuheng.geometry/2.1.0')
+      fail('类型化参考关系需要 2.1 文档');
     if (doc.views.length !== (orthographic ? 3 + (doc.auxiliarySystems?.length ?? 0) : 1))
       fail('视图数量与编辑器类型不一致');
     if (doc.views.some((view) => view.mapping[0] === view.mapping[1]))
@@ -464,6 +496,76 @@ export const GeometryDocument = z
         if (target && layers.get(target.layerId) === 'PROBLEM_STEM') fail('不能绑定并驱动题干点');
         edges.set(c.entityIds[0], [...(edges.get(c.entityIds[0]) ?? []), ...c.entityIds.slice(1)]);
       }
+    const drivers = new Set(
+      doc.constraints.filter((c) => c.mode === 'BINDING').map((c) => c.entityIds[0]),
+    );
+    const relationKeys = new Set<string>();
+    for (const r of doc.referenceRelations ?? []) {
+      const target = entities.get(r.targetId),
+        ref = r.reference;
+      const source = ref.kind === 'entity' ? entities.get(ref.entityId) : undefined;
+      if (!target) {
+        fail('参考关系目标不存在');
+        continue;
+      }
+      if (ref.kind === 'entity' && (!source || source.id === target.id))
+        fail('参考对象不存在或自引用');
+      if (
+        ref.kind === 'baseAxis' &&
+        !(orthographic ? ['X', 'Z', 'Y_H', 'Y_W'] : ['x', 'y', 'z']).includes(ref.axisId)
+      )
+        fail('基准轴不属于当前投影体系');
+      if (ref.kind === 'origin' && !doc.views.some((v) => v.id === ref.frameId))
+        fail('原点框架不存在');
+      if (ref.kind === 'projectionAxis' && !systems.some((a) => a.id === ref.systemId))
+        fail('投影轴引用不存在');
+      if (
+        source &&
+        source.viewId !== target.viewId &&
+        source.scope !== 'SHEET' &&
+        target.scope !== 'SHEET'
+      )
+        fail('关系不能跨投影框架');
+      if (
+        r.kind === 'POINT_ON_REFERENCE' &&
+        (target.kind !== 'point' || (source && !['point', 'segment', 'line'].includes(source.kind)))
+      )
+        fail('贴轴关系需要点和线/原点');
+      if (r.kind === 'THROUGH_POINT' && (target.kind !== 'line' || source?.kind !== 'point'))
+        fail('过点关系需要辅助线和点');
+      if (
+        ['PARALLEL', 'PERPENDICULAR'].includes(r.kind) &&
+        (!['line', 'segment'].includes(target.kind) ||
+          ref.kind === 'origin' ||
+          (source && !['line', 'segment'].includes(source.kind)))
+      )
+        fail('方向关系必须引用线或轴');
+      const key = `${r.targetId}:${r.kind}:${JSON.stringify(ref)}`;
+      if (relationKeys.has(key)) fail('重复参考关系');
+      relationKeys.add(key);
+      if (r.mode === 'BINDING') {
+        const driven = target.kind === 'segment' ? target.endPoint : target.id;
+        if (drivers.has(driven)) fail('一个对象不能有多个驱动约束');
+        drivers.add(driven);
+        if (
+          layers.get(target.layerId) === 'PROBLEM_STEM' ||
+          (target.kind === 'segment' &&
+            layers.get(entities.get(target.endPoint)?.layerId ?? '') === 'PROBLEM_STEM')
+        )
+          fail('不能通过绑定驱动题干');
+        if (
+          target.kind === 'segment' &&
+          doc.entities.some(
+            (e) =>
+              e.id !== target.id &&
+              ((e.kind === 'segment' && [e.startPoint, e.endPoint].includes(target.endPoint)) ||
+                ((e.kind === 'circle' || e.kind === 'arc') && e.center === target.endPoint)),
+          )
+        )
+          fail('方向绑定会影响共享端点，请先解除连接');
+        if (source) edges.set(driven, [...(edges.get(driven) ?? []), source.id]);
+      }
+    }
     const visited = new Set<string>();
     const visiting = new Set<string>();
     function visit(key: string) {
@@ -533,7 +635,11 @@ export const GeometryDocument = z
 export type GeometryDocument = z.infer<typeof GeometryDocument>;
 export const GeometryEvidence = z
   .object({
-    schemaVersion: z.enum(['tuheng.geometry/1.0.0', 'tuheng.geometry/2.0.0']),
+    schemaVersion: z.enum([
+      'tuheng.geometry/1.0.0',
+      'tuheng.geometry/2.0.0',
+      'tuheng.geometry/2.1.0',
+    ]),
     editorType: EditorType,
     problemDocument: GeometryDocument,
     answerDocument: GeometryDocument,

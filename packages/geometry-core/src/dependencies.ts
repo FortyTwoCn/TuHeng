@@ -1,6 +1,11 @@
 import { localToSheet } from './sheet';
 import type { GeometryDocument } from '@tuheng/contracts';
 import { lineGeometry, unit, dot, cross, intersect, distance, point, foot } from './math';
+import {
+  referenceRelationGeometry,
+  applyReferenceResult,
+  referenceDependencyIds,
+} from './reference-relations';
 // Position snaps are observations. Only explicit BINDING intersections follow their parents.
 export function evaluateDependencies(
   doc: GeometryDocument,
@@ -34,6 +39,17 @@ export function evaluateDependencies(
     if (visiting.has(id)) throw new Error('交点绑定循环');
     visiting.add(id);
     const c = bindings.get(id);
+    for (const r of doc.referenceRelations?.filter(
+      (r) => r.targetId === id && r.mode === 'BINDING',
+    ) ?? []) {
+      for (const parent of referenceDependencyIds(doc, r.reference)) resolve(parent);
+      const target = doc.entities.find((e) => e.id === id);
+      if (target?.kind === 'segment') {
+        resolve(target.startPoint);
+        resolve(target.endPoint);
+      }
+      applyReferenceResult(doc, referenceRelationGeometry(doc, r));
+    }
     if (c) {
       for (const lineId of c.entityIds.slice(1)) {
         const e = doc.entities.find((e) => e.id === lineId);
@@ -53,7 +69,12 @@ export function evaluateDependencies(
     visiting.delete(id);
     done.add(id);
   };
-  if (resolveBindings) for (const id of bindings.keys()) resolve(id);
+  if (resolveBindings) {
+    for (const id of bindings.keys()) resolve(id);
+    for (const r of doc.referenceRelations ?? []) if (r.mode === 'BINDING') resolve(r.targetId);
+  }
+  for (const r of doc.referenceRelations ?? [])
+    r.status = referenceRelationGeometry(doc, r).valid ? 'SATISFIED' : 'INVALID';
   for (const c of doc.constraints) {
     const e = c.entityIds.map((id) => doc.entities.find((e) => e.id === id)!);
     if (e.some((v) => !v)) continue;

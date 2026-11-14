@@ -13,3 +13,8 @@ export * from './projection-systems';
 export * from './topology';
 export * from './dependencies';
 export * from './svg';
+export * from './references';
+export * from './marquee';
+export * from './preview';
+export * from './commands';
+export * from './reference-relations';

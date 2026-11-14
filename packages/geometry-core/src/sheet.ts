@@ -13,7 +13,7 @@ export function defaultTransform(doc: GeometryDocument, view: GeometryDocument['
 // Migration is for a NEW editable draft. Parsing/serializing a historical snapshot never migrates it.
 export function upgradeGeometryDocument(input: unknown): GeometryDocument {
   const doc = GeometryDocument.parse(input);
-  if (doc.schemaVersion === 'tuheng.geometry/2.0.0') return doc;
+  if (doc.schemaVersion !== 'tuheng.geometry/1.0.0') return doc;
   return GeometryDocument.parse({
     ...doc,
     schemaVersion: 'tuheng.geometry/2.0.0',

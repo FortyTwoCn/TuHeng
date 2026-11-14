@@ -42,6 +42,15 @@ export function mergePoints(
         ...r,
         entityIds: r.entityIds.map((id) => (id === sourceId ? targetId : id)),
       }));
+      if (d.referenceRelations)
+        d.referenceRelations = d.referenceRelations.map((r) => ({
+          ...r,
+          targetId: r.targetId === sourceId ? targetId : r.targetId,
+          reference:
+            r.reference.kind === 'entity' && r.reference.entityId === sourceId
+              ? { kind: 'entity', entityId: targetId }
+              : r.reference,
+        }));
       const canonical = d.entities.find((e) => e.id === targetId)!;
       if (canonical.kind === 'point' && editable(doc, target, role)) {
         canonical.aliases = [

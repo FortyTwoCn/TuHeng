@@ -152,6 +152,12 @@ export function deleteProjectionAxis(
   if (role === 'student' && axis.owner !== 'STUDENT') throw new Error('题干轴只读');
   const dependents = (doc.auxiliarySystems ?? []).filter((a) => a.parentId === id);
   const objects = doc.entities.filter((e) => e.viewId === axis.newViewId);
+  if (
+    doc.referenceRelations?.some(
+      (r) => r.reference.kind === 'projectionAxis' && r.reference.systemId === id,
+    )
+  )
+    throw new Error('此轴被作图关系依赖，请先解除关系');
   if (dependents.length || objects.length)
     throw new Error(
       `此轴被 ${dependents.length} 个换面和 ${objects.length} 个对象依赖，请先处理依赖`,
