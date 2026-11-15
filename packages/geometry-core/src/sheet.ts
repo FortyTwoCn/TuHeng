@@ -42,6 +42,63 @@ export function sheetDeltaToLocal(doc: GeometryDocument, viewId: string, d: Vec2
   const f = viewTransform(doc, viewId);
   return { x: dot(d, f.xAxis), y: dot(d, f.yAxis) };
 }
+/** Resolve a NEW operation's frame. Existing objects and in-progress operations retain their frame. */
+export function drawingViewAt(
+  doc: GeometryDocument,
+  position: Vec2,
+  approachedViewId?: string,
+  targetEntityId?: string,
+): string {
+  const target = targetEntityId && doc.entities.find((e) => e.id === targetEntityId);
+  if (target) return target.viewId;
+  if (!orthographic(doc)) return doc.views[0].id;
+  const systems = doc.auxiliarySystems ?? [];
+  const ancestors = new Set<string>();
+  let ancestor = approachedViewId;
+  while (ancestor && !ancestors.has(ancestor)) {
+    ancestors.add(ancestor);
+    ancestor = systems.find((a) => a.newViewId === ancestor)?.retainedViewId;
+  }
+  // Each base face is the positive spatial quadrant in its own transformed frame.
+  // This also handles imported IDs, signs, offsets and rotations without guessing from names.
+  const candidates = doc.views
+    .filter((v) => !systems.some((a) => a.newViewId === v.id))
+    .map((v) => {
+      const p = sheetToLocal(doc, v.id, position);
+      return {
+        id: v.id,
+        distance: Math.hypot(Math.min(0, p.x * v.signs[0]), Math.min(0, p.y * v.signs[1])),
+        order: ['x,z', 'x,y', 'y,z'].indexOf(v.mapping.join(',')),
+      };
+    });
+  const epsilon = 1e-7;
+  candidates.sort((a, b) =>
+    Math.abs(a.distance - b.distance) > epsilon
+      ? a.distance - b.distance
+      : Number(ancestors.has(b.id)) - Number(ancestors.has(a.id)) ||
+        a.order - b.order ||
+        a.id.localeCompare(b.id),
+  );
+  let viewId = candidates[0]?.id ?? doc.views[0].id;
+  const visited = new Set<string>();
+  while (!visited.has(viewId)) {
+    visited.add(viewId);
+    // An auxiliary face subdivides the retained region on its chosen unfold side.
+    // Sibling overlaps use the nearest axis; nested faces are resolved recursively.
+    const children = systems
+      .filter((a) => a.retainedViewId === viewId && !visited.has(a.newViewId))
+      .map((a) => ({ id: a.newViewId, distance: dot(sub(position, a.anchor), a.positiveNormal) }))
+      .filter((a) => a.distance > epsilon || (a.distance >= -epsilon && ancestors.has(a.id)))
+      .sort((a, b) =>
+        Math.abs(a.distance - b.distance) > epsilon
+          ? a.distance - b.distance
+          : Number(ancestors.has(b.id)) - Number(ancestors.has(a.id)) || a.id.localeCompare(b.id),
+      );
+    if (!children.length) break;
+    viewId = children[0].id;
+  }
+  return viewId;
+}
 export function sheetBounds(doc: GeometryDocument): Bounds {
   const points = doc.entities
     .filter((e) => e.kind !== 'line')

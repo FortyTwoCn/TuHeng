@@ -121,6 +121,11 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       labels: doc.settings.labels,
       hiddenLayers: [] as string[],
     });
+    const [documentLabels, setDocumentLabels] = useState(doc.settings.labels);
+    if (documentLabels !== doc.settings.labels) {
+      setDocumentLabels(doc.settings.labels);
+      setSettings((current) => ({ ...current, labels: doc.settings.labels }));
+    }
     const [skipSnap, setSkipSnap] = useState(false),
       [zoom, setZoom] = useState(1),
       [fitKey, setFitKey] = useState(0),
@@ -406,20 +411,6 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       >
         <div className="geo-heading">
           <strong>{editorRegistry[doc.editorType].name}</strong>
-          <label>
-            框架{' '}
-            <select
-              aria-label="当前作图框架"
-              value={activeView}
-              onChange={(e) => dispatch({ type: 'patch', patch: { active: e.target.value } })}
-            >
-              {doc.views.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <button type="button" onClick={fit}>
             完整展开图
           </button>
@@ -579,8 +570,6 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
             document={doc}
             revision={revision}
             viewId={activeView}
-            active
-            activate={() => {}}
             focusKey={focusKey}
             replace={replace}
             role={role}

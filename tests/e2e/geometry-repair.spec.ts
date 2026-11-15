@@ -237,7 +237,6 @@ test('standard coordinates, two-level parallel/perpendicular axes, reload and re
       String(p.y),
     );
   }
-  await page.getByLabel('当前作图框架').selectOption({ label: 'H' });
   await choose(page, '实线');
   await drag(page, { x: -50, y: -10 }, { x: -20, y: -10 });
   await choose(page, '新增投影轴');
@@ -253,9 +252,9 @@ test('standard coordinates, two-level parallel/perpendicular axes, reload and re
   const first = d.auxiliarySystems![0];
   expect(first.tangent.y).toBeCloseTo(0);
   expect(first.positiveNormal.y).toBe(-1);
-  await page.getByLabel('当前作图框架').selectOption({ label: 'V1' });
   await choose(page, '实线');
   await drag(page, { x: -50, y: -45 }, { x: -30, y: -45 });
+  expect((await json(page)).entities.at(-1)?.viewId).toBe(first.newViewId);
   await choose(page, '新增投影轴');
   await page.getByLabel('父投影系').selectOption(first.id);
   await page.getByLabel('新轴构造').selectOption('PERPENDICULAR');
@@ -461,4 +460,142 @@ test('stem anchor stays read-only in the UI and explicit disconnection affects o
   const detached = await json(page);
   expect(detached.entities.find((e) => e.id === stem.id)).toEqual(stem);
   expect(detached.entities.find((e) => e.id === line.id)).not.toMatchObject({ endPoint: stem.id });
+});
+for (const viewport of [
+  { width: 1366, height: 768 },
+  { width: 768, height: 1024 },
+  { width: 390, height: 844 },
+]) {
+  test(`automatic V/H/W from drawing position at ${viewport.width}px, with no frame selector`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await choose(page, '点');
+    for (const p of [
+      { x: -30, y: 40 },
+      { x: -30, y: -20 },
+      { x: 20, y: 40 },
+    ])
+      await clickAt(page, p);
+    const doc = await json(page);
+    expect(doc.entities.map((e) => e.viewId)).toEqual(['view-0', 'view-1', 'view-2']);
+    expect(doc.entities.map((e) => (e.kind === 'point' ? e.position : null))).toEqual([
+      { x: expect.closeTo(30, 4), y: expect.closeTo(40, 4) },
+      { x: expect.closeTo(30, 4), y: expect.closeTo(-20, 4) },
+      { x: expect.closeTo(20, 4), y: expect.closeTo(40, 4) },
+    ]);
+    await expect(page.getByLabel('当前作图框架')).toHaveCount(0);
+    const camera = await page.locator('.geo-active svg').getAttribute('viewBox');
+    await choose(page, '实线');
+    await drag(page, { x: -45, y: -30 }, { x: -20, y: -30 });
+    const line = (await json(page)).entities.at(-1)!;
+    expect(line).toMatchObject({ kind: 'segment', viewId: 'view-1' });
+    expect(await page.locator('.geo-active svg').getAttribute('viewBox')).toBe(camera);
+    await page.screenshot({
+      path: `${evidence}/automatic-view-${viewport.width}.png`,
+      fullPage: true,
+    });
+    writeFileSync(
+      `${evidence}/automatic-view-${viewport.width}.json`,
+      JSON.stringify(await json(page), null, 2),
+    );
+  });
+}
+
+test('automatic projection stays locked across axes for a gesture and a multi-click circle', async ({
+  page,
+}) => {
+  await choose(page, '实线');
+  await drag(page, { x: -30, y: -20 }, { x: -30, y: 30 }, async () => {
+    await expect(page.locator('.geo-view-title')).toContainText('H');
+  });
+  let d = await json(page);
+  expect(d.entities.every((e) => e.viewId === 'view-1')).toBe(true);
+  await choose(page, '圆');
+  await clickAt(page, { x: 15, y: 20 });
+  await clickAt(page, { x: -10, y: 20 });
+  d = await json(page);
+  expect(d.entities.at(-1)).toMatchObject({
+    kind: 'circle',
+    viewId: 'view-2',
+    radius: expect.closeTo(25, 4),
+  });
+  await choose(page, '选择');
+  await drag(page, { x: -30, y: -20 }, { x: -45, y: 15 });
+  const moved = await json(page);
+  const endpoint = d.entities[0];
+  expect(moved.entities.find((e) => e.id === endpoint.id)).toMatchObject({ viewId: 'view-1' });
+  await choose(page, '撤销');
+  expect(await json(page)).toEqual(d);
+});
+test('automatic frame also owns a fitted pen stroke and its raw recovery across axes', async ({
+  page,
+}) => {
+  await choose(page, '电子笔');
+  await drag(page, { x: -40, y: -25 }, { x: -40, y: 35 });
+  const fitted = await json(page);
+  expect(fitted.entities.at(-1)).toMatchObject({ kind: 'segment', viewId: 'view-1' });
+  expect(fitted.entities.every((e) => e.viewId === 'view-1')).toBe(true);
+  await choose(page, '恢复原始笔迹');
+  const raw = await json(page);
+  expect(raw.entities.at(-1)).toMatchObject({ kind: 'polyline', viewId: 'view-1' });
+  await choose(page, '撤销');
+  expect((await json(page)).entities).toHaveLength(0);
+  await choose(page, '恢复');
+  expect(await json(page)).toEqual(raw);
+});
+
+test('simulated touch and pen infer the same regions on a three-view sheet', async ({ page }) => {
+  const doc = createDocument('THREE_VIEW');
+  await load(page, doc);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await choose(page, '点');
+  const canvas = page.locator('.geo-active svg');
+  let pointerId = 40;
+  for (const pointerType of ['touch', 'pen']) {
+    for (const p of [
+      { x: -30, y: 40 },
+      { x: -30, y: -20 },
+      { x: 20, y: 40 },
+    ]) {
+      const q = await screen(page, { x: p.x + (pointerType === 'pen' ? 5 : 0), y: p.y });
+      const event = { pointerId: pointerId++, pointerType, button: 0, clientX: q.x, clientY: q.y };
+      await canvas.dispatchEvent('pointerdown', { ...event, buttons: 1 });
+      await canvas.dispatchEvent('pointerup', { ...event, buttons: 0 });
+    }
+  }
+  const saved = await json(page);
+  expect(saved.entities.map((e) => e.viewId)).toEqual([
+    'view-0',
+    'view-1',
+    'view-2',
+    'view-0',
+    'view-1',
+    'view-2',
+  ]);
+  expect(saved.views).toEqual(doc.views);
+  await expect(page.locator('[data-kind=point] text')).toHaveCount(0);
+});
+test('automatic frame is not stolen by a point in another projection 5px across the axis', async ({
+  page,
+}) => {
+  const doc = addDrawing(
+    createDocument('VHW_PROJECTION'),
+    'point',
+    'view-0',
+    [{ x: 30, y: 0 }],
+    'student',
+  );
+  await load(page, doc);
+  const origin = await screen(page, { x: -30, y: 0 });
+  await choose(page, '点');
+  await clickAt(page, { x: -30, y: -5 / origin.scale });
+  const saved = await json(page);
+  expect(saved.entities.map((e) => e.viewId)).toEqual(['view-0', 'view-1']);
+  const h = saved.entities[1];
+  expect(h).toMatchObject({
+    kind: 'point',
+    position: { x: expect.closeTo(30, 4), y: expect.closeTo(0, 4) },
+  });
+  expect(saved.entities[0]).toEqual(doc.entities[0]);
 });

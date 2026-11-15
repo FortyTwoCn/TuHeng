@@ -1,0 +1,218 @@
+{
+  "schemaVersion": "tuheng.geometry/2.0.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "y"
+      ],
+      "signs": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "y",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "bc7caa5f-9284-4aea-80fa-aa8738051b8a",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 30.000005784532135,
+        "y": 40.00000114474149
+      },
+      "name": "P1",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "c67f523b-dc00-415a-9fe5-3cd676ebd10d",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 30.000005784532135,
+        "y": -20.000001144741447
+      },
+      "name": "P2",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "504a18bf-eae3-40cb-a6cc-2dd4b9499270",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 20.000001144741475,
+        "y": 40.00000114474149
+      },
+      "name": "P3",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "7e65d942-8037-4a0d-89de-c7b62553c136",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 45.00000635690287,
+        "y": -29.999996504950786
+      },
+      "name": "P4",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "8f2a89d9-06c1-4713-b566-800e1a486fcd",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 19.99999536020934,
+        "y": -29.999996504950786
+      },
+      "name": "P5",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "726ca3f7-89dc-428d-ae36-871f527d99d5",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "7e65d942-8037-4a0d-89de-c7b62553c136",
+      "endPoint": "8f2a89d9-06c1-4713-b566-800e1a486fcd"
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

@@ -47,8 +47,13 @@ test('JSON validation, projection links, touch zoom and the multi-object mobile 
   await login(page, 'student');
   await page.goto('/geometry');
   await draw(page, '点', 130, 110);
-  await page.getByLabel('当前作图框架').selectOption({ label: 'H' });
-  await draw(page, '点', 130, 210);
+  await choose(page, '点');
+  // Choose H by its actual sheet position; no manual frame selection.
+  const h = await page.locator('.geo-active svg').evaluate((el) => {
+    const p = new DOMPoint(-30, 20).matrixTransform((el as SVGSVGElement).getScreenCTM()!);
+    return { x: p.x, y: p.y };
+  });
+  await page.mouse.click(h.x, h.y);
   await choose(page, '投影关联');
   await page.locator('[data-kind=point]').nth(0).locator('circle').first().click();
   await page.locator('[data-kind=point]').nth(1).locator('circle').first().click();
@@ -80,7 +85,6 @@ test('JSON validation, projection links, touch zoom and the multi-object mobile 
   });
   await expect(page.locator('[data-entity-id]')).toHaveCount(fixture.entities.length);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByLabel('当前作图框架').selectOption({ label: 'V' });
   const canvas = page.locator('.geo-active svg'),
     initial = await canvas.getAttribute('viewBox');
   const box = (await canvas.boundingBox())!;

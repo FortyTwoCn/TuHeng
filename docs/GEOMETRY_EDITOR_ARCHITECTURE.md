@@ -29,7 +29,7 @@ A=(30,20,40) 的纸面位置为 V=(-30,40)、H=(-30,-20)、W=(20,40)。学生实
 
 ## 会话、预览和界面
 
-文档仅包含正式几何。session reducer 保存工具、选择、活动框架、面板和分步构造；useViewportCamera 单独管理镜头与容器尺寸；手势快照、预览文档、HUD 和字段草稿独立保存。开始操作固定 revision 与 CTM，外部更换文档取消旧操作；受控父级同内容回传不重置历史。
+文档仅包含正式几何。session reducer 保存工具、选择、自动识别的最近作图框架、面板和分步构造；useViewportCamera 单独管理镜头与容器尺寸；手势快照、预览文档、HUD 和字段草稿独立保存。geometry-core/sheet.drawingViewAt 按图纸位置与现有对象解析新操作归属，Viewport 固定每次手势及多步命令的 viewId；不再通过下拉选择作图框架。开始操作固定 revision 与 CTM，外部更换文档取消旧操作；受控父级同内容回传不重置历史。
 
 `preview.ts` 只更新受影响点及必要依赖，不在每次 move 做完整 Zod、分析/自然语言导出或 JSON.stringify。`primitive-preview.ts` 让显示的吸附几何和最终提交共用计算结果。完整验证在提交边界，一次操作一条历史。OperationRecovery 用原始结果与自动调整结果替换当前命令；新编辑使旧恢复入口失效。
 

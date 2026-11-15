@@ -205,3 +205,25 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 实际执行 `npm run typecheck`、`npm run lint`、`npm run build` 均通过；`npm test` 8 文件 155 项通过；`npm run test:integration` 2 文件 16 项通过；`npm run test:e2e` 6 文件 60 项通过（1.9 分钟）。生产浏览器回归继续使用隔离数据库/桶/队列，包含原图片作答和教学提交/复核；两项新增竖向 E2E 也已在开发模式通过。环境沿用 Windows / Node 26.13.0 / Chrome 157；真实触控/手写笔硬件未实测。
 
 证据：[桌面拟合结果](images/pen-repair/vertical-drift-1366.png)、[手机拟合结果](images/pen-repair/vertical-drift-390.png)、[桌面 JSON](geometry-examples/pen-repair/vertical-drift-1366.json)、[手机 JSON](geometry-examples/pen-repair/vertical-drift-390.json)。两份 JSON 均通过 Schema，保存 153 个实际浏览器采样点、2 个端点和 1 个 segment；以松手后的实体、历史和引用断言为验收，截图仅辅助展示。无契约或数据库迁移，无历史回填。
+## 按落笔位置自动识别投影面（2026-11-15）
+
+用户要求删除手动“框架 V/H/W”入口。基于 `26bdaa7` 新建 `codex/automatic-projection-frame` 开发分支；开始时工作区干净。先用真实浏览器鼠标在左上、左下、右上各画一点，导出三个点全部为 `view-0`，新增回归实际失败；根因是新手势始终复制手动 session.active，未根据图纸位置计算归属。
+
+- `geometry-core/src/sheet.ts`：新增纯函数 drawingViewAt，按实际局部变换、signs 和区域距离识别 V/H/W，不猜名称或数组位置；轴线等距沿用接近侧。新轴按保留区域及展开侧递归识别。右下空白、同级重叠及边界决策详见[交互规范](GEOMETRY_EDITOR_INTERACTION.md#投影面自动识别)。
+- `geometry-editor/src/Viewport.tsx`：落笔时确定 viewId，拖画和电子笔锁定至抬笔；圆/圆弧/连接两点的多步会话锁定至完成或取消。已有对象编辑保留身份，实体参考构造继承参考面；轴参考构造按通过位置确定面。预览、拟合、恢复原笔迹、吸附与正式提交共用该坐标变换。
+- `GeometryEditor.tsx`、`styles.css`：移除手动下拉框及专属样式，保留完整展开图/镜头功能。`ViewportDrawing.tsx` 使用操作实际框架渲染圆弧预览。画布标题只提示自动识别结果。三视图导入测试另发现点名显示偏好未随新文档默认值更新，一并修复。
+- 增加轴边界回归：V 点在 X 轴上，新落笔在 H 侧仅距它 5 CSS px。初版自动识别过度优先命中对象，导致新点继承 V 并被合并；真实浏览器测试先失败，修正为普通新落笔按区域识别，只有选择/显式连接/通过点构造沿用已有对象身份。最终 JSON 保留两个独立的 V/H 点，默认吸附仍开启。
+
+`tests/unit/geometry-auto-view.test.ts` 新增 7 项，覆盖两个展开编辑器、变换/原点偏移、边界、两级换面、原对象身份和两种轴测。浏览器新增 7 项，包含 1366×768、768×1024、390×844 真实鼠标自动识别，跨轴线段和多步圆、笔迹拟合/恢复与撤销重做、跨面边界不合点，以及模拟 touch/pen 的三视图识别。原投影关联/两级轴测试改成直接在目标区域作图，不再手动选择框架。
+
+实际结果：`npm run typecheck`、`npm run lint`、`npm run build` 通过；`npm test` 9 文件 162 项通过；`npm run test:integration` 2 文件 16 项通过；最终 `npm run test:e2e -- --reporter=list` 6 文件 67 项通过（1.9 分钟）。完整浏览器回归使用生产构建与隔离测试数据库/桶/队列，包含原图片作答、题干保护、草稿提交和教师复核。环境为 Windows / Node 26.13.0 / Chrome 157；触控、手写笔事件是模拟测试，未连接真实手机/Pencil，未调用真实 AI。
+
+证据：[桌面](images/automatic-projection/1366.png)、[手机尺寸](images/automatic-projection/390.png)、[桌面 JSON](geometry-examples/automatic-projection/1366.json)、[手机 JSON](geometry-examples/automatic-projection/390.json)。两份 JSON 均通过 Schema，前三个点分别为 V/H/W，另有 H 面线段及其两个端点。测试同时检查所属 viewId、局部坐标、拖画前后同一镜头和撤销结果；截图仅辅助展示。
+
+| 点 | 投影面 | 局部坐标 mm | 展开图坐标 mm |
+| --- | --- | --- | --- |
+| P1 | V / view-0 | (30, 40) | (-30, 40) |
+| P2 | H / view-1 | (30, -20) | (-30, -20) |
+| P3 | W / view-2 | (20, 40) | (20, 40) |
+
+无新增契约字段或数据库迁移；自动识别状态不进入正式 JSON，既有对象、历史快照和教师基准不按新规则重标归属。

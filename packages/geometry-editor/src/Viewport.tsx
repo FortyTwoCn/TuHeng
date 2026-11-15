@@ -13,6 +13,7 @@ import {
   snapCandidates,
   confirmSnap,
   sheetToLocal,
+  drawingViewAt,
   localToSheet,
   selectionBounds,
   addProjectionAxis,
@@ -87,8 +88,6 @@ interface Gesture {
 export function Viewport(
   props: EditorControls & {
     viewId: string;
-    active: boolean;
-    activate: () => void;
     focusKey: number;
     replace: (doc: GeometryDocument) => void;
   },
@@ -114,6 +113,8 @@ export function Viewport(
     [previewDoc, setPreviewDoc] = useState<GeometryDocument | null>(null),
     [candidate, setCandidate] = useState<SnapCandidate | null>(null),
     [candidateView, setCandidateView] = useState(viewId);
+  const [operationView, setOperationView] = useState<string>(),
+    [hoverView, setHoverView] = useState<string>();
   const [steps, setSteps] = useState<Vec2[]>([]),
     [reference, setReference] = useState<string>(),
     [state, setState] = useState<InteractionState>('idle');
@@ -150,6 +151,9 @@ export function Viewport(
     setPreviewDoc(null);
     setCandidate(null);
     setMarquee(null);
+    setSteps([]);
+    setOperationView(undefined);
+    setReference(undefined);
     if (frame.current !== null) cancelAnimationFrame(frame.current);
     frame.current = null;
     pending.current = null;
@@ -206,9 +210,11 @@ export function Viewport(
   const [previousRevision, setPreviousRevision] = useState(props.revision);
   if (previousRevision !== props.revision) {
     setPreviousRevision(props.revision);
+    setHoverView(undefined);
     setConstructionPreview(null);
     setAxisDraft(null);
     setSteps([]);
+    setOperationView(undefined);
     setReference(undefined);
     setPreview([]);
     setPreviewDoc(null);
@@ -217,7 +223,9 @@ export function Viewport(
   const [previousTool, setPreviousTool] = useState(tool);
   if (previousTool !== tool) {
     setPreviousTool(tool);
+    setState('idle');
     setSteps([]);
+    setOperationView(undefined);
     setReference(undefined);
     setAxisDraft(null);
     setPreview([]);
@@ -236,6 +244,7 @@ export function Viewport(
     props.commit(next);
     props.consumeSnap();
     setSteps([]);
+    setOperationView(undefined);
     setPreview([]);
     setPreviewDoc(null);
     setCandidate(null);
@@ -384,7 +393,27 @@ export function Viewport(
     setMarquee({ box, mode, ids });
     return ids;
   }
-  function constructionClick(p: Vec2, target?: Hit) {
+  function drawingFrame(p: Vec2, target?: Hit) {
+    if (operationView) return operationView;
+    const ref = props.session.construction?.reference;
+    const entity =
+      ref?.kind === 'entity' ? doc.entities.find((e) => e.id === ref.entityId) : undefined;
+    if (entity && entity.scope !== 'SHEET') return entity.viewId;
+    // Hit tolerances may straddle an axis. A new stroke belongs to its region, not
+    // to a nearby point from another projection. Explicit connections/editing retain identity.
+    const usesExisting =
+      tool === 'select' ||
+      tool === 'connect' ||
+      (props.session.construction?.phase === 'position' &&
+        (target?.kind === 'point' || target?.kind === 'endpoint'));
+    return drawingViewAt(
+      doc,
+      p,
+      hoverView ?? viewId,
+      usesExisting && target?.kind !== 'reference' ? target?.id : undefined,
+    );
+  }
+  function constructionClick(p: Vec2, target: Hit | undefined, frameId: string) {
     const c = props.session.construction;
     if (!c) return false;
     if (c.phase === 'reference') {
@@ -413,13 +442,15 @@ export function Viewport(
       return true;
     }
     if (c.phase === 'position') {
-      const e = doc.entities.find((e) => e.id === target?.id && e.viewId === viewId),
-        at = e?.kind === 'point' ? e.position : sheetToLocal(doc, viewId, p);
+      const e = doc.entities.find((e) => e.id === target?.id);
+      if (e?.kind === 'point' && e.viewId !== frameId)
+        throw Error('通过点与参考线不在同一投影面，请选择同面点或空白位置');
+      const at = e?.kind === 'point' ? e.position : sheetToLocal(doc, frameId, p);
       setConstructionPreview({
         revision: props.revision,
         next: constructLine(
           doc,
-          viewId,
+          frameId,
           c.reference!,
           at,
           e?.kind === 'point' ? e.id : undefined,
@@ -487,7 +518,7 @@ export function Viewport(
             }
           })
         : hits[0];
-    if (constructionClick(p, target)) return;
+    if (constructionClick(p, target, g.viewId)) return;
     if (axisDraft) {
       axisClick(p, target);
       return;
@@ -573,6 +604,7 @@ export function Viewport(
       clickThreshold: g.dragPixels,
     });
     if (result.kind === 'steps') {
+      setOperationView(g.viewId);
       setSteps(result.steps);
       setReference(result.reference);
       props.report(result.message);
@@ -679,7 +711,7 @@ export function Viewport(
       penStyle: props.session.penStyle,
       hit,
       ids,
-      viewId,
+      viewId: drawingFrame(p, hit),
       state:
         props.ruler.visible &&
         (e.altKey ||
@@ -694,9 +726,15 @@ export function Viewport(
       additive: e.shiftKey,
     };
     setState(gesture.current.state);
+    if (!pan && !axisDraft) {
+      setHoverView(gesture.current.viewId);
+      props.dispatch({ type: 'patch', patch: { active: gesture.current.viewId } });
+    }
   }
   function move(e: ReactPointerEvent<SVGSVGElement>) {
     if (!pointers.current.has(e.pointerId)) {
+      const frameId = drawingFrame(local(e));
+      setHoverView(frameId);
       if (steps.length && ['circle', 'arc'].includes(tool)) {
         const p = local(e),
           threshold =
@@ -707,7 +745,7 @@ export function Viewport(
           {
             base: doc,
             tool,
-            viewId,
+            viewId: frameId,
             start: p,
             scale: cssScale(),
             dragPixels: threshold.drag,
@@ -715,10 +753,10 @@ export function Viewport(
           },
           p,
         );
-        setPreview(value.points.map((p) => localToSheet(doc, viewId, p)));
+        setPreview(value.points.map((p) => localToSheet(doc, frameId, p)));
         setState('drawingPrimitive');
         setCandidate(value.candidates.at(-1) ?? null);
-        setCandidateView(viewId);
+        setCandidateView(frameId);
       }
       if (
         props.session.construction?.phase === 'position' &&
@@ -727,13 +765,13 @@ export function Viewport(
         try {
           const c = props.session.construction,
             p = local(e),
-            a = sheetToLocal(doc, viewId, p),
-            d = referenceDirection(doc, viewId, c.reference!, c.spec.directionMode);
+            a = sheetToLocal(doc, frameId, p),
+            d = referenceDirection(doc, frameId, c.reference!, c.spec.directionMode);
           setPreview([
             p,
             localToSheet(
               doc,
-              viewId,
+              frameId,
               add(a, multiply(d, c.spec.geometryExtent === 'segment' ? c.spec.length : 100)),
             ),
           ]);
@@ -790,13 +828,13 @@ export function Viewport(
       if (props.session.construction) {
         const c = props.session.construction;
         if (c.phase === 'position' && c.reference) {
-          const start = sheetToLocal(doc, viewId, p),
-            d = referenceDirection(doc, viewId, c.reference, c.spec.directionMode),
+          const start = sheetToLocal(doc, g.viewId, p),
+            d = referenceDirection(doc, g.viewId, c.reference, c.spec.directionMode),
             end = add(
               start,
               multiply(d, c.spec.geometryExtent === 'segment' ? c.spec.length : 100),
             );
-          setPreview([localToSheet(doc, viewId, start), localToSheet(doc, viewId, end)]);
+          setPreview([localToSheet(doc, g.viewId, start), localToSheet(doc, g.viewId, end)]);
         }
         return;
       }
@@ -894,6 +932,7 @@ export function Viewport(
       }
   }
   const scale = size.width / box.width;
+  const displayedView = operationView ?? (state !== 'idle' ? viewId : (hoverView ?? viewId));
   return (
     <section className="geo-view geo-active">
       {overlaps.length > 1 &&
@@ -917,7 +956,7 @@ export function Viewport(
           </select>
         )}
       <div className="geo-view-title">
-        统一图纸 · 当前作图框架 {doc.views.find((v) => v.id === viewId)?.name} ·{' '}
+        统一图纸 · 自动识别投影面：{doc.views.find((v) => v.id === displayedView)?.name} ·{' '}
         {commandRegistry.find((c) => c.id === tool)?.name}
       </div>
       <svg
@@ -958,11 +997,13 @@ export function Viewport(
               doc,
             highlighted: [...props.highlighted, ...(marquee?.ids ?? [])],
           }}
-          viewId={viewId}
+          viewId={operationView ?? viewId}
           box={box}
           scale={scale}
           preview={preview}
-          steps={tool === 'box' ? steps : steps.map((p) => localToSheet(doc, viewId, p))}
+          steps={
+            tool === 'box' ? steps : steps.map((p) => localToSheet(doc, operationView ?? viewId, p))
+          }
           candidate={candidate ? localToSheet(doc, candidateView, candidate.position) : null}
           axisDraft={
             axisDraft && ['side', 'confirm'].includes(axisDraft.phase) ? axisDraft.spec : null

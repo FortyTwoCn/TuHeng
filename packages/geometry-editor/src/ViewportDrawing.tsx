@@ -21,6 +21,7 @@ import { sheetDrawingDocument } from './sheet-drawing';
 import { EntityShape } from './rendering';
 export function ViewportDrawing({
   controls: props,
+  viewId,
   box,
   scale,
   preview,
@@ -237,11 +238,7 @@ export function ViewportDrawing({
           (() => {
             try {
               const a = minorArc(preview[0], preview[1], preview[2]),
-                f = viewTransform(
-                  props.document,
-                  props.document.views.find((v) => v.id === props.session.active)?.id ??
-                    props.document.views[0].id,
-                );
+                f = viewTransform(props.document, viewId);
               if (a.sweep === 180) a.sweep *= f.xAxis.x * f.yAxis.y - f.xAxis.y * f.yAxis.x;
               return (
                 <path
