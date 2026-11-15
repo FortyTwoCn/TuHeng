@@ -1,16 +1,26 @@
+import type { PenStrokeStyle } from '@tuheng/geometry-core';
 import { useState } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
 import type { Tool } from './types';
 import { commandRegistry, commandUnavailable, type CommandId } from './commands';
 import { EditorPopover } from './EditorPopover';
+const penNames: Record<PenStrokeStyle, string> = {
+  visible: '实线',
+  hidden: '虚线',
+  construction: '辅助线',
+};
 export function ToolPicker({
   tool,
+  penStyle,
+  setPenStyle,
   run,
   readOnly,
   compact = false,
   editorType,
 }: {
   tool: Tool;
+  penStyle: PenStrokeStyle;
+  setPenStyle: (style: PenStrokeStyle) => void;
   run: (id: CommandId) => void;
   readOnly: boolean;
   compact?: boolean;
@@ -30,6 +40,7 @@ export function ToolPicker({
       <button
         key={id}
         data-command={id}
+        aria-label={id === 'pen' ? '电子笔' : undefined}
         type="button"
         disabled={!!reason}
         title={reason}
@@ -37,9 +48,25 @@ export function ToolPicker({
         onClick={() => invoke(id)}
       >
         {entry.name}
+        {id === 'pen' ? ` · ${penNames[penStyle]}` : ''}
       </button>
     );
   };
+  const penStyles = (Object.keys(penNames) as PenStrokeStyle[]).map((style) => (
+    <button
+      key={style}
+      type="button"
+      data-command={`pen-${style}`}
+      disabled={readOnly}
+      aria-pressed={tool === 'pen' && penStyle === style}
+      onClick={() => {
+        setPenStyle(style);
+        invoke('pen');
+      }}
+    >
+      {penNames[style]}笔迹
+    </button>
+  ));
   if (compact)
     return (
       <>
@@ -50,6 +77,7 @@ export function ToolPicker({
               (e) => ['draw', 'line', 'round', 'select'].includes(e.group) && e.id !== 'select',
             )
             .map((e) => button(e.id))}
+          {penStyles}
         </EditorPopover>
         <EditorPopover label="构造">
           {commandRegistry
@@ -70,7 +98,10 @@ export function ToolPicker({
           </EditorPopover>
         </span>
       ))}
-      {button('pen')}
+      <span className="geo-split">
+        {button('pen')}
+        <EditorPopover label="电子笔线型">{penStyles}</EditorPopover>
+      </span>
       <EditorPopover label="构造">
         {commandRegistry
           .filter((e) => e.group === 'construct' || e.id === 'line')

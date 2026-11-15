@@ -64,3 +64,9 @@ type GeometryTargetRef =
 ```
 
 样本通过独立运行时 Schema 后，使用现有 addPenStroke 应用到当前选定框架。合成测试样本在 `geometry-examples/v2/stroke-circle.json`，明确不代表真实设备采集；真实设备可输出相同格式，不需要照片识别服务。
+
+## 斜二等轴默认值与电子笔线型修复（2026-11-15）
+
+新建 OBLIQUE_DIMETRIC 文档的 depthAngle 为 -135°、depthScale 为 0.5：图纸 x 向右、z 向上、y 向左下。角度基于图纸 x 正向逆时针，非屏幕 y 向下坐标。历史文件的显式角度（包括原默认 45°）读取和重存时保留，既有题干和学生历史快照不回填。参考 [清华大学出版社轴测图样章，第 5 章，印刷页 120](https://www.tup.tsinghua.edu.cn/upload/books/yz/103003-01.pdf) 的轴间角和缩短系数。
+
+电子笔会话线型不成为新 JSON 字段；使用既有 lineStyle、layerId 与实体 kind 表达结果。辅助直线保存为 line(anchor, direction)，方向归一化，不能通过拉长 segment 假装无限。line 也保留既有 samples、sampling 字段；恢复后 polyline 继承线型与采样证据。未增加契约版本、数据库迁移或第二套笔迹格式。

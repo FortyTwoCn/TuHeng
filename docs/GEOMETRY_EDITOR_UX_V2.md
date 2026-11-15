@@ -156,3 +156,22 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 - 新轴几何重定义（会影响后续换面）明确禁用；提供创建、查看、重命名、依赖安全删除、保存/重载和撤销。方向关系只支持明确有向依赖，不是任意闭环 CAD 求解器。
 - 照片识别/OCR、DWG/DXF、实体建模、协同等不在本轮；原图片作答已回归保留。
 - 代码与文档阶段提交留在本地 codex/geometry-ux-v2，不推送、不部署。
+
+## 后续修复：斜二等轴与电子笔（2026-11-15）
+
+基线为本地提交 `64dce14`，开始时工作区干净。先建立 7 个回归用例，实测 6 失败、1 通过：错误默认轴向、2/3/5 事件短线、密集轻微抖动直线、缺采样信息的恢复快照失败；历史显式投影配置可读取通过。
+
+| 用户问题                         | 根因                                          | 修改位置                                                                                                | 验收                                                                                          |
+| -------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 斜二等轴 Y 轴朝右上              | 新文档 depthAngle 固定 45°                    | core/projections.ts                                                                                     | 新默认 -135°/0.5，统一渲染/引用/投影，旧显式配置不改                                          |
+| 短笔画不拟合、慢画直线失败       | 至少 6 样本门槛；累加抖动折线长度误判折返     | core/pen.ts                                                                                             | 2–5 样本、亚像素抖动、2/4/8 px/mm；折返、椭圆、8 字拒绝误判                                   |
+| 拟合候选不可采用                 | 原始恢复副本缺 sampling，文档一致性检查不通过 | core/tools.ts、editor/drawing-session.ts、OperationRecovery.tsx                                         | 共用原笔迹构造，采用候选与恢复、撤销/重做一致                                                 |
+| 电子笔没有线型，辅助笔画仍为短线 | 工具只执行实线 segment，线型未接入手势/拟合   | core/tools.ts、editor/session.ts、ToolPicker.tsx、GeometryEditor.tsx、Viewport.tsx、ViewportDrawing.tsx | 三种线型覆盖 segment/circle/arc/polyline；辅助直线为无限 line，保留采样；教师笔迹不可被学生改 |
+
+单元回归位于 `tests/unit/geometry-pen.test.ts`，26 项覆盖新默认/旧值兼容、短线与抖动、三种线型、曲线、恢复采样、权限、缩放及折返。既有 `geometry-repair.test.ts` 的不同速度、顺逆时针、圆/弧、噪点和异常笔迹用例保持通过。
+
+新增 `tests/e2e/geometry-pen.spec.ts` 使用真实 mouse.move/down/up，松手前检查笔迹预览。5 项实际验证默认轴向、12px 短线、1366/390 布局中 16px 辅助线横贯画布、JSON/SVG 导出与重载、原笔迹恢复和撤销/重做、变焦圆弧以及椭圆的显式候选采用。吸附保持默认开启；虚拟直尺关闭。这里的鼠标描迹和手机视口模拟不等于真实手写笔/手机硬件测试。
+
+本轮实际结果：`npm run typecheck`、`npm run lint`、`npm run build` 通过；`npm test` 为 8 文件 125 项通过；`npm run test:integration` 为 2 文件 16 项通过；`npm run test:e2e` 为 6 文件 56 项通过（1.6 分钟）。全量浏览器回归运行在生产构建、隔离数据库/桶/队列，保留原图片作答、教师出题、草稿、提交与复核；新增 5 项电子笔测试也已在开发模式通过。环境沿用上文 Windows / Node 26.13.0 / Chrome 157。未连接真实手写笔设备，未调用真实 AI。
+
+本轮真实交互证据：[修正后的坐标轴](images/pen-repair/oblique.png)、[桌面无限辅助线](images/pen-repair/auxiliary-1366.png)、[手机无限辅助线](images/pen-repair/auxiliary-390.png)、[短辅助笔画导出的 JSON](geometry-examples/pen-repair/auxiliary-1366.json)、[手机 JSON](geometry-examples/pen-repair/auxiliary-390.json)、[新斜二等轴 JSON](geometry-examples/pen-repair/oblique.json)。这些笔画由 Playwright 真实鼠标路径产生，包含 samples 与 sampling；示例不是硬件手写笔采集。

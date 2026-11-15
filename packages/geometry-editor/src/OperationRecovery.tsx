@@ -1,6 +1,11 @@
 import type { GeometryDocument } from '@tuheng/contracts';
 import { useMemo } from 'react';
-import { addPenStroke, sheetToLocal, type PenOptions } from '@tuheng/geometry-core';
+import {
+  addPenStroke,
+  sheetToLocal,
+  type PenOptions,
+  type PenStrokeStyle,
+} from '@tuheng/geometry-core';
 import { rawStrokeDocument, type StrokeSample } from './drawing-session';
 export interface ReversibleStep {
   raw: GeometryDocument;
@@ -15,6 +20,8 @@ export interface PenSuggestion {
   options: PenOptions;
 }
 export interface InterruptedStroke {
+  penStyle: PenStrokeStyle;
+  scale: number;
   base: GeometryDocument;
   samples: StrokeSample[];
   viewId: string;
@@ -138,7 +145,12 @@ export function OperationRecovery({
                 ...sheetToLocal(doc, interrupted.viewId, p),
                 pressure: p.pressure,
               }));
-              commit(rawStrokeDocument(doc, interrupted.viewId, samples, role));
+              commit(
+                rawStrokeDocument(doc, interrupted.viewId, samples, role, undefined, {
+                  style: interrupted.penStyle,
+                  cssPixelsPerMm: interrupted.scale,
+                }),
+              );
               setInterrupted(null);
             } catch (e) {
               report((e as Error).message);

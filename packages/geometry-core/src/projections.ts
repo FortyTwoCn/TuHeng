@@ -25,7 +25,7 @@ export function createDocument(editorType: EditorType): GeometryDocument {
     coordinateSystem: 'VIEW_LOCAL_X_RIGHT_Y_UP',
     projectionConfig: {
       convention: 'FIRST_ANGLE_LEFT',
-      depthAngle: 45,
+      depthAngle: editorType === 'OBLIQUE_DIMETRIC' ? -135 : 45,
       depthScale: 0.5,
       axes: {
         x: { angle: 210, scale: 1 },

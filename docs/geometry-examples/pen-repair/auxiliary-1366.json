@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "tuheng.geometry/2.0.0",
+  "editorType": "OBLIQUE_DIMETRIC",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": -135,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "斜二等轴图",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "47c3e96a-2721-40ea-8903-0bc6e53cc785",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "scope": "SHEET",
+      "sampling": {
+        "cssPixelsPerMm": 4.051692553728651,
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "kind": "line",
+      "anchor": {
+        "x": -17.404313037619772,
+        "y": 21.106469556429644
+      },
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "referenceEntityId": null,
+      "samples": [
+        {
+          "x": -17.404313037619772,
+          "y": 21.106469556429687,
+          "pressure": 0.5
+        },
+        {
+          "x": -15.429829560921178,
+          "y": 21.106469556429687,
+          "pressure": 0.5
+        },
+        {
+          "x": -13.455346084222555,
+          "y": 21.106469556429687,
+          "pressure": 0.5
+        }
+      ]
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

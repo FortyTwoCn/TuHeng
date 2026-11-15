@@ -229,8 +229,8 @@ describe('versioned geometry kernel', () => {
       -Math.sqrt(3) / 2,
     );
     const oblique = projectPoint(createDocument('OBLIQUE_DIMETRIC'), p, 'view-0');
-    expect(oblique.x).toBeCloseTo(10 + 10 / Math.sqrt(2));
-    expect(oblique.y).toBeCloseTo(30 + 10 / Math.sqrt(2));
+    expect(oblique.x).toBeCloseTo(10 - 10 / Math.sqrt(2));
+    expect(oblique.y).toBeCloseTo(30 - 10 / Math.sqrt(2));
   });
   it('validates dangling references, versions, finite numbers and duplicate IDs', () => {
     const d = addDrawing(

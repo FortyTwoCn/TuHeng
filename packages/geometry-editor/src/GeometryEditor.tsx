@@ -96,6 +96,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     const history = useRef(new DocumentHistory(doc));
     const [session, dispatch] = useReducer(sessionReducer, {
       tool: 'select',
+      penStyle: 'visible',
       selected: [],
       panel: null,
       construction: null,
@@ -432,6 +433,8 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         <EditorToolbar>
           <div className="geo-tool-scroll">
             <ToolPicker
+              penStyle={session.penStyle}
+              setPenStyle={(penStyle) => dispatch({ type: 'patch', patch: { penStyle } })}
               editorType={doc.editorType}
               tool={tool}
               run={runCommand}

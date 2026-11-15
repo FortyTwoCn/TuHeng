@@ -260,7 +260,16 @@ export function ViewportDrawing({
           <polyline
             data-transient="preview"
             points={preview.map((p) => `${p.x},${p.y}`).join(' ')}
-            stroke="#0f766e"
+            stroke={
+              props.tool === 'pen' && props.session.penStyle === 'construction'
+                ? '#64748b'
+                : '#0f766e'
+            }
+            strokeDasharray={
+              props.tool === 'pen' && props.session.penStyle !== 'visible'
+                ? `${5 / scale} ${3 / scale}`
+                : undefined
+            }
             strokeWidth={2 / scale}
             fill="none"
           />

@@ -2,11 +2,12 @@ import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import {
   addDrawing,
   addPenStroke,
-  transact,
+  addRawPenStroke,
   distance,
   foot,
   fitStroke,
   type PenOptions,
+  type PenStrokeStyle,
 } from '@tuheng/geometry-core';
 import type { Tool, Ruler } from './types';
 export type StrokeSample = Vec2 & { pressure: number };
@@ -16,25 +17,11 @@ export function rawStrokeDocument(
   samples: StrokeSample[],
   role: 'teacher' | 'student',
   id = crypto.randomUUID(),
+  options: PenOptions = { cssPixelsPerMm: 4 },
 ) {
-  return transact(
-    base,
-    (d) =>
-      d.entities.push({
-        id,
-        kind: 'polyline',
-        viewId,
-        layerId: d.layers.find(
-          (l) => l.role === (role === 'teacher' ? 'PROBLEM_STEM' : 'STUDENT_ANSWER'),
-        )!.id,
-        lineStyle: role === 'teacher' ? 'PROBLEM_VISIBLE' : 'ANSWER_VISIBLE',
-        points: samples.map((p) => ({ x: p.x, y: p.y })),
-        samples,
-        fitStatus: 'UNFITTED',
-      }),
-    role,
-  );
+  return addRawPenStroke(base, viewId, samples, role, options, id);
 }
+
 export function rulerSamples(samples: StrokeSample[], ruler: Ruler, scale: number) {
   if (!ruler.visible) return samples;
   const a = (ruler.angle * Math.PI) / 180,
@@ -73,20 +60,22 @@ export function finishDrawing(
     samples: StrokeSample[];
     scale: number;
     clickThreshold?: number;
+    penStyle?: PenStrokeStyle;
   },
 ): DrawingResult {
   const { tool, viewId, role, start, end, steps, reference, samples, scale } = options;
   const target = doc.entities.find((e) => e.id === options.targetId && e.viewId === viewId);
   if (tool === 'pen') {
+    const penOptions: PenOptions = { cssPixelsPerMm: scale, style: options.penStyle };
     if (samples.length >= 4096)
       return {
         kind: 'document',
-        document: rawStrokeDocument(doc, viewId, samples, role),
+        document: rawStrokeDocument(doc, viewId, samples, role, undefined, penOptions),
         message: '采样达到 4096 上限，已保留原始折线与最终落点；请分段绘制',
       };
-    const document = addPenStroke(doc, viewId, samples, role, { cssPixelsPerMm: scale }),
+    const document = addPenStroke(doc, viewId, samples, role, penOptions),
       entity = document.entities.at(-1)!;
-    const rawStroke = rawStrokeDocument(doc, viewId, samples, role, entity.id);
+    const rawStroke = rawStrokeDocument(doc, viewId, samples, role, entity.id, penOptions);
     const candidate =
       entity.kind === 'polyline'
         ? fitStroke(samples, { cssPixelsPerMm: scale, noisePixels: 3.4 })
@@ -100,11 +89,11 @@ export function finishDrawing(
           ? candidate?.kind !== 'polyline'
             ? '存在拟合候选，请检查后采用；当前保留笔迹'
             : '笔迹不满足可靠拟合条件，已保留原轨迹'
-          : `已拟合为${{ circle: '圆', arc: '圆弧', segment: '直线' }[entity.kind as 'circle' | 'arc' | 'segment']}，可恢复笔迹`,
+          : `已拟合为${{ circle: '圆', arc: '圆弧', segment: '直线', line: '无限辅助线' }[entity.kind as 'circle' | 'arc' | 'segment' | 'line']}，可恢复笔迹`,
       suggestion:
         entity.kind === 'polyline'
           ? {
-              cssPixelsPerMm: scale,
+              ...penOptions,
               ...(candidate?.kind !== 'polyline'
                 ? { noisePixels: 3.4 }
                 : { allowApproximateCircle: true }),

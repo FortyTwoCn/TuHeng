@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "tuheng.geometry/2.0.0",
+  "editorType": "OBLIQUE_DIMETRIC",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": -135,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "斜二等轴图",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "851a3a66-2b7a-441c-afb0-432bc670c4ff",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": -17.404313037619772,
+        "y": 21.106469556429644
+      },
+      "name": "P1",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "5eaf4568-f125-4906-9589-0b7cfbd7a0d1",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": -14.442587822571852,
+        "y": 21.106469556429687
+      },
+      "name": "P2",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "64977064-4bff-4fee-8965-2c7abb1c6b6f",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "sampling": {
+        "cssPixelsPerMm": 4.051692553728651,
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "kind": "segment",
+      "startPoint": "851a3a66-2b7a-441c-afb0-432bc670c4ff",
+      "endPoint": "5eaf4568-f125-4906-9589-0b7cfbd7a0d1",
+      "samples": [
+        {
+          "x": -17.404313037619772,
+          "y": 21.106469556429687,
+          "pressure": 0.5
+        },
+        {
+          "x": -14.442587822571852,
+          "y": 21.106469556429687,
+          "pressure": 0.5
+        }
+      ]
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

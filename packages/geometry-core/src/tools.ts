@@ -3,7 +3,7 @@ import { transact } from './document';
 import { distance, minorArc, point, sub, unit, scale, add, lineGeometry } from './math';
 import { viewTransform } from './sheet';
 import { PenStrokeRecord } from '@tuheng/contracts';
-import { fitStroke, type PenOptions } from './pen';
+import { fitStroke, type PenOptions, type PenStrokeStyle } from './pen';
 export type DrawingTool =
   | 'point'
   | 'segment'
@@ -107,6 +107,53 @@ export function addDrawing(
     role,
   );
 }
+function penAppearance(
+  doc: GeometryDocument,
+  role: 'teacher' | 'student',
+  style: PenStrokeStyle = 'visible',
+) {
+  const layerRole =
+    role === 'teacher'
+      ? 'PROBLEM_STEM'
+      : style === 'construction'
+        ? 'CONSTRUCTION'
+        : 'STUDENT_ANSWER';
+  const lineStyle: GeometryEntity['lineStyle'] =
+    role === 'teacher'
+      ? style === 'hidden'
+        ? 'PROBLEM_HIDDEN'
+        : 'PROBLEM_VISIBLE'
+      : style === 'construction'
+        ? 'CONSTRUCTION'
+        : style === 'hidden'
+          ? 'ANSWER_HIDDEN'
+          : 'ANSWER_VISIBLE';
+  return { layerId: doc.layers.find((l) => l.role === layerRole)!.id, lineStyle };
+}
+export function addRawPenStroke(
+  doc: GeometryDocument,
+  viewId: string,
+  samples: (Vec2 & { pressure: number })[],
+  role: 'teacher' | 'student',
+  options: PenOptions = { cssPixelsPerMm: 4 },
+  id = crypto.randomUUID(),
+) {
+  return transact(
+    doc,
+    (d) =>
+      d.entities.push({
+        ...penAppearance(d, role, options.style),
+        id,
+        kind: 'polyline',
+        viewId,
+        points: samples.map((p) => ({ x: p.x, y: p.y })),
+        samples,
+        sampling: { cssPixelsPerMm: options.cssPixelsPerMm, ...viewTransform(doc, viewId) },
+        fitStatus: 'UNFITTED',
+      }),
+    role,
+  );
+}
 export function addPenStroke(
   doc: GeometryDocument,
   viewId: string,
@@ -115,9 +162,13 @@ export function addPenStroke(
   options: PenOptions = { cssPixelsPerMm: 4 },
 ) {
   const fit = fitStroke(samples, options);
+  if (fit.kind === 'polyline') return addRawPenStroke(doc, viewId, samples, role, options);
   let next: GeometryDocument;
-  if (fit.kind === 'segment') next = addDrawing(doc, 'segment', viewId, [fit.start, fit.end], role);
-  else if (fit.kind === 'circle' || fit.kind === 'arc') {
+  if (fit.kind === 'segment') {
+    const tool =
+      options.style === 'construction' ? 'line' : options.style === 'hidden' ? 'hidden' : 'segment';
+    next = addDrawing(doc, tool, viewId, [fit.start, fit.end], role);
+  } else {
     next = addDrawing(
       doc,
       'circle',
@@ -137,29 +188,16 @@ export function addPenStroke(
         sweep: fit.sweep,
       };
     }
-  } else {
-    next = transact(
-      doc,
-      (d) =>
-        d.entities.push({
-          id: crypto.randomUUID(),
-          kind: 'polyline',
-          viewId,
-          layerId: d.layers.find(
-            (l) => l.role === (role === 'teacher' ? 'PROBLEM_STEM' : 'STUDENT_ANSWER'),
-          )!.id,
-          lineStyle: role === 'teacher' ? 'PROBLEM_VISIBLE' : 'ANSWER_VISIBLE',
-          points: samples.map((p) => ({ x: p.x, y: p.y })),
-          fitStatus: 'UNFITTED',
-        }),
-      role,
-    );
   }
+  const existing = new Set(doc.entities.map((e) => e.id));
   return transact(
     next,
     (d) => {
+      for (const e of d.entities) {
+        if (!existing.has(e.id)) Object.assign(e, penAppearance(d, role, options.style));
+      }
       const e = d.entities[d.entities.length - 1];
-      if (e.kind !== 'point' && e.kind !== 'line' && e.kind !== 'plane') {
+      if (e.kind !== 'point' && e.kind !== 'plane') {
         e.samples = samples;
         e.sampling = { cssPixelsPerMm: options.cssPixelsPerMm, ...viewTransform(doc, viewId) };
       }

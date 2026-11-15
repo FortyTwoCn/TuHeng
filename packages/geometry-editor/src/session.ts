@@ -1,3 +1,4 @@
+import type { PenStrokeStyle } from '@tuheng/geometry-core';
 import type { Tool } from './types';
 import type { GeometryTargetRef } from '@tuheng/contracts';
 import type { ConstructionSpec } from '@tuheng/geometry-core';
@@ -11,6 +12,7 @@ export type ConstructionSession = {
   phase: 'reference' | 'position' | 'target' | 'confirm';
 };
 export interface EditorSession {
+  penStyle: PenStrokeStyle;
   tool: Tool;
   selected: string[];
   panel: EditorPanel;

@@ -59,6 +59,7 @@ import {
 } from './interaction-controller';
 import type { EditorControls, Tool } from './types';
 interface Gesture {
+  penStyle: EditorControls['session']['penStyle'];
   id: number;
   start: Vec2;
   last: Vec2;
@@ -561,6 +562,7 @@ export function Viewport(
     if (g.tool === 'pen' && samples.length < 2) return;
     const result = finishDrawing(g.base, {
       tool: g.tool,
+      penStyle: g.penStyle,
       viewId: g.viewId,
       role,
       start: at(g.start),
@@ -686,6 +688,7 @@ export function Viewport(
       toggle: e.ctrlKey || e.metaKey,
       base: doc,
       tool,
+      penStyle: props.session.penStyle,
       hit,
       ids,
       viewId,

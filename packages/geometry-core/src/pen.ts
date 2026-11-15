@@ -5,7 +5,9 @@ export type PenFit =
   | { kind: 'circle'; center: Vec2; radius: number }
   | { kind: 'arc'; center: Vec2; radius: number; startAngle: number; sweep: number }
   | { kind: 'polyline'; points: Vec2[] };
+export type PenStrokeStyle = 'visible' | 'hidden' | 'construction';
 export interface PenOptions {
+  style?: PenStrokeStyle;
   cssPixelsPerMm: number;
   noisePixels?: number;
   allowApproximateCircle?: boolean;
@@ -45,11 +47,11 @@ export function fitStroke(
   options: PenOptions | number = { cssPixelsPerMm: 4 },
 ): PenFit {
   const fallback: PenFit = { kind: 'polyline', points: input.map((p) => ({ ...p })) };
-  if (input.length < 6) return fallback;
+  if (input.length < 2) return fallback;
   const pixels = typeof options === 'number' ? 2.4 / options : options.cssPixelsPerMm;
   const noise = typeof options === 'number' ? options : (options.noisePixels ?? 2.4) / pixels;
   const points = resampleStroke(input);
-  if (points.length < 6) return fallback;
+  if (points.length < 2) return fallback;
   const mean = points.reduce(
     (m, p) => ({ x: m.x + p.x / points.length, y: m.y + p.y / points.length }),
     { x: 0, y: 0 },
@@ -73,11 +75,13 @@ export function fitStroke(
   const start = points[0],
     end = points.at(-1)!,
     chord = distance(start, end),
-    path = points.slice(1).reduce((n, p, i) => n + distance(p, points[i]), 0);
+    // Measure progress along the fitted direction. Dense subpixel sideways tremor
+    // increases polyline length without representing a reversal of the stroke.
+    path = points.slice(1).reduce((n, p, i) => n + Math.abs(dot(sub(p, points[i]), dir)), 0);
   const residual = points.map((p) => Math.abs((p.x - mean.x) * dir.y - (p.y - mean.y) * dir.x));
   if (
     chord * pixels > 8 &&
-    quantile(residual, 0.95) <= Math.min(noise, chord * 0.035) &&
+    quantile(residual, 0.95) <= Math.min(noise, Math.max(0.75 / pixels, chord * 0.035)) &&
     path / chord < 1.14
   ) {
     const at = (p: Vec2) => {
@@ -86,6 +90,7 @@ export function fitStroke(
     };
     return { kind: 'segment', start: at(start), end: at(end) };
   }
+  if (input.length < 6) return fallback;
   const det = xx * yy - xy * xy;
   if (Math.abs(det) < 1e-10) return fallback;
   let center = { x: mean.x + (bx * yy - by * xy) / det, y: mean.y + (by * xx - bx * xy) / det };
