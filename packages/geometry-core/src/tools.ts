@@ -161,7 +161,11 @@ export function addPenStroke(
   role: 'teacher' | 'student',
   options: PenOptions = { cssPixelsPerMm: 4 },
 ) {
-  const fit = fitStroke(samples, options);
+  let fit = fitStroke(samples, options);
+  // Apply the existing bounded-noise candidate automatically, using the same
+  // classifier and all residual, winding and closure checks. Never force a circle.
+  if (fit.kind === 'polyline' && options.noisePixels === undefined)
+    fit = fitStroke(samples, { ...options, noisePixels: 3.4 });
   if (fit.kind === 'polyline') return addRawPenStroke(doc, viewId, samples, role, options);
   let next: GeometryDocument;
   if (fit.kind === 'segment') {

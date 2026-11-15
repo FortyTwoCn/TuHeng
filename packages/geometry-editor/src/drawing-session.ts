@@ -5,7 +5,6 @@ import {
   addRawPenStroke,
   distance,
   foot,
-  fitStroke,
   type PenOptions,
   type PenStrokeStyle,
 } from '@tuheng/geometry-core';
@@ -44,7 +43,6 @@ export type DrawingResult =
       document: GeometryDocument;
       rawStroke?: GeometryDocument;
       message?: string;
-      suggestion?: PenOptions;
     };
 export function finishDrawing(
   doc: GeometryDocument,
@@ -75,32 +73,20 @@ export function finishDrawing(
       };
     const document = addPenStroke(doc, viewId, samples, role, penOptions),
       entity = document.entities.at(-1)!;
-    const rawStroke = rawStrokeDocument(doc, viewId, samples, role, entity.id, penOptions);
-    const candidate =
-      entity.kind === 'polyline'
-        ? fitStroke(samples, { cssPixelsPerMm: scale, noisePixels: 3.4 })
-        : null;
     return {
       kind: 'document',
       document,
-      rawStroke,
+      rawStroke:
+        entity.kind === 'polyline'
+          ? undefined
+          : rawStrokeDocument(doc, viewId, samples, role, entity.id, penOptions),
       message:
         entity.kind === 'polyline'
-          ? candidate?.kind !== 'polyline'
-            ? '存在拟合候选，请检查后采用；当前保留笔迹'
-            : '笔迹不满足可靠拟合条件，已保留原轨迹'
-          : `已拟合为${{ circle: '圆', arc: '圆弧', segment: '直线', line: '无限辅助线' }[entity.kind as 'circle' | 'arc' | 'segment' | 'line']}，可恢复笔迹`,
-      suggestion:
-        entity.kind === 'polyline'
-          ? {
-              ...penOptions,
-              ...(candidate?.kind !== 'polyline'
-                ? { noisePixels: 3.4 }
-                : { allowApproximateCircle: true }),
-            }
-          : undefined,
+          ? '未能可靠识别为直线、圆或圆弧，已保留原笔迹'
+          : `已自动拟合为${{ circle: '圆', arc: '圆弧', segment: '直线', line: '无限辅助线' }[entity.kind as 'circle' | 'arc' | 'segment' | 'line']}，可恢复原始笔迹`,
     };
   }
+
   if (
     ['parallel', 'perpendicular', 'parallel-hidden', 'perpendicular-hidden'].includes(tool) &&
     !reference

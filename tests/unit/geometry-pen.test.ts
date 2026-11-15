@@ -10,7 +10,7 @@ import {
   moveEntities,
 } from '@tuheng/geometry-core';
 import { finishDrawing } from '../../packages/geometry-editor/src/drawing-session';
-import { penSample } from '../repair-fixtures';
+import { penSample, wavyLineSample, borderlineCircleSample } from '../repair-fixtures';
 describe('oblique axes and pen regressions', () => {
   it('uses a left-down half-scale depth axis for new engineering oblique drawings', () => {
     const d = createDocument('OBLIQUE_DIMETRIC'),
@@ -39,7 +39,7 @@ describe('oblique axes and pen regressions', () => {
     }));
     expect(fitStroke(pts, { cssPixelsPerMm: 4 }).kind).toBe('segment');
   });
-  it('keeps the recovery snapshot identical to an unfitted stroke including sampling evidence', () => {
+  it('keeps sampling evidence on an unfitted stroke without a redundant recovery action', () => {
     const samples = penSample(4, 1, 360, 'ellipse'),
       doc = createDocument('VHW_PROJECTION');
     const result = finishDrawing(doc, {
@@ -55,7 +55,11 @@ describe('oblique axes and pen regressions', () => {
     expect(result.kind).toBe('document');
     if (result.kind !== 'document') throw Error();
     expect(result.document.entities.at(-1)?.kind).toBe('polyline');
-    expect(result.rawStroke).toEqual(result.document);
+    expect(result.rawStroke).toBeUndefined();
+    expect(result.document.entities.at(-1)).toMatchObject({
+      samples,
+      sampling: { cssPixelsPerMm: 4 },
+    });
     expect(GeometryDocument.safeParse(result.document).success).toBe(true);
   });
 });
@@ -101,11 +105,13 @@ describe('pen styles share fitting, evidence and permissions', () => {
           samples,
           sampling: { cssPixelsPerMm: 4 },
         });
-        expect(result.rawStroke?.entities.at(-1)).toMatchObject({
-          kind: 'polyline',
-          lineStyle,
-          samples,
-        });
+        if (kind === 'polyline') expect(result.rawStroke).toBeUndefined();
+        else
+          expect(result.rawStroke?.entities.at(-1)).toMatchObject({
+            kind: 'polyline',
+            lineStyle,
+            samples,
+          });
         const serialized = serializeGeometryDocument(result.document);
         expect(serializeGeometryDocument(loadGeometryDocument(serialized))).toBe(serialized);
         if (entity.kind === 'line') {
@@ -158,4 +164,59 @@ describe('pen styles share fitting, evidence and permissions', () => {
     const samples = [0, 10, 3, 12, 1, 15].map((x) => ({ x, y: 0 }));
     expect(fitStroke(samples, { cssPixelsPerMm: 4 }).kind).toBe('polyline');
   });
+});
+describe('automatic fitting after pointerup, without forced circle fallback', () => {
+  for (const scale of [2, 4, 8]) {
+    for (const degrees of [0, 70, 160]) {
+      it(`fits long wavy straight strokes at ${scale} px/mm and ${degrees} degrees`, () => {
+        const samples = wavyLineSample(620, 7, degrees).map((p) => ({
+          ...p,
+          x: p.x / scale,
+          y: p.y / scale,
+        }));
+        expect(fitStroke(samples, { cssPixelsPerMm: scale }).kind).toBe('segment');
+        const doc = addPenStroke(createDocument('VHW_PROJECTION'), 'view-0', samples, 'student', {
+          cssPixelsPerMm: scale,
+        });
+        expect(doc.entities.at(-1)).toMatchObject({ kind: 'segment', samples });
+      });
+    }
+  }
+  it('automatically applies a geometrically valid round candidate that previously required confirmation', () => {
+    const samples = borderlineCircleSample().map((p) => ({ ...p, x: p.x / 4, y: p.y / 4 }));
+    const doc = addPenStroke(createDocument('VHW_PROJECTION'), 'view-0', samples, 'student', {
+      cssPixelsPerMm: 4,
+    });
+    expect(doc.entities.at(-1)?.kind).toBe('circle');
+  });
+  it.each(['ellipse', 'eight', 'backtrack'])(
+    'retains %s without offering a circle or confirmation',
+    (shape) => {
+      const samples =
+        shape === 'backtrack'
+          ? [0, 20, 5, 24, 2, 30].map((x) => ({ x, y: 0, pressure: 0.5 }))
+          : penSample(4, 1, 360, shape);
+      const result = finishDrawing(createDocument('VHW_PROJECTION'), {
+        tool: 'pen',
+        viewId: 'view-0',
+        role: 'student',
+        start: samples[0],
+        end: samples.at(-1)!,
+        steps: [],
+        samples,
+        scale: 4,
+      });
+      if (result.kind !== 'document') throw Error('expected stroke');
+      expect(result.document.entities.at(-1)).toMatchObject({ kind: 'polyline', samples });
+      expect(result).not.toHaveProperty('suggestion');
+      expect(result.rawStroke).toBeUndefined();
+    },
+  );
+  it.each([40, 90, 230, 360])(
+    'keeps a %s degree curved stroke distinct from a wavy straight line',
+    (sweep) => {
+      const samples = penSample(4, 1, sweep);
+      expect(fitStroke(samples, { cssPixelsPerMm: 4 }).kind).toBe(sweep === 360 ? 'circle' : 'arc');
+    },
+  );
 });

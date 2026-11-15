@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { GeometryDocument, type Vec2 } from '@tuheng/contracts';
 import { createDocument } from '@tuheng/geometry-core';
-import { penSample } from '../repair-fixtures';
+import { penSample, wavyLineSample, borderlineCircleSample } from '../repair-fixtures';
 import { choose, closePanels } from './editor-controls';
 
 const evidence = 'test-results/pen-repair';
@@ -163,7 +163,7 @@ test('hidden circles and auxiliary arcs auto-fit at different zooms, with the ru
   });
 });
 
-test('unreliable ellipse stays raw and explicit fitting remains usable and reversible', async ({
+test('unreliable ellipse stays raw without a confirmation flow and remains undoable', async ({
   page,
 }) => {
   await load(page);
@@ -171,13 +171,50 @@ test('unreliable ellipse stays raw and explicit fitting remains usable and rever
   await stroke(page, penSample(1, 1, 360, 'ellipse'));
   const raw = await json(page);
   expect(raw.entities.at(-1)?.kind).toBe('polyline');
-  const adopt = page.getByRole('button', { name: '尝试拟合为圆', exact: true });
-  await expect(adopt).toBeEnabled();
-  await adopt.click();
+  await expect(page.getByRole('button', { name: /尝试拟合|采用拟合|恢复原始笔迹/ })).toHaveCount(0);
+  await choose(page, '撤销');
+  expect((await json(page)).entities).toHaveLength(0);
+  await choose(page, '恢复');
+  expect(await json(page)).toEqual(raw);
+});
+test('long hand-drawn lines fit on release in every pen style without a circle prompt', async ({
+  page,
+}) => {
+  await load(page, createDocument('VHW_PROJECTION'));
+  for (const [name, kind, lineStyle] of [
+    ['实线', 'segment', 'ANSWER_VISIBLE'],
+    ['虚线', 'segment', 'ANSWER_HIDDEN'],
+    ['辅助线', 'line', 'CONSTRUCTION'],
+  ] as const) {
+    await style(page, name);
+    await stroke(page, wavyLineSample());
+    await expect(page.locator(`[data-kind=${kind}]`)).toHaveCount(1);
+    await expect(page.getByRole('button', { name: /尝试拟合|采用拟合/ })).toHaveCount(0);
+    const doc = await json(page);
+    expect(doc.entities.at(-1)).toMatchObject({ kind, lineStyle, samples: expect.any(Array) });
+    if (name === '实线') {
+      writeFileSync(`${evidence}/automatic-line.json`, JSON.stringify(doc, null, 2));
+      await page.locator('.geometry-editor').screenshot({ path: `${evidence}/automatic-line.png` });
+    }
+    await choose(page, '恢复原始笔迹');
+    expect((await json(page)).entities.at(-1)).toMatchObject({ kind: 'polyline', lineStyle });
+    await choose(page, '撤销');
+    expect((await json(page)).entities).toHaveLength(0);
+    await choose(page, '恢复');
+    expect((await json(page)).entities.at(-1)?.kind).toBe('polyline');
+    await choose(page, '撤销');
+  }
+});
+test('a valid noisy circle is automatically adopted on release, without confirmation', async ({
+  page,
+}) => {
+  await load(page, createDocument('VHW_PROJECTION'));
+  await choose(page, '电子笔');
+  await stroke(page, borderlineCircleSample());
+  await expect(page.locator('[data-kind=circle]')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /尝试拟合|采用拟合/ })).toHaveCount(0);
   expect((await json(page)).entities.at(-1)).toMatchObject({
     kind: 'circle',
-    lineStyle: 'ANSWER_HIDDEN',
+    radius: expect.any(Number),
   });
-  await choose(page, '恢复原始笔迹');
-  expect(await json(page)).toEqual(raw);
 });

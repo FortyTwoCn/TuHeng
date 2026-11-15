@@ -26,7 +26,6 @@ import { ViewportDrawing } from './ViewportDrawing';
 import {
   OperationRecovery,
   type ReversibleStep,
-  type PenSuggestion,
   type InterruptedStroke,
 } from './OperationRecovery';
 import { AxisTools } from './AxisTools';
@@ -120,7 +119,6 @@ export function Viewport(
     [state, setState] = useState<InteractionState>('idle');
   const [lastSnap, setLastSnap] = useState<ReversibleStep | null>(null),
     [lastPen, setLastPen] = useState<ReversibleStep | null>(null),
-    [suggestion, setSuggestion] = useState<PenSuggestion | null>(null),
     [interrupted, setInterrupted] = useState<InterruptedStroke | null>(null);
   const [axisDraft, setAxisDraft] = useState<{
     spec: AxisConstruction;
@@ -620,15 +618,6 @@ export function Viewport(
     accept(next, raw);
     setReference(undefined);
     if (result.rawStroke) setLastPen({ raw: result.rawStroke, next });
-    if (result.suggestion && result.rawStroke)
-      setSuggestion({
-        base: g.base,
-        raw: result.rawStroke,
-        samples,
-        viewId: g.viewId,
-        scale: g.scale,
-        options: result.suggestion,
-      });
     if (result.message) props.report(result.message);
   }
 
@@ -650,7 +639,6 @@ export function Viewport(
     if (!['select', 'pan', 'box'].includes(tool) || props.session.construction || axisDraft) {
       setLastSnap(null);
       setLastPen(null);
-      setSuggestion(null);
       setInterrupted(null);
     }
     const p = local(e),
@@ -825,7 +813,6 @@ export function Viewport(
         if (g.state === 'pressed') {
           setLastSnap(null);
           setLastPen(null);
-          setSuggestion(null);
           setInterrupted(null);
         }
         g.state =
@@ -1056,7 +1043,6 @@ export function Viewport(
             beginEdit={() => {
               setLastSnap(null);
               setLastPen(null);
-              setSuggestion(null);
               setInterrupted(null);
             }}
           />
@@ -1082,14 +1068,12 @@ export function Viewport(
           role={role}
           lastSnap={lastSnap}
           lastPen={lastPen}
-          suggestion={suggestion}
           interrupted={interrupted}
           replace={props.replace}
           commit={accept}
           report={props.report}
           setLastSnap={setLastSnap}
           setLastPen={setLastPen}
-          setSuggestion={setSuggestion}
           setInterrupted={setInterrupted}
         />
       )}

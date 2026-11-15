@@ -48,3 +48,26 @@ export function penSample(scale: number, direction = 1, sweep = 360, shape = 'ci
     };
   });
 }
+// Synthetic approximation of a long hand-drawn line: slow drift, small waviness,
+// variable sampling speed. Coordinates are CSS pixels, not a captured device trace.
+export function wavyLineSample(length = 620, wobble = 7, degrees = 0) {
+  const angle = (degrees * Math.PI) / 180;
+  return Array.from({ length: 161 }, (_, i) => {
+    const t = (i / 160) ** 1.45;
+    const u = length * (t - 0.5);
+    const v = 18 * t + wobble * Math.sin(t * Math.PI * 6) + 2 * Math.sin(t * Math.PI * 17);
+    return {
+      x: u * Math.cos(angle) - v * Math.sin(angle),
+      y: u * Math.sin(angle) + v * Math.cos(angle),
+      pressure: 0.5,
+    };
+  });
+}
+export function borderlineCircleSample() {
+  return Array.from({ length: 181 }, (_, i) => {
+    const t = i / 180,
+      a = t * Math.PI * 2,
+      r = 80 + 3 * Math.sin(t * Math.PI * 18);
+    return { x: Math.cos(a) * r, y: Math.sin(a) * r, pressure: 0.5 };
+  });
+}

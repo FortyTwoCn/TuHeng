@@ -10,7 +10,6 @@ export interface PenOptions {
   style?: PenStrokeStyle;
   cssPixelsPerMm: number;
   noisePixels?: number;
-  allowApproximateCircle?: boolean;
 }
 export function appendStrokeSample<T extends Vec2>(
   samples: T[],
@@ -79,11 +78,14 @@ export function fitStroke(
     // increases polyline length without representing a reversal of the stroke.
     path = points.slice(1).reduce((n, p, i) => n + Math.abs(dot(sub(p, points[i]), dir)), 0);
   const residual = points.map((p) => Math.abs((p.x - mean.x) * dir.y - (p.y - mean.y) * dir.x));
-  if (
-    chord * pixels > 8 &&
-    quantile(residual, 0.95) <= Math.min(noise, Math.max(0.75 / pixels, chord * 0.035)) &&
-    path / chord < 1.14
-  ) {
+  // Long freehand lines accumulate small lateral drift. Bound it relative to
+  // their span instead of capping every stroke at a fixed screen-pixel error.
+  // Short strokes retain the pixel floor / relative cap; reversals still fail.
+  const lineLimit = Math.min(
+    Math.max(noise, chord * 0.015),
+    Math.max(0.75 / pixels, chord * 0.035),
+  );
+  if (chord * pixels > 8 && quantile(residual, 0.95) <= lineLimit && path / chord < 1.14) {
     const at = (p: Vec2) => {
       const t = dot(sub(p, mean), dir);
       return { x: mean.x + t * dir.x, y: mean.y + t * dir.y };
@@ -120,8 +122,6 @@ export function fitStroke(
   const errors = points.map((p) => Math.abs(distance(p, center) - radius));
   const limit = Math.min(Math.max(noise, radius * 0.012), radius * 0.055);
   const trimmed = errors.filter((e) => e <= quantile(errors, 0.95));
-  if (typeof options !== 'number' && options.allowApproximateCircle)
-    return { kind: 'circle', center, radius };
   if (
     quantile(errors, 0.9) > limit ||
     Math.sqrt(trimmed.reduce((n, e) => n + e * e, 0) / trimmed.length) > limit * 0.8 ||

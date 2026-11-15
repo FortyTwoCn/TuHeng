@@ -159,6 +159,8 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 
 ## 后续修复：斜二等轴与电子笔（2026-11-15）
 
+以下为 `833a107` 阶段记录；拟合确认交互已被后文“松手自动拟合”取代。
+
 基线为本地提交 `64dce14`，开始时工作区干净。先建立 7 个回归用例，实测 6 失败、1 通过：错误默认轴向、2/3/5 事件短线、密集轻微抖动直线、缺采样信息的恢复快照失败；历史显式投影配置可读取通过。
 
 | 用户问题                         | 根因                                          | 修改位置                                                                                                | 验收                                                                                          |
@@ -175,3 +177,17 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 本轮实际结果：`npm run typecheck`、`npm run lint`、`npm run build` 通过；`npm test` 为 8 文件 125 项通过；`npm run test:integration` 为 2 文件 16 项通过；`npm run test:e2e` 为 6 文件 56 项通过（1.6 分钟）。全量浏览器回归运行在生产构建、隔离数据库/桶/队列，保留原图片作答、教师出题、草稿、提交与复核；新增 5 项电子笔测试也已在开发模式通过。环境沿用上文 Windows / Node 26.13.0 / Chrome 157。未连接真实手写笔设备，未调用真实 AI。
 
 本轮真实交互证据：[修正后的坐标轴](images/pen-repair/oblique.png)、[桌面无限辅助线](images/pen-repair/auxiliary-1366.png)、[手机无限辅助线](images/pen-repair/auxiliary-390.png)、[短辅助笔画导出的 JSON](geometry-examples/pen-repair/auxiliary-1366.json)、[手机 JSON](geometry-examples/pen-repair/auxiliary-390.json)、[新斜二等轴 JSON](geometry-examples/pen-repair/oblique.json)。这些笔画由 Playwright 真实鼠标路径产生，包含 samples 与 sampling；示例不是硬件手写笔采集。
+
+## 松手自动拟合与长直线识别（2026-11-15）
+
+用户反馈长直线被保留为笔迹，界面却提示“尝试拟合为圆”，并要求松手自动应用拟合。本次在 `833a107` 干净基线上复现，未要求重新绘制或点击确认。
+
+- 根因：直线残差被固定屏幕误差上限限制，620px 长线的小幅波动也会失败；drawing-session 对所有未识别笔迹无条件提供 `allowApproximateCircle`，且该选项在 core 中绕过曲线形状检查。之前只覆盖短线/亚像素抖动，未覆盖长线的可见波动。
+- `geometry-core/src/pen.ts`：直线容差兼顾 CSS 像素和跨度，保留主方向行程/折返与曲线分类；删除强制圆分支。`tools.ts`：原有有界噪声候选由同一 fitter 自动重试、通过几何检查后应用。圆/弧仍要求残差、扫角、方向一致性及闭合条件，不把未识别笔迹直接变为圆。
+- `geometry-editor/src/drawing-session.ts`、`Viewport.tsx`、`OperationRecovery.tsx`：删除待确认状态、按钮与手动采用流程。松手提交一次，拟合成功保留原笔迹恢复；未识别则直接保留原笔迹，不显示无效果的恢复按钮。实线、虚线、无限辅助线及吸附继续使用原流程。
+- 新增 17 项单元场景：2/4/8 px/mm、0°/70°/160° 的长线；原来需要候选确认的噪声圆；椭圆/8 字/折返拒绝；40°/90°/230° 圆弧和完整圆。修复前 13 项失败，修复后全部通过。样本在 `tests/repair-fixtures.ts`，为近似截图形状的合成轨迹，不声称来自用户设备。
+- 新增 2 项真实鼠标 E2E，修复前均失败，修复后通过；鼠标松开后立即断言 segment/line/circle，随后才导出 JSON，无任何确认点击。复核三种线型、原笔迹恢复、一次撤销/重做；旧椭圆测试改为验证保留笔迹且不出现确认入口。
+
+实际命令：`npm run typecheck`、`npm run lint`、`npm run build` 全部通过；`npm test` 8 文件 142 项通过；`npm run test:integration` 2 文件 16 项通过；`npm run test:e2e` 6 文件 58 项通过（1.5 分钟）。浏览器使用生产构建和隔离测试数据库/桶/队列；7 项电子笔浏览器测试也在开发模式通过。原图片作答、权限、保存提交与教师复核回归正常。
+
+[松手自动拟合长线截图](images/pen-repair/automatic-line.png)；[真实鼠标路径导出的 JSON](geometry-examples/pen-repair/automatic-line.json) 已通过 GeometryDocument Schema，包含 161 个采样点、两个端点与一个 segment。保存原始样本供恢复，未通过截图猜测用户的精确原始坐标。环境仍为 Windows / Node 26.13.0 / Chrome 157。无契约字段/数据库迁移、历史回填或模型调用；真实手写笔设备未接入。
