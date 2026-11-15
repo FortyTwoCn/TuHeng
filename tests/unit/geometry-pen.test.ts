@@ -10,7 +10,12 @@ import {
   moveEntities,
 } from '@tuheng/geometry-core';
 import { finishDrawing } from '../../packages/geometry-editor/src/drawing-session';
-import { penSample, wavyLineSample, borderlineCircleSample } from '../repair-fixtures';
+import {
+  penSample,
+  wavyLineSample,
+  borderlineCircleSample,
+  driftingLineSample,
+} from '../repair-fixtures';
 describe('oblique axes and pen regressions', () => {
   it('uses a left-down half-scale depth axis for new engineering oblique drawings', () => {
     const d = createDocument('OBLIQUE_DIMETRIC'),
@@ -219,4 +224,50 @@ describe('automatic fitting after pointerup, without forced circle fallback', ()
       expect(fitStroke(samples, { cssPixelsPerMm: 4 }).kind).toBe(sweep === 360 ? 'circle' : 'arc');
     },
   );
+});
+describe('slow lateral drift is direction neutral', () => {
+  for (const degrees of [0, 90, -90, 165])
+    for (const reverse of [false, true]) {
+      it(`fits a wandering ${degrees} degree stroke, reverse=${reverse}, at every scale`, () => {
+        for (const scale of [2, 4, 8]) {
+          const samples = driftingLineSample(degrees, reverse).map((p) => ({
+            ...p,
+            x: p.x / scale,
+            y: p.y / scale,
+          }));
+          const fit = fitStroke(samples, { cssPixelsPerMm: scale });
+          expect(fit.kind).toBe('segment');
+          if (fit.kind !== 'segment') throw Error('expected a straight stroke');
+          const progress = {
+            x: samples.at(-1)!.x - samples[0].x,
+            y: samples.at(-1)!.y - samples[0].y,
+          };
+          expect(
+            (fit.end.x - fit.start.x) * progress.x + (fit.end.y - fit.start.y) * progress.y,
+          ).toBeGreaterThan(0);
+        }
+      });
+    }
+  it('handles uneven sampling of the same slowly wandering stroke', () => {
+    expect(fitStroke(driftingLineSample(90, false, 490, true), { cssPixelsPerMm: 1 }).kind).toBe(
+      'segment',
+    );
+  });
+});
+describe('drift allowance does not flatten clear bends or curves', () => {
+  it.each([0, 90])('retains a pronounced elbow at %s degrees', (degrees) => {
+    const a = (degrees * Math.PI) / 180;
+    const input = Array.from({ length: 121 }, (_, i) => {
+      const x = i * 4,
+        y = Math.max(0, i - 60) * 2;
+      return { x: x * Math.cos(a) - y * Math.sin(a), y: x * Math.sin(a) + y * Math.cos(a) };
+    });
+    expect(fitStroke(input, { cssPixelsPerMm: 1 }).kind).toBe('polyline');
+  });
+  it.each([1, 8])('keeps circular arcs at radius multiplier %s', (size) => {
+    for (const sweep of [40, 90, 230]) {
+      const input = penSample(1, -1, sweep).map((p) => ({ x: p.x * size, y: p.y * size }));
+      expect(fitStroke(input, { cssPixelsPerMm: 1 }).kind).toBe('arc');
+    }
+  });
 });

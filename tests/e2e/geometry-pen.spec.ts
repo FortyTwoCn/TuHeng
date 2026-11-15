@@ -2,7 +2,12 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { GeometryDocument, type Vec2 } from '@tuheng/contracts';
 import { createDocument } from '@tuheng/geometry-core';
-import { penSample, wavyLineSample, borderlineCircleSample } from '../repair-fixtures';
+import {
+  penSample,
+  wavyLineSample,
+  borderlineCircleSample,
+  driftingLineSample,
+} from '../repair-fixtures';
 import { choose, closePanels } from './editor-controls';
 
 const evidence = 'test-results/pen-repair';
@@ -37,7 +42,8 @@ async function stroke(page: Page, points: Vec2[]) {
   await expect
     .poll(async () => (await preview.getAttribute('points'))?.split(' ').length ?? 0)
     .toBeGreaterThanOrEqual(2);
-  expect((await preview.boundingBox())!.width).toBeGreaterThan(8);
+  const previewBox = (await preview.boundingBox())!;
+  expect(Math.hypot(previewBox.width, previewBox.height)).toBeGreaterThan(8);
   await page.mouse.up();
 }
 async function style(page: Page, name: string) {
@@ -218,3 +224,37 @@ test('a valid noisy circle is automatically adopted on release, without confirma
     radius: expect.any(Number),
   });
 });
+for (const width of [1366, 390])
+  test(`vertical drifting strokes auto-fit upwards and downwards at different zooms (${width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 768 });
+    await load(page, createDocument('VHW_PROJECTION'));
+    await choose(page, '电子笔');
+    for (const zoom of [1, 2]) {
+      if (zoom === 2) {
+        await choose(page, '放大');
+        await closePanels(page);
+      }
+      for (const reverse of [false, true]) {
+        await stroke(page, driftingLineSample(90, reverse, 300, true));
+        await expect(page.locator('[data-kind=segment]')).toHaveCount(1);
+        const doc = await json(page),
+          segment = doc.entities.at(-1)!;
+        expect(segment).toMatchObject({ kind: 'segment', samples: expect.any(Array) });
+        if (zoom === 1 && !reverse) {
+          writeFileSync(`${evidence}/vertical-drift-${width}.json`, JSON.stringify(doc, null, 2));
+          await page
+            .locator('.geometry-editor')
+            .screenshot({ path: `${evidence}/vertical-drift-${width}.png` });
+        }
+        await choose(page, '撤销');
+        expect((await json(page)).entities).toHaveLength(0);
+        await choose(page, '恢复');
+        expect(await json(page)).toEqual(doc);
+        await choose(page, '恢复原始笔迹');
+        expect((await json(page)).entities.at(-1)?.kind).toBe('polyline');
+        await choose(page, '撤销');
+      }
+    }
+  });

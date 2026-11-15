@@ -71,3 +71,45 @@ export function borderlineCircleSample() {
     return { x: Math.cos(a) * r, y: Math.sin(a) * r, pressure: 0.5 };
   });
 }
+// Approximate the screenshot's narrow, slowly wandering stroke. This is a
+// synthetic trace, not user/device capture; rotate it to check direction neutrality.
+export function driftingLineSample(degrees = 90, reverse = false, length = 490, uneven = false) {
+  const control = [
+    [0, 0],
+    [36, 0],
+    [61, -7],
+    [144, -19],
+    [187, -19],
+    [212, -15],
+    [227, -14],
+    [246, -9],
+    [277, -3],
+    [292, -3],
+    [309, -6],
+    [323, -10],
+    [413, -10],
+    [439, -5],
+    [442, -5],
+    [457, -2],
+    [474, 2],
+    [490, 3],
+  ];
+  const angle = (degrees * Math.PI) / 180;
+  const samples = Array.from({ length: 161 }, (_, i) => {
+    const t = (i / 160) ** (uneven ? 2.4 : 1),
+      at = t * 490;
+    let j = 1;
+    while (j < control.length - 1 && control[j][0] < at) j++;
+    const a = control[j - 1],
+      b = control[j],
+      fraction = (at - a[0]) / (b[0] - a[0]);
+    const u = (t - 0.5) * length,
+      v = ((a[1] + (b[1] - a[1]) * fraction) * length) / 490;
+    return {
+      x: u * Math.cos(angle) - v * Math.sin(angle),
+      y: u * Math.sin(angle) + v * Math.cos(angle),
+      pressure: 0.5,
+    };
+  });
+  return reverse ? samples.reverse() : samples;
+}

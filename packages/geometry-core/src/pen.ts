@@ -78,14 +78,17 @@ export function fitStroke(
     // increases polyline length without representing a reversal of the stroke.
     path = points.slice(1).reduce((n, p, i) => n + Math.abs(dot(sub(p, points[i]), dir)), 0);
   const residual = points.map((p) => Math.abs((p.x - mean.x) * dir.y - (p.y - mean.y) * dir.x));
-  // Long freehand lines accumulate small lateral drift. Bound it relative to
-  // their span instead of capping every stroke at a fixed screen-pixel error.
-  // Short strokes retain the pixel floor / relative cap; reversals still fail.
-  const lineLimit = Math.min(
-    Math.max(noise, chord * 0.015),
-    Math.max(0.75 / pixels, chord * 0.035),
-  );
-  if (chord * pixels > 8 && quantile(residual, 0.95) <= lineLimit && path / chord < 1.14) {
+  const driftLimit = chord * 0.015;
+  const lineLimit = Math.min(Math.max(noise, driftLimit), Math.max(0.75 / pixels, chord * 0.035));
+  const p95 = quantile(residual, 0.95);
+  const rms = Math.sqrt(residual.reduce((sum, error) => sum + error * error, 0) / residual.length);
+  // A narrow, slowly wandering stroke can have a few offsets beyond the usual
+  // noise band while staying close to a straight line overall. Bound both RMS
+  // and the tails relative to its span, in the fitted direction (never screen x/y).
+  // Use no pixel floor here: small arcs must not gain this extra drift allowance.
+  const narrowDrift =
+    rms <= driftLimit && p95 <= driftLimit * 2 && Math.max(...residual) <= driftLimit * 3;
+  if (chord * pixels > 8 && (p95 <= lineLimit || narrowDrift) && path / chord < 1.14) {
     const at = (p: Vec2) => {
       const t = dot(sub(p, mean), dir);
       return { x: mean.x + t * dir.x, y: mean.y + t * dir.y };

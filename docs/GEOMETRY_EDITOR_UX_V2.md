@@ -191,3 +191,17 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 实际命令：`npm run typecheck`、`npm run lint`、`npm run build` 全部通过；`npm test` 8 文件 142 项通过；`npm run test:integration` 2 文件 16 项通过；`npm run test:e2e` 6 文件 58 项通过（1.5 分钟）。浏览器使用生产构建和隔离测试数据库/桶/队列；7 项电子笔浏览器测试也在开发模式通过。原图片作答、权限、保存提交与教师复核回归正常。
 
 [松手自动拟合长线截图](images/pen-repair/automatic-line.png)；[真实鼠标路径导出的 JSON](geometry-examples/pen-repair/automatic-line.json) 已通过 GeometryDocument Schema，包含 161 个采样点、两个端点与一个 segment。保存原始样本供恢复，未通过截图猜测用户的精确原始坐标。环境仍为 Windows / Node 26.13.0 / Chrome 157。无契约字段/数据库迁移、历史回填或模型调用；真实手写笔设备未接入。
+
+## 竖向缓慢漂移笔迹（2026-11-15）
+
+在 `51d38ce` 干净基线上，按用户截图的窄幅、缓慢左右漂移形状构造近似轨迹：总长 490px、横向带宽约 22px。不是用户设备原始采样。其 PCA 方向计算正常；旋转到横向也失败。测得整体 RMS 约 5.99px，95 分位约 10.83px，最大约 11.08px，原 7.35px 的 95 分位上限拒绝了这类整体仍接近直线的笔迹。此前高频小幅抖动用例不足以覆盖此形状。
+
+修改 `packages/geometry-core/src/pen.ts`：保留原有严格直线识别，在拟合方向上增加 RMS/95 分位/最大偏移联合检查，分别限制为跨度的 1.5%/3%/4.5%；继续检查折返行程。新增分支不设像素下限，避免小圆弧获得额外容差。没有单独给“竖线”更宽阈值，也不强制吸成 90°。继续使用已有 fitter、松手自动提交、原笔迹恢复与统一撤销历史。
+
+`tests/repair-fixtures.ts` 添加近似截图的合成轨迹；`tests/unit/geometry-pen.test.ts` 新增 13 项用例，覆盖 0°/±90°/165°、正反向、2/4/8 px/mm、非均匀采样，以及明显折线和不同尺寸的圆弧。9 项识别回归在修改前失败、修改后通过；弯折/圆弧用例保持正确分类。
+
+`tests/e2e/geometry-pen.spec.ts` 增加 1366px 桌面和 390px 手机视口的真实鼠标路径：上下绘制、变焦、松手立即拟合、导出 JSON、一次撤销/恢复、恢复原笔迹。桌面用例修改前实测失败，修复后两种布局均通过。预览断言改用包围盒对角跨度，支持零宽度的竖线。手机视口模拟不代表真实触控或 Pencil 设备。
+
+实际执行 `npm run typecheck`、`npm run lint`、`npm run build` 均通过；`npm test` 8 文件 155 项通过；`npm run test:integration` 2 文件 16 项通过；`npm run test:e2e` 6 文件 60 项通过（1.9 分钟）。生产浏览器回归继续使用隔离数据库/桶/队列，包含原图片作答和教学提交/复核；两项新增竖向 E2E 也已在开发模式通过。环境沿用 Windows / Node 26.13.0 / Chrome 157；真实触控/手写笔硬件未实测。
+
+证据：[桌面拟合结果](images/pen-repair/vertical-drift-1366.png)、[手机拟合结果](images/pen-repair/vertical-drift-390.png)、[桌面 JSON](geometry-examples/pen-repair/vertical-drift-1366.json)、[手机 JSON](geometry-examples/pen-repair/vertical-drift-390.json)。两份 JSON 均通过 Schema，保存 153 个实际浏览器采样点、2 个端点和 1 个 segment；以松手后的实体、历史和引用断言为验收，截图仅辅助展示。无契约或数据库迁移，无历史回填。
