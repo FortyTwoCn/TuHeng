@@ -3,6 +3,7 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { GeometryDocument, type Vec2 } from '@tuheng/contracts';
 import { createDocument, addDrawing, point } from '@tuheng/geometry-core';
 import { choose, closePanels } from './editor-controls';
+import { handDrawnCurve } from '../hand-drawn-curve-fixtures';
 
 function fixture() {
   let d = createDocument('VHW_PROJECTION');
@@ -219,3 +220,61 @@ test.describe('touch curve creation', () => {
     expect(doc.entities.slice(0, base.entities.length)).toEqual(base.entities);
   });
 });
+
+for (const width of [1366, 390])
+  test(`hand-drawn U and waves auto-fit at ${width}px, with real mouse input and raw recovery`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    for (const [index, shape] of (['bowl', 'peaked', 'wave'] as const).entries()) {
+      const base = createDocument('VHW_PROJECTION');
+      await load(page, base);
+      await choose(page, '电子笔');
+      const svg = page.locator('.geo-active svg');
+      await svg.scrollIntoViewIfNeeded();
+      const rect = (await svg.boundingBox())!;
+      await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      if (index) await page.mouse.wheel(0, index === 1 ? -320 : 320);
+      await page.waitForTimeout(100);
+      const samples = handDrawnCurve(shape).map((p) => ({
+        x: p.x * (width === 390 ? 0.6 : 1),
+        y: p.y * (width === 390 ? 0.6 : 1),
+      }));
+      const at = (p: Vec2) => ({
+        x: rect.x + rect.width / 2 + p.x,
+        y: rect.y + rect.height * 0.3 - p.y,
+      });
+      const start = at(samples[0]);
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      for (const p of samples.slice(1)) {
+        const q = at(p);
+        await page.mouse.move(q.x, q.y);
+      }
+      await expect(page.locator('[data-transient=preview]')).toBeAttached();
+      await page.mouse.up();
+      await expect(page.getByText(/已自动拟合为曲线/)).toBeVisible();
+      const doc = await json(page),
+        curve = doc.entities.at(-1)!;
+      expect(curve.kind).toBe('curve');
+      if (curve.kind !== 'curve') throw Error('expected curve on pointerup');
+      expect(curve.samples!.length).toBeGreaterThan(70);
+      expect(curve.pointIds.length).toBeLessThan(curve.samples!.length);
+      expect(doc.entities.filter((e) => e.kind === 'polyline')).toHaveLength(0);
+      writeFileSync(
+        `test-results/curves/hand-${shape}-${width}.json`,
+        JSON.stringify(doc, null, 2),
+      );
+      await page.screenshot({
+        path: `test-results/curves/hand-${shape}-${width}.png`,
+        fullPage: true,
+      });
+      await choose(page, '恢复原始笔迹');
+      const raw = await json(page);
+      expect(raw.entities.at(-1)).toMatchObject({ kind: 'polyline', samples: curve.samples });
+      await choose(page, '撤销');
+      expect(await json(page)).toEqual(base);
+      await choose(page, '恢复');
+      expect(await json(page)).toEqual(raw);
+    }
+  });

@@ -82,7 +82,7 @@ export function finishDrawing(
           : rawStrokeDocument(doc, viewId, samples, role, entity.id, penOptions),
       message:
         entity.kind === 'polyline'
-          ? '未能可靠识别为直线、圆或圆弧，已保留原笔迹'
+          ? '未能可靠拟合为直线、圆、圆弧或曲线，已保留原笔迹'
           : `已自动拟合为${{ circle: '圆', arc: '圆弧', segment: '直线', line: '无限辅助线', curve: '曲线' }[entity.kind as 'circle' | 'arc' | 'segment' | 'line' | 'curve']}，可恢复原始笔迹`,
     };
   }

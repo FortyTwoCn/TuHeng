@@ -258,3 +258,21 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 [普通模式完整 JSON](geometry-examples/curves/manual.json) 包含只读端点、辅助线交点及轴交点的两条参考；[电子笔完整 JSON](geometry-examples/curves/pen.json) 包含拟合节点、交点引用及原始轨迹。Schema 与插值公式见 [几何契约](GEOMETRY_EDITOR_SCHEMA.md#22-插值曲线2026-11-16)，步骤和取消语义见 [交互规范](GEOMETRY_EDITOR_INTERACTION.md#曲线作图2026-11-16)。
 
 真实手机/平板/手写笔硬件、系统软键盘和低端设备尚未实测；触控是浏览器模拟，电子笔曲线轨迹是合成轨迹经真实鼠标输入，不能称为 Pencil/手写笔硬件验收。本轮自动曲线限定平滑开放轨迹，尖角、折返、自交或闭合非圆保持原笔迹；未新增曲线求交、闭合样条或复杂求解器。真实 AI 评分准确性未验证。无数据库 DDL、历史回填或生产部署。
+
+## 手绘曲线误拒绝修复（2026-11-16）
+
+用户反馈：电子笔画 U 形、带局部转折的波浪、较浅的波浪后，仍显示“保留原笔迹”。上一版使用固定 65 点重采样，并在任意局部转角超过 0.3rad（约 17°）时直接拒绝整个曲线。理想正弦曲线测试不足以覆盖真实手绘的像素抖动、停顿及不均匀速度。
+
+| 修改位置                                          | 修复与证据                                                                                                                                                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| geometry-core/src/pen.ts 的既有 fitFreeCurve 分支 | 按 CSS 像素等弧长重采样、有限窗口平滑，保留首末落点；从稀疏经过点开始，按 Hermite 实际路径误差增加点；双向距离检查避免明显改形。移除逐样本固定转角的一票否决，明显折线、反复急转、折返、自交、闭合非圆仍回退原笔迹 |
+| geometry-editor/src/drawing-session.ts            | 失败提示包含“曲线”，与实际识别范围一致；自动应用、交点吸附、原笔迹恢复及历史提交仍使用原入口                                                                                                                       |
+| tests/hand-drawn-curve-fixtures.ts                | 人工按截图近似 U / 局部起伏 / 浅波浪中心线，加入像素抖动、非均匀采样；明确是合成测试输入，不是用户原始笔迹或真实设备录制                                                                                           |
+| tests/unit/geometry-hand-drawn-curves.test.ts     | 修改前 3 个截图形状用例全部失败（polyline，预期 curve）；修复后验证 2/4/8 CSS px/mm、反向、旋转和孤立抖动。实际采样与拟合路径距离不超过 4 CSS px，首末点和原始 samples 保留                                        |
+| tests/e2e/geometry-curves.spec.ts                 | 1366/390 宽度，真实 Playwright mouse down/move/up，依次画三种手绘形状并变更镜头缩放；pointerup 后自动显示成功，无确认步骤，JSON 是 curve；验证原笔迹恢复、撤销及重做                                               |
+
+本轮实际命令结果：typecheck、lint、生产 build 通过；单元 175、隔离集成 17、生产浏览器 E2E 73 项通过（2.4 分钟）。原有短辅助线无限延长、三种笔迹线型、竖线、圆/圆弧、椭圆/8 字/乱线回退、交点吸附、题干权限、旧文档和教学图片作答回归通过。环境仍为 Windows / Chrome 157 / Node 26.13，集成仅使用隔离测试库、桶、队列及测试模型替身。
+
+证据：[桌面起伏曲线](images/curves/hand-peaked.png)、[手机波浪曲线](images/curves/hand-wave-mobile.png)；完整导出：[U 形](geometry-examples/curves/hand-bowl.json)、[起伏曲线](geometry-examples/curves/hand-peaked.json)、[手机波浪](geometry-examples/curves/hand-wave-mobile.json)。JSON 保留原始 samples，可用于后续回归。
+
+真实手写笔硬件仍未实测；本轮是合成笔迹经真实浏览器鼠标路径验证。改变的是新笔迹的拟合，2.2 契约和既有保存曲线的插值语义不变，不重写已保存笔迹、历史作答或教师题干，无数据库迁移或新识别服务。

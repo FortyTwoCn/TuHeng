@@ -1,5 +1,6 @@
 import type { Vec2 } from '@tuheng/contracts';
-import { angle, distance, dot, sub, intersect } from './math';
+import { angle, distance, dot, sub, intersect, foot } from './math';
+import { curveSegments, cubicAt, flattenCurve } from './curves';
 export type PenFit =
   | { kind: 'segment'; start: Vec2; end: Vec2 }
   | { kind: 'circle'; center: Vec2; radius: number }
@@ -149,21 +150,55 @@ export function fitStroke(
   return { kind: 'arc', center, radius, startAngle: angle(sub(start, center)), sweep };
 }
 
+// A few jagged samples are not evidence of a corner in a freehand curve.
+// Work at a CSS-pixel scale, then bound the actual interpolated geometry against
+// the input. The source samples are never replaced by these denoised fit points.
 function fitFreeCurve(input: Vec2[], pixels: number): PenFit | undefined {
   if (input.length < 8) return;
-  const samples = resampleStroke(input, 65);
-  const travel = samples.slice(1).reduce((n, p, i) => n + distance(p, samples[i]), 0);
-  const chord = distance(samples[0], samples.at(-1)!);
+  const travel = input.slice(1).reduce((n, p, i) => n + distance(p, input[i]), 0);
+  const chord = distance(input[0], input.at(-1)!);
   if (travel * pixels < 30 || chord < travel * 0.3) return;
-  // Reject corners, reversals and self crossings; those remain recoverable raw strokes.
-  for (let i = 1; i < samples.length - 1; i++) {
-    const a = sub(samples[i], samples[i - 1]),
-      b = sub(samples[i + 1], samples[i]);
-    const turn = Math.abs(Math.atan2(a.x * b.y - a.y * b.x, dot(a, b)));
-    if (turn > 0.3) return;
-  }
+  const uniform = resampleStroke(
+    input,
+    Math.min(512, Math.max(16, Math.ceil((travel * pixels) / 2) + 1)),
+  );
+  const stepPixels = (travel * pixels) / (uniform.length - 1);
+  const halfWindow = Math.min(3, Math.max(1, Math.ceil(3 / stepPixels)));
+  const samples = uniform.map((p, i) => {
+    if (i === 0 || i === uniform.length - 1) return p;
+    let x = 0,
+      y = 0,
+      weights = 0;
+    for (
+      let j = Math.max(0, i - halfWindow);
+      j <= Math.min(uniform.length - 1, i + halfWindow);
+      j++
+    ) {
+      const w = Math.exp(-0.5 * ((j - i) / (halfWindow / 1.5)) ** 2);
+      x += uniform[j].x * w;
+      y += uniform[j].y * w;
+      weights += w;
+    }
+    return { x: x / weights, y: y / weights };
+  });
+  // A small number of long straight runs with an abrupt join is a polygonal
+  // stroke (including a shallow elbow), not a smooth free curve.
+  const polygon = simplifyStroke(samples, 1.25 / pixels);
+  const turns = polygon.slice(1, -1).map((p, i) => {
+    const a = sub(p, polygon[i]),
+      b = sub(polygon[i + 2], p);
+    return Math.abs(Math.atan2(a.x * b.y - a.y * b.x, dot(a, b)));
+  });
+  if (
+    (polygon.length <= 4 && turns.some((a) => a > 0.3)) ||
+    turns.filter((a) => a > Math.PI / 2).length >= 3
+  )
+    return;
+  // Ignore tiny loops within the noise window, but retain scribbles and real
+  // crossings as raw input. Closed non-circular strokes also fail the chord test.
   for (let i = 1; i < samples.length; i++)
-    for (let j = i + 2; j < samples.length; j++)
+    for (let j = i + 2; j < samples.length; j++) {
+      if ((j - i) * stepPixels < 12) continue;
       if (
         intersect(
           { a: samples[i - 1], d: sub(samples[i], samples[i - 1]), finite: true },
@@ -171,7 +206,76 @@ function fitFreeCurve(input: Vec2[], pixels: number): PenFit | undefined {
         )
       )
         return;
-  const count = Math.min(96, Math.max(5, Math.ceil((travel * pixels) / 10)));
-  const points = resampleStroke(samples, count);
+    }
+  // Start with sparse knots, then refine only intervals whose Hermite path
+  // misses the smoothed trajectory. Merely interpolating dense noisy points
+  // would preserve the same jagged stroke under a different entity kind.
+  const count = Math.min(80, Math.max(5, Math.ceil((travel * pixels) / 16) + 1));
+  const indices = [
+    ...new Set(
+      Array.from({ length: count }, (_, i) => Math.round((i * (samples.length - 1)) / (count - 1))),
+    ),
+  ];
+  while (true) {
+    if (indices.some((i, k) => k > 0 && distance(samples[i], samples[indices[k - 1]]) < 1e-8))
+      return;
+    const segments = curveSegments(indices.map((i) => samples[i]));
+    let worst = 1.5 / pixels,
+      insert = -1;
+    for (let j = 0; j < segments.length; j++)
+      for (let i = indices[j] + 1; i < indices[j + 1]; i++) {
+        const error = distance(
+          samples[i],
+          cubicAt(segments[j], (i - indices[j]) / (indices[j + 1] - indices[j])),
+        );
+        if (error > worst) {
+          worst = error;
+          insert = i;
+        }
+      }
+    if (insert < 0) break;
+    if (indices.length >= 96) return;
+    indices.push(insert);
+    indices.sort((a, b) => a - b);
+  }
+  const points = indices.map((i) => samples[i]);
+  const fitted = flattenCurve(points, 0.15 / pixels);
+  const errors = uniform.map((p) => distanceToStroke(p, fitted) * pixels);
+  if (
+    quantile(errors, 0.95) > 2.5 ||
+    input.some((p) => distanceToStroke(p, fitted) * pixels > 3.8) ||
+    fitted.some((p) => distanceToStroke(p, uniform) * pixels > 3.8)
+  )
+    return;
   return { kind: 'curve', points };
+}
+function distanceToStroke(p: Vec2, points: Vec2[]) {
+  let nearest = Infinity;
+  for (let i = 1; i < points.length; i++) {
+    const d = sub(points[i], points[i - 1]);
+    const q = dot(d, d) > 1e-16 ? foot(p, { a: points[i - 1], d, finite: true }) : points[i];
+    nearest = Math.min(nearest, distance(p, q));
+  }
+  return nearest;
+}
+function simplifyStroke(points: Vec2[], tolerance: number): Vec2[] {
+  const selected = new Set([0, points.length - 1]);
+  const pending = [[0, points.length - 1]];
+  while (pending.length) {
+    const [a, b] = pending.pop()!;
+    let worst = tolerance,
+      index = -1;
+    for (let i = a + 1; i < b; i++) {
+      const error = distanceToStroke(points[i], [points[a], points[b]]);
+      if (error > worst) {
+        worst = error;
+        index = i;
+      }
+    }
+    if (index >= 0) {
+      selected.add(index);
+      pending.push([a, index], [index, b]);
+    }
+  }
+  return [...selected].sort((a, b) => a - b).map((i) => points[i]);
 }
