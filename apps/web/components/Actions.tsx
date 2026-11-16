@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'next-auth/react';
+import { realmSignOut } from './identity/client';
 const messages: Record<string, string> = {
   BLOCKED_CONFIG: '视觉模型尚未配置',
   FORBIDDEN: '没有此操作权限',
@@ -133,11 +133,14 @@ export function TextAction({
     </form>
   );
 }
-export function Logout() {
+export function Logout({ realm = 'STAFF' }: { realm?: 'STAFF' | 'STUDENT' }) {
   return (
     <button
       className="logout"
-      onClick={() => signOut({ callbackUrl: new URL('/login', window.location.origin).href })}
+      onClick={async () => {
+        await realmSignOut(realm);
+        window.location.assign('/login');
+      }}
     >
       退出登录
     </button>

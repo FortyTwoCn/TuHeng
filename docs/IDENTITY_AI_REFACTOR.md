@@ -4,28 +4,28 @@
 
 审查起点：main / f354b31ce026fe986cfffc7a4d1a6a40c15ed5dd。保留 next-env.d.ts 的本地开发生成差异。开发分支 codex/identity-ai-refactor，不回退参考提交，不部署生产。开发数据库允许结构重构或重建；实现仍保留旧数据迁移路径。
 
-| 能力 | 现有入口 / 位置 | 实际行为与缺口 | 本轮方案 |
-|---|---|---|---|
-| 账号与认证 | lib/auth.ts、/login、User | 邮箱全局唯一、多角色、单 cookie；无首次设置 | 单一账号种类、双 realm / cookie / audience、受限启用会话 |
-| 组织 | Course/Offering/Class/Grant/Enrollment | 教师班级授权可用；没有学校租户 | School、稳定登录 ID、同校学号、学校范围和班级归属 |
-| 导入 | domain/teaching.ts importRoster | 仅按已有邮箱加入班级 | 一个 XLSX 引擎，两套模板，预检、确认、幂等结果和独立凭据交付 |
-| 作业名单 | Assignment.classId、policy.ts、queries.ts | 按当前单班成员判断，未冻结接收人 | 公共选择表达式、解析和接收人快照；列表、资产、提交和复核一起切换 |
-| AI | ai-providers、grading-runner、admin.ts | Chat 适配已存在；密钥从 env、缺模型阻止提交 | provider/model/task 版本、Gateway、Anthropic；缺配置仍保存作答 |
-| SMTP / 密钥 | 无公共实现 | 无验证码、无安装闭环 | SecretStore、受限出口、版本化 SMTP、验证码和安装向导 |
-| 几何 / 自测 / 成绩 | geometry-*、learning、decisions | 已有统一图纸、曲线、正式成绩教师发布 | 保留契约、实体 ID、权限、队列和历史；加入身份及受众回归 |
+| 能力               | 现有入口 / 位置                           | 实际行为与缺口                              | 本轮方案                                                         |
+| ------------------ | ----------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------- |
+| 账号与认证         | lib/auth.ts、/login、User                 | 邮箱全局唯一、多角色、单 cookie；无首次设置 | 单一账号种类、双 realm / cookie / audience、受限启用会话         |
+| 组织               | Course/Offering/Class/Grant/Enrollment    | 教师班级授权可用；没有学校租户              | School、稳定登录 ID、同校学号、学校范围和班级归属                |
+| 导入               | domain/teaching.ts importRoster           | 仅按已有邮箱加入班级                        | 一个 XLSX 引擎，两套模板，预检、确认、幂等结果和独立凭据交付     |
+| 作业名单           | Assignment.classId、policy.ts、queries.ts | 按当前单班成员判断，未冻结接收人            | 公共选择表达式、解析和接收人快照；列表、资产、提交和复核一起切换 |
+| AI                 | ai-providers、grading-runner、admin.ts    | Chat 适配已存在；密钥从 env、缺模型阻止提交 | provider/model/task 版本、Gateway、Anthropic；缺配置仍保存作答   |
+| SMTP / 密钥        | 无公共实现                                | 无验证码、无安装闭环                        | SecretStore、受限出口、版本化 SMTP、验证码和安装向导             |
+| 几何 / 自测 / 成绩 | geometry-*、learning、decisions           | 已有统一图纸、曲线、正式成绩教师发布        | 保留契约、实体 ID、权限、队列和历史；加入身份及受众回归          |
 
 ## 权限矩阵（目标约束）
 
-| 操作 | admin | 学校 | 教师 | 学生 |
-|---|---|---|---|---|
-| 学校创建/停用 | 指定学校，敏感操作再认证 | 不可 | 不可 | 不可 |
-| 教师管理/重置 | 指定学校 | 本校 | 不可创建教师 | 不可 |
-| 班级/学生管理 | 明确学校与教师范围 | 本校 | 本校且授权班级；建班 | 自己安全设置 |
-| 发布任务 | 指定学校，显式复核人 | 本校，显式复核人 | 授权接收人 | 不可 |
-| 作业作答/文件 | 不因管理权读取私有作答 | 不因管理权读取私有作答 | 明确复核授权 | 自己且实际接收人 |
-| 正式成绩 | 无隐式发布权 | 无隐式发布权 | 获授予复核范围 | 只读已发布 |
-| 自测/错题 | 无管理旁路 | 无管理旁路 | 仅本人 | 仅本人 |
-| AI / SMTP | 近期再认证 | 不可 | 不可 | 不可 |
+| 操作          | admin                    | 学校                   | 教师                 | 学生             |
+| ------------- | ------------------------ | ---------------------- | -------------------- | ---------------- |
+| 学校创建/停用 | 指定学校，敏感操作再认证 | 不可                   | 不可                 | 不可             |
+| 教师管理/重置 | 指定学校                 | 本校                   | 不可创建教师         | 不可             |
+| 班级/学生管理 | 明确学校与教师范围       | 本校                   | 本校且授权班级；建班 | 自己安全设置     |
+| 发布任务      | 指定学校，显式复核人     | 本校，显式复核人       | 授权接收人           | 不可             |
+| 作业作答/文件 | 不因管理权读取私有作答   | 不因管理权读取私有作答 | 明确复核授权         | 自己且实际接收人 |
+| 正式成绩      | 无隐式发布权             | 无隐式发布权           | 获授予复核范围       | 只读已发布       |
+| 自测/错题     | 无管理旁路               | 无管理旁路             | 仅本人               | 仅本人           |
+| AI / SMTP     | 近期再认证               | 不可                   | 不可                 | 不可             |
 
 任何账号未完成首次改密、STAFF 邮箱验证时只有启用/安全/退出权限。根 admin 唯一固定登录 ID admin；首次安装仅额外允许 SMTP 设置与验证本人邮箱。两个域分别退出、撤销和验证；停校立即阻断本校会话与后台调用。
 
@@ -48,3 +48,16 @@
 - F：响应式真实浏览器、迁移/恢复演练；typecheck、lint、unit、integration、E2E、build；逐项记录结果与限制。
 
 验收编号采用附件 ID01–11、IM01–07、AU01–06、AI01–08、EM01–03。当前仅完成审查，不把计划标为已实现。实际 SMTP 投递、协议替身测试与真实模型调用分别记录；无凭据不伪称外部服务通过。本轮不调用付费模型验证，不新增照片识别、不改几何格式、不创建第二套评分流程。
+
+## 阶段 B 进行记录（2026-11-16）
+
+- 扩展迁移 2026111601 已在开发库执行；迁移前 pg_dump 位于 git 忽略的 .runtime/identity-backup。旧 ID 与历史记录保留。
+- 学生与 STAFF 各自 NextAuth 配置、签名派生、cookie、CSRF 和 JWT audience；原共享认证接口返回 410。首次设置状态在数据库与服务端 guard 检查。
+- 新密码限制 12 字符 / 72 UTF-8 字节；随机临时密码 20 字符；验证码 HMAC 摘要、5 分钟/60 秒重发间隔/5 次错误、锁行单次消费；多维限流。邮件同步发送，不持久化验证码正文。
+- AES-256-GCM SecretStore，AAD 绑定 ID/用途；密钥轮换由 keyId 区分。出站 DNS 校验后绑定连接地址，禁止重定向/内网，部署白名单可允许本地 SMTP。
+- NextAuth v4 的可选 nodemailer 7 peer 与当前安全版本冲突；实际 EmailService 仅使用别名 tuheng-smtp-client（nodemailer 10.6.0），未强制忽略 peer。ExcelJS 4.4.0（MIT）用于后续 XLSX；已记录其间接依赖审计，待 F 阶段处理适用更新。
+- 类型检查通过；身份安全单元 6/6、真实 PostgreSQL + 本地 SMTP 接收器集成 4/4。集成曾因未解码 MIME 提取了错误验证码失败，改为解码实际收到的 MIME 后通过，未固定验证码或绕过验证。
+- 数据库账号无 CREATE DATABASE 权限，改用现有测试库内独立 identity_refactor schema；没有修改数据库用户权限。Prisma adapter 与 SQL search_path 均显式指定该 schema。
+- 尚未完成浏览器双会话、旧入口关闭的完整回归、组织/导入/受众/AI 阶段和真实外部 SMTP/模型验收。上述记录不是整轮交付结论。
+
+实现参考：[Next.js 随包认证文档](../node_modules/next/dist/docs/01-app/02-guides/authentication.md)、[Nodemailer SMTP](https://nodemailer.com/smtp)、[OWASP SSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)。SMTP 连接成功与实际接收测试分别记录。

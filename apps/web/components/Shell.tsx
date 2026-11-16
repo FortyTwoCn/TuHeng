@@ -13,7 +13,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import type { Actor } from '@tuheng/domain';
-import { hasRole } from '@tuheng/domain';
 import { Logout } from './Actions';
 import { BrandLogo } from './BrandLogo';
 const menus = {
@@ -92,7 +91,7 @@ export function Shell({
                 {area === 'student' ? '学生' : area === 'teacher' ? '教师' : '系统管理员'}
               </small>
             </span>
-            <Logout />
+            <Logout realm={a.realm ?? (area === 'student' ? 'STUDENT' : 'STAFF')} />
           </div>
         </div>
       </aside>
@@ -105,18 +104,8 @@ export function Shell({
           </div>
           <div className="topbar-right">
             <span className="term">工程图学 · 教学空间</span>
-            <details className="role-switch">
-              <summary>切换身份</summary>
-              <div>
-                {hasRole(a, 'STUDENT') && <Link href="/student/dashboard">学生空间</Link>}
-                {hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT') && (
-                  <Link href="/teacher/dashboard">教师空间</Link>
-                )}
-                {hasRole(a, 'ADMIN', 'PLATFORM_OPERATOR') && (
-                  <Link href="/admin/dashboard">管理空间</Link>
-                )}
-              </div>
-            </details>
+            <Link href={`/onboarding/${area === 'student' ? 'student' : 'staff'}`}>账号安全</Link>
+            <Link href="/login">其他身份登录</Link>
             <span className="avatar small-avatar">{a.name.slice(0, 1)}</span>
           </div>
         </header>

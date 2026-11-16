@@ -1,3 +1,4 @@
+export * from './identity';
 export { createId } from './id';
 import { z } from 'zod';
 export * from './geometry';
@@ -9,6 +10,7 @@ export const Role = z.enum([
   'TEACHING_ASSISTANT',
   'COURSE_MANAGER',
   'ADMIN',
+  'SCHOOL_ADMIN',
   'PLATFORM_OPERATOR',
 ]);
 export type Role = z.infer<typeof Role>;

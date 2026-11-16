@@ -5,3 +5,5 @@ export * from './submissions';
 export * from './decisions';
 export * from './learning';
 export * from './queries';
+
+export * from './identity';

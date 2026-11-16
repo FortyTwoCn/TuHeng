@@ -4,10 +4,12 @@ import { hasRole } from '@tuheng/domain';
 export default async function Home() {
   let a;
   try {
-    a = await actor();
+    a = await actor(undefined, true);
   } catch {
     redirect('/login');
   }
+  if (a.onboarding) redirect(`/onboarding/${a.realm?.toLowerCase()}`);
+  if (a.kind === 'SCHOOL_ADMIN') redirect('/school/dashboard');
   redirect(
     hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT')
       ? '/teacher/dashboard'

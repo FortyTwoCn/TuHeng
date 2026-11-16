@@ -5,33 +5,48 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
-
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String              @id @default(uuid())
-  email        String              @unique
-  name         String
-  passwordHash String
-  roles        String[]
-  active       Boolean             @default(true)
-  tokenVersion Int                 @default(0)
-  createdAt    DateTime            @default(now())
-  enrollments  Enrollment[]
-  grants       TeachingGrant[]
-  questions    Question[]
-  assets       StoredAsset[]
-  submissions  Submission[]
-  attempts     SubmissionAttempt[]
-  decisions    GradeDecision[]
-  appeals      Appeal[]
-  folders      SelfTestFolder[]
-  sets         SelfTestSet[]
-  errors       ErrorBookEntry[]
-  evidence     KnowledgeEvidence[]
-  audits       AuditLog[]
+  id                   String              @id @default(uuid())
+  email                String
+  name                 String
+  passwordHash         String
+  roles                String[]
+  active               Boolean             @default(true)
+  tokenVersion         Int                 @default(0)
+  createdAt            DateTime            @default(now())
+  kind                 String              @default("STUDENT")
+  realm                String              @default("STUDENT")
+  loginId              String?             @unique
+  schoolId             String?
+  studentNumber        String?
+  emailNormalized      String?
+  emailVerifiedAt      DateTime?
+  mustChangePassword   Boolean             @default(true)
+  passwordExpiresAt    DateTime?
+  credentialVersion    Int                 @default(0)
+  lastLoginAt          DateTime?
+  installationComplete Boolean             @default(false)
+  school               School?             @relation(fields: [schoolId], references: [id])
+  enrollments          Enrollment[]
+  grants               TeachingGrant[]
+  questions            Question[]
+  assets               StoredAsset[]
+  submissions          Submission[]
+  attempts             SubmissionAttempt[]
+  decisions            GradeDecision[]
+  appeals              Appeal[]
+  folders              SelfTestFolder[]
+  sets                 SelfTestSet[]
+  errors               ErrorBookEntry[]
+  evidence             KnowledgeEvidence[]
+  audits               AuditLog[]
 
+  @@unique([realm, emailNormalized])
+  @@unique([schoolId, studentNumber])
+  @@index([schoolId, kind, active])
   @@index([active])
 }
 
@@ -39,6 +54,7 @@ model Course {
   id        String           @id @default(uuid())
   title     String
   code      String           @unique
+  schoolId  String?
   offerings CourseOffering[]
   questions Question[]
 }
@@ -56,6 +72,9 @@ model CourseOffering {
 model TeachingClass {
   id          String          @id @default(uuid())
   offeringId  String
+  schoolId    String?
+  archived    Boolean         @default(false)
+  createdAt   DateTime        @default(now())
   name        String
   offering    CourseOffering  @relation(fields: [offeringId], references: [id])
   enrollments Enrollment[]
@@ -109,45 +128,48 @@ model Question {
 }
 
 model QuestionVersion {
-  id           String              @id @default(uuid())
-  questionId   String
-  version      Int
-  title        String
-  content      String
-  type         String
-  chapter      String
-  maxPoints    Int
-  knowledgeIds String[]
-  assetIds     String[]
-  reference    Json
-  rubric       Json
-  analysis     Json?
+  id               String              @id @default(uuid())
+  questionId       String
+  version          Int
+  title            String
+  content          String
+  type             String
+  chapter          String
+  maxPoints        Int
+  knowledgeIds     String[]
+  assetIds         String[]
+  reference        Json
+  rubric           Json
+  analysis         Json?
   geometryDocument Json?
-  confirmed    Boolean             @default(false)
-  createdAt    DateTime            @default(now())
-  question     Question            @relation(fields: [questionId], references: [id])
-  items        AssignmentItem[]
-  selfItems    SelfTestItem[]
-  attempts     SubmissionAttempt[]
-  errors       ErrorBookEntry[]
+  confirmed        Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  question         Question            @relation(fields: [questionId], references: [id])
+  items            AssignmentItem[]
+  selfItems        SelfTestItem[]
+  attempts         SubmissionAttempt[]
+  errors           ErrorBookEntry[]
 
   @@unique([questionId, version])
 }
 
 model Assignment {
-  id             String           @id @default(uuid())
-  classId        String
-  creatorId      String
-  title          String
-  status         String           @default("DRAFT")
-  startsAt       DateTime
-  dueAt          DateTime
-  allowLate      Boolean          @default(false)
-  maxAttempts    Int              @default(1)
-  releaseAnswers Boolean          @default(false)
-  createdAt      DateTime         @default(now())
-  teachingClass  TeachingClass    @relation(fields: [classId], references: [id])
-  items          AssignmentItem[]
+  id               String           @id @default(uuid())
+  classId          String?
+  schoolId         String?
+  audience         Json?
+  audienceRevision Int              @default(0)
+  creatorId        String
+  title            String
+  status           String           @default("DRAFT")
+  startsAt         DateTime
+  dueAt            DateTime
+  allowLate        Boolean          @default(false)
+  maxAttempts      Int              @default(1)
+  releaseAnswers   Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  teachingClass    TeachingClass?   @relation(fields: [classId], references: [id])
+  items            AssignmentItem[]
 
   @@index([classId, status, dueAt])
 }
@@ -178,29 +200,29 @@ model Submission {
 }
 
 model SubmissionAttempt {
-  id                  String            @id @default(uuid())
-  ownerId             String
-  submissionId        String?
-  questionVersionId   String
-  selfTestItemId      String?
-  version             Int
-  idempotencyKey      String
-  source              String
-  submittedAt         DateTime          @default(now())
-  publishedDecisionId String?           @unique
-  geometryAnswer      Json?
+  id                    String            @id @default(uuid())
+  ownerId               String
+  submissionId          String?
+  questionVersionId     String
+  selfTestItemId        String?
+  version               Int
+  idempotencyKey        String
+  source                String
+  submittedAt           DateTime          @default(now())
+  publishedDecisionId   String?           @unique
+  geometryAnswer        Json?
   geometrySchemaVersion String?
-  owner               User              @relation(fields: [ownerId], references: [id])
-  submission          Submission?       @relation(fields: [submissionId], references: [id])
-  questionVersion     QuestionVersion   @relation(fields: [questionVersionId], references: [id])
-  selfTestItem        SelfTestItem?     @relation(fields: [selfTestItemId], references: [id])
-  assets              SubmissionAsset[]
-  runs                GradingRun[]
-  decisions           GradeDecision[]   @relation("AttemptDecisions")
-  publishedDecision   GradeDecision?    @relation("PublishedDecision", fields: [publishedDecisionId], references: [id])
-  appeals             Appeal[]
-  errors              ErrorBookEntry[]
-  reviews             ReviewAttempt[]
+  owner                 User              @relation(fields: [ownerId], references: [id])
+  submission            Submission?       @relation(fields: [submissionId], references: [id])
+  questionVersion       QuestionVersion   @relation(fields: [questionVersionId], references: [id])
+  selfTestItem          SelfTestItem?     @relation(fields: [selfTestItemId], references: [id])
+  assets                SubmissionAsset[]
+  runs                  GradingRun[]
+  decisions             GradeDecision[]   @relation("AttemptDecisions")
+  publishedDecision     GradeDecision?    @relation("PublishedDecision", fields: [publishedDecisionId], references: [id])
+  appeals               Appeal[]
+  errors                ErrorBookEntry[]
+  reviews               ReviewAttempt[]
 
   @@unique([ownerId, idempotencyKey])
   @@unique([submissionId, version])
@@ -252,10 +274,10 @@ model ModelConfigurationVersion {
 }
 
 model GradingRun {
-  id              String                    @id @default(uuid())
+  id              String                     @id @default(uuid())
   attemptId       String
-  configId        String
-  status          String                    @default("QUEUED")
+  configId        String?
+  status          String                     @default("QUEUED")
   strategyVersion String
   promptVersion   String
   request         Json
@@ -264,9 +286,9 @@ model GradingRun {
   leaseToken      String?
   startedAt       DateTime?
   finishedAt      DateTime?
-  createdAt       DateTime                  @default(now())
-  attempt         SubmissionAttempt         @relation(fields: [attemptId], references: [id])
-  config          ModelConfigurationVersion @relation(fields: [configId], references: [id])
+  createdAt       DateTime                   @default(now())
+  attempt         SubmissionAttempt          @relation(fields: [attemptId], references: [id])
+  config          ModelConfigurationVersion? @relation(fields: [configId], references: [id])
   suggestion      GradingSuggestion?
   job             BackgroundJob?
 
@@ -434,4 +456,227 @@ model LoginThrottle {
   failures     Int       @default(0)
   blockedUntil DateTime?
   updatedAt    DateTime  @updatedAt
+}
+
+model School {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  active        Boolean  @default(true)
+  rosterVersion Int      @default(0)
+  createdAt     DateTime @default(now())
+  users         User[]
+}
+
+model IdentitySequence {
+  id    String @id
+  value Int    @default(0)
+}
+
+model VerificationChallenge {
+  id          String    @id @default(uuid())
+  realm       String
+  purpose     String
+  accountId   String
+  targetEmail String
+  digest      String
+  expiresAt   DateTime
+  failures    Int       @default(0)
+  consumedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([realm, purpose, accountId, createdAt])
+}
+
+model SecurityThrottle {
+  id        String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+}
+
+model Reauthentication {
+  id           String   @id
+  accountId    String
+  realm        String
+  tokenVersion Int
+  expiresAt    DateTime
+}
+
+model SecretRecord {
+  id         String    @id @default(uuid())
+  purpose    String
+  keyId      String
+  nonce      String
+  ciphertext String
+  tag        String
+  suffix     String
+  revokedAt  DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model SMTPConfigurationVersion {
+  id        String   @id @default(uuid())
+  version   Int      @unique
+  config    Json
+  secretId  String?
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model EmailDelivery {
+  id          String   @id @default(uuid())
+  challengeId String?  @unique
+  smtpId      String
+  purpose     String
+  status      String   @default("PENDING")
+  errorCode   String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+model CredentialDeliveryBatch {
+  id        String                   @id @default(uuid())
+  creatorId String
+  schoolId  String?
+  expiresAt DateTime
+  createdAt DateTime                 @default(now())
+  items     CredentialDeliveryItem[]
+}
+
+model CredentialDeliveryItem {
+  id                String                  @id @default(uuid())
+  batchId           String
+  accountId         String
+  credentialVersion Int
+  secretId          String
+  expiresAt         DateTime
+  batch             CredentialDeliveryBatch @relation(fields: [batchId], references: [id])
+
+  @@unique([batchId, accountId])
+}
+
+model CredentialDownload {
+  id         String    @id
+  batchId    String
+  actorId    String
+  kind       String
+  expiresAt  DateTime
+  consumedAt DateTime?
+}
+
+model RosterImportBatch {
+  id            String   @id @default(uuid())
+  creatorId     String
+  schoolId      String
+  fingerprint   String
+  scope         Json
+  rows          Json
+  mapping       Json
+  rosterVersion Int
+  status        String   @default("PREVIEW")
+  result        Json?
+  errorCode     String?
+  createdAt     DateTime @default(now())
+
+  @@unique([creatorId, schoolId, fingerprint])
+}
+
+model AssignmentRecipient {
+  id           String   @id @default(uuid())
+  assignmentId String
+  studentId    String
+  schoolId     String
+  classIds     String[]
+  reviewerIds  String[]
+  revision     Int
+  active       Boolean  @default(true)
+  inferred     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@unique([assignmentId, studentId])
+  @@index([studentId, active])
+}
+
+model AIProvider {
+  id             String              @id @default(uuid())
+  name           String
+  brand          String
+  enabled        Boolean             @default(false)
+  archived       Boolean             @default(false)
+  currentVersion Int                 @default(1)
+  createdAt      DateTime            @default(now())
+  versions       AIProviderVersion[]
+  models         AIModel[]
+}
+
+model AIProviderVersion {
+  id         String     @id @default(uuid())
+  providerId String
+  version    Int
+  config     Json
+  secretId   String?
+  createdAt  DateTime   @default(now())
+  provider   AIProvider @relation(fields: [providerId], references: [id])
+
+  @@unique([providerId, version])
+}
+
+model AIModel {
+  id             String           @id @default(uuid())
+  providerId     String
+  name           String
+  enabled        Boolean          @default(false)
+  archived       Boolean          @default(false)
+  currentVersion Int              @default(1)
+  createdAt      DateTime         @default(now())
+  provider       AIProvider       @relation(fields: [providerId], references: [id])
+  versions       AIModelVersion[]
+}
+
+model AIModelVersion {
+  id         String   @id @default(uuid())
+  modelId    String
+  version    Int
+  config     Json
+  testStatus Json
+  createdAt  DateTime @default(now())
+  model      AIModel  @relation(fields: [modelId], references: [id])
+
+  @@unique([modelId, version])
+}
+
+model AITaskBindingVersion {
+  id         String   @id @default(uuid())
+  taskKey    String
+  version    Int
+  modelId    String
+  parameters Json
+  enabled    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([taskKey, version])
+}
+
+model AIInvocation {
+  id               String    @id @default(uuid())
+  runId            String?   @unique
+  taskKey          String
+  schoolId         String?
+  actorId          String
+  resourceId       String
+  snapshot         Json?
+  status           String    @default("BLOCKED_CONFIG")
+  attempts         Int       @default(0)
+  inputTokens      Int?
+  outputTokens     Int?
+  durationMs       Int?
+  errorCode        String?
+  billingUncertain Boolean   @default(false)
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([taskKey, schoolId, status])
 }

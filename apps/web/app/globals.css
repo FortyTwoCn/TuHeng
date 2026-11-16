@@ -1522,3 +1522,103 @@ footer {
     transition: none !important;
   }
 }
+
+/* Identity and administration: scoped forms, mobile cards, no horizontal page overflow. */
+.identity-entry {
+  max-width: 600px;
+  margin: 5vh auto;
+  padding: 24px;
+}
+.identity-entry.wide {
+  max-width: 1100px;
+}
+.identity-choices,
+.identity-grid-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+}
+.identity-choice,
+.identity-panel,
+.identity-list article {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-block: 16px;
+}
+.identity-choice {
+  color: inherit;
+  text-decoration: none;
+}
+.identity-entry label,
+.identity-panel label {
+  display: grid;
+  gap: 6px;
+  margin-block: 12px;
+  min-width: 0;
+}
+.identity-entry input,
+.identity-entry select,
+.identity-panel input,
+.identity-panel select,
+.login-form input,
+.login-form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+}
+.identity-inline,
+.identity-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-block: 12px;
+}
+.identity-inline button,
+.identity-tabs button,
+.identity-reauth button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--navy);
+  cursor: pointer;
+}
+.identity-tabs [aria-pressed='true'] {
+  background: var(--teal-light);
+  border-color: var(--teal);
+}
+.identity-steps {
+  padding-left: 24px;
+  line-height: 2;
+}
+.identity-panel p,
+.identity-list p {
+  overflow-wrap: anywhere;
+}
+.identity-reauth {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.identity-panel form {
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .identity-entry {
+    margin: 0 auto;
+    padding: 16px 12px max(24px, env(safe-area-inset-bottom));
+  }
+  .identity-panel {
+    padding: 14px;
+  }
+  .identity-tabs {
+    gap: 5px;
+  }
+  .identity-inline > .button {
+    flex: 1;
+  }
+}

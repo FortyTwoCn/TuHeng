@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation';
 import { DomainError } from '@tuheng/domain';
 export default async function GeometryPage() {
   try {
-    await actor();
+    const a = await actor(undefined, true);
+    if (a.onboarding) redirect(`/onboarding/${a.realm?.toLowerCase()}`);
   } catch (error) {
     if (error instanceof DomainError && error.status === 401)
       redirect('/login?callbackUrl=%2Fgeometry');

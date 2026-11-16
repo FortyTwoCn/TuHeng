@@ -3,6 +3,11 @@ export interface Actor {
   id: string;
   roles: Role[];
   name: string;
+  schoolId?: string | null;
+  kind?: import('@tuheng/contracts').AccountKind;
+  realm?: import('@tuheng/contracts').AuthRealm;
+  tokenVersion?: number;
+  onboarding?: boolean;
 }
 export interface Row {
   id: string;
@@ -10,6 +15,14 @@ export interface Row {
 export interface Entities {
   user: Row & {
     email: string;
+    kind?: import('@tuheng/contracts').AccountKind;
+    realm?: import('@tuheng/contracts').AuthRealm;
+    schoolId?: string | null;
+    studentNumber?: string | null;
+    loginId?: string | null;
+    emailNormalized?: string | null;
+    emailVerifiedAt?: Date | null;
+    mustChangePassword?: boolean;
     name: string;
     passwordHash: string;
     roles: Role[];

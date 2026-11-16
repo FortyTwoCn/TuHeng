@@ -4,7 +4,16 @@ import type { DataPort, Entities, Table, Where } from '@tuheng/domain';
 const globalDb = globalThis as unknown as { tuhengDb?: PrismaClient };
 export const prisma =
   globalDb.tuhengDb ??
-  new PrismaClient({ adapter: new SafePrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+  new PrismaClient({
+    adapter: new SafePrismaPg(
+      { connectionString: process.env.DATABASE_URL! },
+      {
+        schema: process.env.DATABASE_URL
+          ? (new URL(process.env.DATABASE_URL).searchParams.get('schema') ?? 'public')
+          : 'public',
+      },
+    ),
+  });
 if (process.env.NODE_ENV !== 'production') globalDb.tuhengDb = prisma;
 interface Delegate {
   findUnique(a: unknown): Promise<unknown>;

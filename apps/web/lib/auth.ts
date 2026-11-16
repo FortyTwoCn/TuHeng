@@ -1,77 +1,131 @@
 import { getServerSession, type NextAuthOptions } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { compare } from 'bcryptjs';
+import { encode } from 'next-auth/jwt';
+import { createHmac } from 'node:crypto';
+import { cookies, headers } from 'next/headers';
 import { prisma } from '@tuheng/database';
-import { Role } from '@tuheng/contracts';
-import { DomainError, type Actor } from '@tuheng/domain';
-import { createHash } from 'node:crypto';
-import { appAuthRedirect } from './app-origins';
-export const authOptions: NextAuthOptions = {
-  secret: process.env.AUTH_SECRET,
-  session: { strategy: 'jwt', maxAge: 8 * 60 * 60 },
-  pages: { signIn: '/login' },
-  providers: [
-    Credentials({
-      name: '图衡账号',
-      credentials: {
-        email: { label: '邮箱', type: 'email' },
-        password: { label: '密码', type: 'password' },
-      },
-      async authorize(credentials) {
-        const email = credentials?.email?.trim().toLowerCase();
-        const password = credentials?.password;
-        if (!email || !password || email.length > 200 || password.length > 200) return null;
-        const id = createHash('sha256').update(email).digest('hex');
-        const throttle = await prisma.loginThrottle.findUnique({ where: { id } });
-        if (throttle?.blockedUntil && throttle.blockedUntil > new Date()) return null;
-        const user = await prisma.user.findUnique({ where: { email } });
-        const valid = await compare(
-          password,
-          user?.passwordHash ?? '$2b$12$W8X7WOfB8gHxYRxQbGy.rOIJfbdU72u2H0vghdOsmQGykb00lVjKq',
-        );
-        if (!user?.active || !valid) {
-          const row = await prisma.loginThrottle.upsert({
-            where: { id },
-            create: { id, failures: 1 },
-            update: { failures: { increment: 1 } },
-          });
-          if (row.failures >= 8)
-            await prisma.loginThrottle.update({
-              where: { id },
-              data: { failures: 0, blockedUntil: new Date(Date.now() + 15 * 60000) },
-            });
-          return null;
+import { AuthRealm, type AuthRealm as Realm } from '@tuheng/contracts';
+import { DomainError, ensure, needsOnboarding, type Actor } from '@tuheng/domain';
+import { authenticate, loadIdentity } from '../../../packages/infrastructure/src/identity-auth';
+import { appAuthRedirect, allowedAppOrigins } from './app-origins';
+
+export function authOptionsFor(realm: Realm): NextAuthOptions {
+  const secure = (process.env.NEXTAUTH_URL ?? '').startsWith('https://');
+  const prefix = `${secure ? '__Secure-' : ''}tuheng.${realm.toLowerCase()}`;
+  const options = { httpOnly: true, sameSite: 'lax' as const, path: '/', secure };
+  const secret = process.env.AUTH_SECRET;
+  ensure(secret && secret.length >= 32, 'AUTH_CONFIGURATION_REQUIRED', 503);
+  return {
+    secret: createHmac('sha256', secret).update(`tuheng-auth-domain:${realm}`).digest('hex'),
+    session: { strategy: 'jwt', maxAge: 8 * 60 * 60 },
+    cookies: {
+      sessionToken: { name: `${prefix}.session-token`, options },
+      csrfToken: { name: `${prefix}.csrf-token`, options },
+      callbackUrl: { name: `${prefix}.callback-url`, options },
+    },
+    pages: { signIn: `/login/${realm.toLowerCase()}`, error: `/login/${realm.toLowerCase()}` },
+    providers: [
+      Credentials({
+        name: realm === 'STUDENT' ? '学生登录' : '教师与管理登录',
+        credentials: {
+          identifier: { type: 'text' },
+          schoolId: { type: 'text' },
+          method: { type: 'text' },
+          password: { type: 'password' },
+          code: { type: 'text' },
+          challengeId: { type: 'text' },
+        },
+        async authorize(credentials) {
+          try {
+            return await authenticate({ ...credentials, realm });
+          } catch {
+            return null;
+          }
+        },
+      }),
+    ],
+    callbacks: {
+      redirect: async ({ url, baseUrl }) => appAuthRedirect(url, baseUrl),
+      async jwt({ token, user }) {
+        if (user) {
+          const account = user as unknown as {
+            id: string;
+            tokenVersion: number;
+            onboarding: boolean;
+          };
+          token.sub = account.id;
+          token.version = account.tokenVersion;
+          token.realm = realm;
+          token.aud = realm;
+          token.onboarding = account.onboarding;
         }
-        await prisma.loginThrottle.deleteMany({ where: { id } });
-        return { id: user.id, name: user.name, email: user.email, tokenVersion: user.tokenVersion };
+        return token;
       },
-    }),
-  ],
-  callbacks: {
-    async redirect({ url, baseUrl }) {
-      return appAuthRedirect(url, baseUrl);
+      async session({ session, token }) {
+        if (token.realm !== realm || token.aud !== realm) return { ...session, user: undefined };
+        if (session.user)
+          Object.assign(session.user, {
+            id: token.sub,
+            tokenVersion: token.version,
+            realm,
+            onboarding: token.onboarding,
+          });
+        return session;
+      },
     },
-    async jwt({ token, user }) {
-      if (user) {
-        token.sub = user.id;
-        token.version = (user as unknown as { tokenVersion: number }).tokenVersion;
+  };
+}
+export async function actor(realm?: Realm, allowOnboarding = false): Promise<Actor> {
+  if (!realm) {
+    const h = await headers();
+    const explicit = AuthRealm.safeParse(h.get('x-tuheng-realm'));
+    if (explicit.success) realm = explicit.data;
+    else {
+      try {
+        const url = new URL(h.get('referer') ?? '');
+        if (allowedAppOrigins().includes(url.origin)) {
+          if (/^\/(student|login\/student)/.test(url.pathname)) realm = 'STUDENT';
+          if (/^\/(teacher|school|admin|login\/staff)/.test(url.pathname)) realm = 'STAFF';
+        }
+      } catch {
+        /* direct navigation has no referring realm */
       }
-      return token;
+    }
+  }
+  const candidates = realm ? [realm] : (['STUDENT', 'STAFF'] as const);
+  const identities: Actor[] = [];
+  for (const domain of candidates) {
+    const session = await getServerSession(authOptionsFor(domain));
+    const s = session?.user as
+      { id?: string; tokenVersion?: number; realm?: Realm; onboarding?: boolean } | undefined;
+    if (!s?.id || s.realm !== domain || typeof s.tokenVersion !== 'number') continue;
+    try {
+      identities.push(await loadIdentity(s.id, domain, s.tokenVersion, !!s.onboarding));
+    } catch (error) {
+      if (realm) throw error;
+    }
+  }
+  ensure(identities.length === 1, identities.length ? 'SELECT_AUTH_REALM' : 'UNAUTHENTICATED', 401);
+  const result = identities[0];
+  if (!allowOnboarding && result.onboarding) throw new DomainError('ONBOARDING_REQUIRED', 403);
+  return result;
+}
+export async function rotateIdentitySession(id: string, realm: Realm) {
+  const u = await prisma.user.findUniqueOrThrow({ where: { id } });
+  ensure(u.realm === realm && u.active, 'SESSION_REVOKED', 401);
+  const config = authOptionsFor(realm),
+    cookie = config.cookies!.sessionToken!;
+  const token = await encode({
+    secret: config.secret!,
+    maxAge: 8 * 3600,
+    token: {
+      sub: id,
+      name: u.name,
+      realm,
+      aud: realm,
+      version: u.tokenVersion,
+      onboarding: needsOnboarding(u),
     },
-    async session({ session, token }) {
-      if (session.user) {
-        Object.assign(session.user, { id: token.sub, tokenVersion: token.version });
-      }
-      return session;
-    },
-  },
-};
-export async function actor(): Promise<Actor> {
-  const session = await getServerSession(authOptions);
-  const s = session?.user as { id?: string; tokenVersion?: number } | undefined;
-  if (!s?.id) throw new DomainError('UNAUTHENTICATED', 401);
-  const u = await prisma.user.findUnique({ where: { id: s.id } });
-  if (!u?.active || u.tokenVersion !== s.tokenVersion)
-    throw new DomainError('SESSION_REVOKED', 401);
-  return { id: u.id, name: u.name, roles: u.roles.map((r) => Role.parse(r)) };
+  });
+  (await cookies()).set(cookie.name, token, { ...cookie.options, maxAge: 8 * 3600 });
 }

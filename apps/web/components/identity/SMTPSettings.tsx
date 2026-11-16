@@ -1,0 +1,154 @@
+'use client';
+import { useEffect, useState } from 'react';
+import type { SMTPConfig } from '@tuheng/contracts';
+import { Reauthentication } from './Reauthentication';
+import { identityRequest } from './client';
+type Version = {
+  id: string;
+  version: number;
+  config: SMTPConfig;
+  enabled: boolean;
+  secretConfigured: boolean;
+};
+export function SMTPSettings() {
+  const [versions, setVersions] = useState<Version[]>([]),
+    [proof, setProof] = useState(''),
+    [message, setMessage] = useState(''),
+    [busy, setBusy] = useState(false),
+    [recipient, setRecipient] = useState('');
+  const [draft, setDraft] = useState<SMTPConfig>({
+    name: '学校邮件服务',
+    host: '',
+    port: 587,
+    tls: 'STARTTLS',
+    username: '',
+    fromName: '图衡',
+    fromEmail: '',
+    timeoutMs: 10000,
+    perMinute: 60,
+  });
+  useEffect(() => {
+    identityRequest('/api/settings/mail')
+      .then(setVersions)
+      .catch((e) => setMessage(e.message));
+  }, []);
+  async function act(data: object) {
+    setBusy(true);
+    setMessage('');
+    try {
+      const r = await identityRequest('/api/settings/mail', { ...data, proof }, 'STAFF');
+      setMessage(
+        r.status === 'SUBMITTED_TO_SMTP'
+          ? '已提交 SMTP，请实际检查收件箱。'
+          : r.status === 'CONNECTION_VERIFIED'
+            ? '连接与认证通过，尚未证明邮件已送达。'
+            : '已保存配置状态。',
+      );
+      setVersions(await identityRequest('/api/settings/mail'));
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="identity-panel">
+      <h2>邮件服务</h2>
+      <p>保存、测试连接、发送测试邮件和启用是独立操作。密码留空会保留原值。</p>
+      <Reauthentication onProof={setProof} />
+      <form
+        method="post"
+        className="identity-grid-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const f = new FormData(e.currentTarget);
+          void act({ action: 'SAVE', config: draft, password: f.get('password') });
+        }}
+      >
+        {(['name', 'host', 'username', 'fromName', 'fromEmail'] as const).map((key) => (
+          <label key={key}>
+            {
+              {
+                name: '配置名称',
+                host: 'SMTP 主机',
+                username: '认证用户名',
+                fromName: '发件名称',
+                fromEmail: '发件邮箱',
+              }[key]
+            }
+            <input
+              value={draft[key]}
+              required={key !== 'username'}
+              type={key === 'fromEmail' ? 'email' : 'text'}
+              onChange={(e) => setDraft((v) => ({ ...v, [key]: e.target.value }))}
+            />
+          </label>
+        ))}
+        <label>
+          端口
+          <input
+            type="number"
+            min={1}
+            max={65535}
+            value={draft.port}
+            onChange={(e) => setDraft((v) => ({ ...v, port: Number(e.target.value) }))}
+          />
+        </label>
+        <label>
+          传输安全
+          <select
+            value={draft.tls}
+            onChange={(e) => setDraft((v) => ({ ...v, tls: e.target.value as SMTPConfig['tls'] }))}
+          >
+            <option value="STARTTLS">STARTTLS</option>
+            <option value="TLS">TLS</option>
+            <option value="LOCAL_TEST">仅部署白名单中的本地测试</option>
+          </select>
+        </label>
+        <label>
+          密码 / 授权码
+          <input name="password" type="password" autoComplete="new-password" />
+        </label>
+        <button className="button" disabled={busy || !proof}>
+          保存为新版本
+        </button>
+      </form>
+      <p role="status">{message}</p>
+      <label>
+        测试收件邮箱
+        <input type="email" value={recipient} onChange={(e) => setRecipient(e.target.value)} />
+      </label>
+      <div className="identity-list">
+        {versions.map((v) => (
+          <article key={v.id}>
+            <h3>
+              {v.config.name} · v{v.version}
+            </h3>
+            <p>
+              {v.config.host}:{v.config.port} · {v.enabled ? '启用' : '停用'} ·{' '}
+              {v.secretConfigured ? '凭据已配置' : '未配置凭据'}
+            </p>
+            <div className="identity-inline">
+              <button onClick={() => setDraft(v.config)}>载入此版本编辑</button>
+              <button disabled={!proof || busy} onClick={() => act({ action: 'VERIFY', id: v.id })}>
+                测试连接
+              </button>
+              <button
+                disabled={!proof || busy || !recipient}
+                onClick={() => act({ action: 'TEST', id: v.id, recipient })}
+              >
+                发送测试邮件
+              </button>
+              <button
+                disabled={!proof || busy}
+                onClick={() => act({ action: v.enabled ? 'DISABLE' : 'ENABLE', id: v.id })}
+              >
+                {v.enabled ? '停用' : '启用'}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}

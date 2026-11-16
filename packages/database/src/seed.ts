@@ -1,6 +1,13 @@
 import { hash } from 'bcryptjs';
 import { prisma } from './index';
 import { ensureBucket } from '../../infrastructure/src/storage';
+if (
+  process.env.SEED_TEST_ACCOUNTS !== '1' ||
+  !new URL(process.env.DATABASE_URL!).pathname.endsWith('_test')
+)
+  throw new Error(
+    'Demo accounts are restricted to an explicitly selected test database. Use identity:bootstrap for installation.',
+  );
 const password = process.env.SEED_PASSWORD;
 if (!password || password.length < 12) throw new Error('Set SEED_PASSWORD, at least 12 characters');
 for (const [id, role, name] of [
@@ -10,13 +17,20 @@ for (const [id, role, name] of [
   ['admin', 'ADMIN', '平台管理员'],
 ] as const) {
   await prisma.user.upsert({
-    where: { email: `${id}@tuheng.local` },
+    where: { id },
     create: {
       id,
       email: `${id}@tuheng.local`,
       name,
       passwordHash: await hash(password, 12),
       roles: [role],
+      kind: role === 'ADMIN' ? 'SITE_ADMIN' : role,
+      realm: role === 'STUDENT' ? 'STUDENT' : 'STAFF',
+      loginId: role === 'ADMIN' ? 'admin' : role === 'TEACHER' ? 'T000001' : null,
+      emailNormalized: `${id}@tuheng.local`,
+      emailVerifiedAt: new Date(),
+      mustChangePassword: false,
+      installationComplete: role === 'ADMIN',
     },
     update: {},
   });
@@ -54,17 +68,6 @@ for (const [id, title, chapter] of [
   ['drawing', '图线表达与作图规范', '制图基础'],
 ])
   await prisma.knowledgePoint.upsert({ where: { id }, create: { id, title, chapter }, update: {} });
-if (!(await prisma.modelConfigurationVersion.count()))
-  await prisma.modelConfigurationVersion.create({
-    data: {
-      provider: 'openai-compatible-vision',
-      baseUrl: process.env.AI_BASE_URL ?? 'https://api.openai.com/v1',
-      model: process.env.AI_MODEL ?? '',
-      outputMode: process.env.AI_OUTPUT_MODE ?? 'json_object',
-      timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 60000),
-      concurrency: Number(process.env.AI_CONCURRENCY ?? 2),
-    },
-  });
 await ensureBucket();
 console.log(
   'Seed ready: explicitly marked demo course, accounts and knowledge points. No grades fabricated.',

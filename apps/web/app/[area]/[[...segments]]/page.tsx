@@ -36,9 +36,11 @@ export default async function Workspace({
   if (!['student', 'teacher', 'admin'].includes(area)) notFound();
   let a;
   try {
-    a = await actor();
-  } catch {
-    redirect('/login');
+    a = await actor(area === 'student' ? 'STUDENT' : 'STAFF', true);
+    if (a.onboarding) redirect(`/onboarding/${area === 'student' ? 'student' : 'staff'}`);
+  } catch (e) {
+    if (e instanceof Error && e.message === 'NEXT_REDIRECT') throw e;
+    redirect(`/login/${area === 'student' ? 'student' : 'staff'}`);
   }
   const section = segments[0];
   let view: React.ReactNode;

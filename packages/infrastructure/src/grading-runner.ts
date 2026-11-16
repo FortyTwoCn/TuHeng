@@ -39,6 +39,7 @@ export async function executeGradingRun(
     data: { status: 'RUNNING', attempts: { increment: 1 }, errorCode: null },
   });
   try {
+    if (!run.config) throw new ProviderError('BLOCKED_CONFIG', false);
     const apiKey = process.env[run.config.keyEnv] ?? '';
     if (!options.provider && (!apiKey || !run.config.model))
       throw new ProviderError('BLOCKED_CONFIG', false);
