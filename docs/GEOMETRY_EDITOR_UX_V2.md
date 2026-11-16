@@ -205,6 +205,7 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 实际执行 `npm run typecheck`、`npm run lint`、`npm run build` 均通过；`npm test` 8 文件 155 项通过；`npm run test:integration` 2 文件 16 项通过；`npm run test:e2e` 6 文件 60 项通过（1.9 分钟）。生产浏览器回归继续使用隔离数据库/桶/队列，包含原图片作答和教学提交/复核；两项新增竖向 E2E 也已在开发模式通过。环境沿用 Windows / Node 26.13.0 / Chrome 157；真实触控/手写笔硬件未实测。
 
 证据：[桌面拟合结果](images/pen-repair/vertical-drift-1366.png)、[手机拟合结果](images/pen-repair/vertical-drift-390.png)、[桌面 JSON](geometry-examples/pen-repair/vertical-drift-1366.json)、[手机 JSON](geometry-examples/pen-repair/vertical-drift-390.json)。两份 JSON 均通过 Schema，保存 153 个实际浏览器采样点、2 个端点和 1 个 segment；以松手后的实体、历史和引用断言为验收，截图仅辅助展示。无契约或数据库迁移，无历史回填。
+
 ## 按落笔位置自动识别投影面（2026-11-15）
 
 用户要求删除手动“框架 V/H/W”入口。基于 `26bdaa7` 新建 `codex/automatic-projection-frame` 开发分支；开始时工作区干净。先用真实浏览器鼠标在左上、左下、右上各画一点，导出三个点全部为 `view-0`，新增回归实际失败；根因是新手势始终复制手动 session.active，未根据图纸位置计算归属。
@@ -220,10 +221,40 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 
 证据：[桌面](images/automatic-projection/1366.png)、[手机尺寸](images/automatic-projection/390.png)、[桌面 JSON](geometry-examples/automatic-projection/1366.json)、[手机 JSON](geometry-examples/automatic-projection/390.json)。两份 JSON 均通过 Schema，前三个点分别为 V/H/W，另有 H 面线段及其两个端点。测试同时检查所属 viewId、局部坐标、拖画前后同一镜头和撤销结果；截图仅辅助展示。
 
-| 点 | 投影面 | 局部坐标 mm | 展开图坐标 mm |
-| --- | --- | --- | --- |
-| P1 | V / view-0 | (30, 40) | (-30, 40) |
-| P2 | H / view-1 | (30, -20) | (-30, -20) |
-| P3 | W / view-2 | (20, 40) | (20, 40) |
+| 点  | 投影面     | 局部坐标 mm | 展开图坐标 mm |
+| --- | ---------- | ----------- | ------------- |
+| P1  | V / view-0 | (30, 40)    | (-30, 40)     |
+| P2  | H / view-1 | (30, -20)   | (-30, -20)    |
+| P3  | W / view-2 | (20, 40)    | (20, 40)      |
 
 无新增契约字段或数据库迁移；自动识别状态不进入正式 JSON，既有对象、历史快照和教师基准不按新规则重标归属。
+
+## 过点曲线与电子笔曲线（2026-11-16）
+
+本轮在已有编辑器、统一图纸和公共拟合流程上新增曲线；投影面依旧自动识别。桌面入口为「线工具 → 曲线」，手机为「绘图 → 曲线」。先选两个端点，再按路径顺序标记经过点；点任一端点后确认。电子笔平滑开放轨迹在松手时自动拟合，可吸附笔迹附近的直线/轴交点。
+
+| 问题 / 缺口                      | 根因与修改                                                                                                                                                          | 回归证据                                                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 无法按端点与经过点创建曲线       | 旧契约只有基本图元和原始 polyline；contracts 增加 2.2 curve / 有序 pointIds。core/curves.ts 共用弦长 Hermite 插值、渲染和导出，editor/curve-session.ts 管理分步草稿 | 修改前新增的 5 项纯几何用例失败；修复后全量单元通过，四种编辑器均校验曲线往返和经过点                                             |
+| 点击轴交点不会得到真实交点       | snapping.ts 原交点枚举仅涵盖实体线；现在用 ReferenceResolver 的实际图纸几何计算实体、基准射线和新轴交点                                                             | 2/4/8 CSS px/mm 下精确落点；隐藏层与轴开关生效；实际浏览器在约 2px 偏移处吸附                                                     |
+| 交点只保留一个轴/线引用          | writeReferenceRelation 原本每次替换同类 POSITION 观察；一组交点现在只在写第一条时替换，再保留第二条引用                                                             | 先出现“应有 2 条但只有 1 条”失败，再验证两条均 SATISFIED；导出 JSON 保留两条参考                                                  |
+| 电子笔平滑非圆曲线始终保留原线迹 | pen.ts 在直线/圆/弧判定之后识别开放平滑曲线；curve-snapping.ts 定位经过点，仍保留 samples/sampling                                                                  | 实际 mouse down/move/up 绘制 S 形并穿过 (34,26) 交点；取消吸附、恢复原笔迹、撤销/重做分别验证；原圆、椭圆、竖线和短辅助线回归通过 |
+| 曲线无法复用编辑能力             | pointReferences、topology、copy、marquee、EntityShape、SVG 与自然语言补齐 curve 分支                                                                                | 未松鼠标即改变实际曲线路径；蓝色端点不变；复制映射点 ID、合点改写引用、删除经过点处理依赖、拒绝退化曲线                           |
+| 新实体需要进入既有业务           | domain 提交选择 geometry-review/1.4.0；contracts 校验版本，grading-core 解释实际插值及参考关系                                                                      | 隔离集成同时覆盖 2.1/2.2 草稿、冻结提交、旧题版本、伪造请求拒绝、原 Worker 证据、教师正式成绩不变                                 |
+
+### 实际验证
+
+- `npm run typecheck`、`npm run lint`、`npm run build` 通过。
+- `npm test`：171 项通过，含新曲线流程、四种框架、缩放/反向/旋转笔迹、版本往返和真实点引用。
+- `npm run test:integration`：17 项通过。使用隔离的 tuheng_test、tuheng-test-private 和测试队列；真实 PostgreSQL/Redis/本地对象存储，模型仅为既有自动化测试替身。
+- `npm run test:e2e -- --reporter=list`：生产构建下 71 项通过（2.4 分钟）。Windows / Chrome 157 / Node 26.13；新增 4 项位于 tests/e2e/geometry-curves.spec.ts。桌面 1366 与手机 390 CSS px 使用真实浏览器 mouse 路径，包含 pointerup 前预览断言、JSON、历史及重载；另有浏览器 touchscreen.tap 模拟触控、取消草稿及从第一个端点完成。
+- 全量回归保留旧框选、轴参考、实时尺寸、吸附开/关、教师题干保护、两实例隔离、1024/768/390/360 布局、图片作答与教师复核流程。截图只作为交互和 JSON 断言的补充。
+- 初次浏览器运行因本地项目 PostgreSQL 未运行而无法登录；恢复已有服务后使用隔离库验证，没有改写实际账户密码或重置数据库。
+
+### 证据与范围
+
+[桌面曲线](images/curves/desktop.png) · [手机曲线](images/curves/mobile.png) · [手机标点预览](images/curves/preview-mobile.png) · [电子笔拟合](images/curves/pen.png)
+
+[普通模式完整 JSON](geometry-examples/curves/manual.json) 包含只读端点、辅助线交点及轴交点的两条参考；[电子笔完整 JSON](geometry-examples/curves/pen.json) 包含拟合节点、交点引用及原始轨迹。Schema 与插值公式见 [几何契约](GEOMETRY_EDITOR_SCHEMA.md#22-插值曲线2026-11-16)，步骤和取消语义见 [交互规范](GEOMETRY_EDITOR_INTERACTION.md#曲线作图2026-11-16)。
+
+真实手机/平板/手写笔硬件、系统软键盘和低端设备尚未实测；触控是浏览器模拟，电子笔曲线轨迹是合成轨迹经真实鼠标输入，不能称为 Pencil/手写笔硬件验收。本轮自动曲线限定平滑开放轨迹，尖角、折返、自交或闭合非圆保持原笔迹；未新增曲线求交、闭合样条或复杂求解器。真实 AI 评分准确性未验证。无数据库 DDL、历史回填或生产部署。

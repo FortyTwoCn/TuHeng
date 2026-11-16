@@ -137,6 +137,15 @@ export const GeometryEntity = z.discriminatedUnion('kind', [
   z
     .object({
       ...base,
+      kind: z.literal('curve'),
+      pointIds: z.array(id).min(3).max(128),
+      interpolation: z.literal('CUBIC_HERMITE'),
+      samples: stroke.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
       kind: z.literal('polyline'),
       points: z.array(Vec2).min(2).max(4096),
       samples: stroke.optional(),
@@ -230,6 +239,7 @@ export const GeometryDocument = z
       'tuheng.geometry/1.0.0',
       'tuheng.geometry/2.0.0',
       'tuheng.geometry/2.1.0',
+      'tuheng.geometry/2.2.0',
     ]),
     editorType: EditorType,
     units: z.literal('mm'),
@@ -308,7 +318,10 @@ export const GeometryDocument = z
     if (new Set(all.map((e) => e.id)).size !== all.length) fail('对象或关系 ID 重复');
     if (new Set(doc.layers.map((l) => l.role)).size !== 3) fail('图层角色必须唯一');
     const orthographic = ['VHW_PROJECTION', 'THREE_VIEW'].includes(doc.editorType);
-    if (doc.referenceRelations && doc.schemaVersion !== 'tuheng.geometry/2.1.0')
+    if (
+      doc.referenceRelations &&
+      !['tuheng.geometry/2.1.0', 'tuheng.geometry/2.2.0'].includes(doc.schemaVersion)
+    )
       fail('类型化参考关系需要 2.1 文档');
     if (doc.views.length !== (orthographic ? 3 + (doc.auxiliarySystems?.length ?? 0) : 1))
       fail('视图数量与编辑器类型不一致');
@@ -441,13 +454,29 @@ export const GeometryDocument = z
           ? [e.startPoint, e.endPoint]
           : e.kind === 'circle' || e.kind === 'arc'
             ? [e.center]
-            : [];
+            : e.kind === 'curve'
+              ? [...e.pointIds]
+              : [];
       for (const ref of refs) {
         const point = entities.get(ref);
         if (point?.kind !== 'point' || point.viewId !== e.viewId)
           fail('端点或圆心必须引用同视图的点');
         if (role === 'PROBLEM_STEM' && point?.layerId !== e.layerId)
           fail('题干不能引用可编辑答案点');
+      }
+      if (e.kind === 'curve') {
+        if (doc.schemaVersion !== 'tuheng.geometry/2.2.0') fail('插值曲线需要 2.2 文档');
+        if (new Set(e.pointIds).size !== e.pointIds.length) fail('曲线经过点引用不能重复');
+        for (let i = 1; i < e.pointIds.length; i++) {
+          const a = entities.get(e.pointIds[i - 1]),
+            b = entities.get(e.pointIds[i]);
+          if (
+            a?.kind === 'point' &&
+            b?.kind === 'point' &&
+            Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y) < 1e-8
+          )
+            fail('相邻曲线经过点不能重合');
+        }
       }
       if (e.kind === 'segment') {
         if (e.lineStyle === 'CONSTRUCTION') fail('辅助直线必须使用无限线类型');
@@ -559,7 +588,8 @@ export const GeometryDocument = z
             (e) =>
               e.id !== target.id &&
               ((e.kind === 'segment' && [e.startPoint, e.endPoint].includes(target.endPoint)) ||
-                ((e.kind === 'circle' || e.kind === 'arc') && e.center === target.endPoint)),
+                ((e.kind === 'circle' || e.kind === 'arc') && e.center === target.endPoint) ||
+                (e.kind === 'curve' && e.pointIds.includes(target.endPoint))),
           )
         )
           fail('方向绑定会影响共享端点，请先解除连接');
@@ -639,6 +669,7 @@ export const GeometryEvidence = z
       'tuheng.geometry/1.0.0',
       'tuheng.geometry/2.0.0',
       'tuheng.geometry/2.1.0',
+      'tuheng.geometry/2.2.0',
     ]),
     editorType: EditorType,
     problemDocument: GeometryDocument,

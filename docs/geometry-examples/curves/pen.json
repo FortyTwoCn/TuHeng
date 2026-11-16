@@ -1,0 +1,1189 @@
+{
+  "schemaVersion": "tuheng.geometry/2.2.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["x", "z"],
+      "signs": [1, 1]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["x", "y"],
+      "signs": [1, -1]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["y", "z"],
+      "signs": [1, 1]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "535e6b54-e1f1-4288-830a-ae8bf50257dd",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "scope": "SHEET",
+      "kind": "line",
+      "anchor": {
+        "x": 34,
+        "y": 5
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "referenceEntityId": null
+    },
+    {
+      "id": "08e3a37c-16ec-418f-86ad-ebda3d9454be",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "scope": "SHEET",
+      "kind": "line",
+      "anchor": {
+        "x": 10,
+        "y": 26
+      },
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "referenceEntityId": null
+    },
+    {
+      "id": "217ed9cc-ebdb-48ba-939e-0fc3aa856236",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 25.00000057237075
+      },
+      "name": "P1",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "82875a6d-f6f4-4d98-a426-efaff649374f",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 11.606816083118689,
+        "y": 26.87704513887371
+      },
+      "name": "P2",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "6c5fac0c-ea7a-4d53-8db1-d0608d2105d7",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 13.254955707970163,
+        "y": 28.71773677437671
+      },
+      "name": "P3",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "a0260d18-60ae-47dc-9b02-7ac017f9ed7c",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 14.996455010313257,
+        "y": 30.46983476548117
+      },
+      "name": "P4",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "8d8b7d03-0c0f-466b-8140-caac45f5723a",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 16.891225671112334,
+        "y": 32.05273257574133
+      },
+      "name": "P5",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "e2f34235-f83c-4e3c-9384-47df6351698f",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 19.011997823585364,
+        "y": 33.311115220240914
+      },
+      "name": "P6",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "4c175df8-4ad7-4622-8c8d-49c55057f7a4",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 21.38410894053474,
+        "y": 33.952508198377316
+      },
+      "name": "P7",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "4cdae94b-b615-401b-a5d6-65a120cae31a",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 23.82978297457017,
+        "y": 33.73597251118145
+      },
+      "name": "P8",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "7d2f4d49-3c06-4258-945d-fa1fc15464f7",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 26.07909647532995,
+        "y": 32.734025997491464
+      },
+      "name": "P9",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "85cf2f64-7480-4360-bb86-dc42079e92c0",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 28.08242466381442,
+        "y": 31.29288153436809
+      },
+      "name": "P10",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "f25abbfa-a141-4de7-99ce-485fb8fae14f",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 29.88822905616255,
+        "y": 29.60767908242801
+      },
+      "name": "P11",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "2697c6a0-a499-4fe1-9de8-d07ae1a090ab",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 31.577173846460816,
+        "y": 27.80462268591287
+      },
+      "name": "P12",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "0bc3167d-1a6b-40de-be27-4f53cdcdb60c",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 34,
+        "y": 26
+      },
+      "name": "P13",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "94c0426f-4837-4463-858c-211bf62c8e29",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 34.80081482777538,
+        "y": 24.059253723356626
+      },
+      "name": "P14",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "66ef58f3-032a-4af1-91c5-d58b37a857a6",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 36.42282354321759,
+        "y": 22.195375182265767
+      },
+      "name": "P15",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "9e701ffa-2625-447c-8947-c39ec342b66d",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 38.11177099390267,
+        "y": 20.392320957558358
+      },
+      "name": "P16",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "ccc80a8a-cb4b-4b38-9686-725702d7f616",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 39.9175779742128,
+        "y": 18.707121506479492
+      },
+      "name": "P17",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "0d81cbb3-4c2d-4dc2-9dfe-b044c888104a",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 41.92090302496297,
+        "y": 17.265973658666972
+      },
+      "name": "P18",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "d4a27e3b-53d3-46b3-85a0-bc85778566b8",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 44.17021599129038,
+        "y": 16.26402705642487
+      },
+      "name": "P19",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "957c2621-8a70-4092-a9dc-f8fbdf999f2f",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 46.61589051752867,
+        "y": 16.047492398963218
+      },
+      "name": "P20",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "9db02438-c4cf-492e-a3a9-bf4e6d9d14f3",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 48.988003090947224,
+        "y": 16.688880882932068
+      },
+      "name": "P21",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "f1f3f7b5-ab17-4f77-97ec-4147c5692617",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 51.108772838888235,
+        "y": 17.947267910537104
+      },
+      "name": "P22",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "1e0eafef-3fa8-4308-81a4-5847840c6dbb",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53.003543357356875,
+        "y": 19.530165751569122
+      },
+      "name": "P23",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "6daacb1b-da67-4d64-beae-e17782f66c39",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 54.74504213827028,
+        "y": 21.282263999933534
+      },
+      "name": "P24",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "6893570b-9554-4405-84eb-04afddfbe41d",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 56.39318554995849,
+        "y": 23.122952309445957
+      },
+      "name": "P25",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "569ad527-0dd1-4ad3-a751-cb398260a80c",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 57.999997312352306,
+        "y": 25.00000057237075
+      },
+      "name": "P26",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "72ab053a-954c-4d1c-b4b8-1d3a4947d264",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "sampling": {
+        "cssPixelsPerMm": 4.051692553728651,
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "kind": "curve",
+      "pointIds": [
+        "217ed9cc-ebdb-48ba-939e-0fc3aa856236",
+        "82875a6d-f6f4-4d98-a426-efaff649374f",
+        "6c5fac0c-ea7a-4d53-8db1-d0608d2105d7",
+        "a0260d18-60ae-47dc-9b02-7ac017f9ed7c",
+        "8d8b7d03-0c0f-466b-8140-caac45f5723a",
+        "e2f34235-f83c-4e3c-9384-47df6351698f",
+        "4c175df8-4ad7-4622-8c8d-49c55057f7a4",
+        "4cdae94b-b615-401b-a5d6-65a120cae31a",
+        "7d2f4d49-3c06-4258-945d-fa1fc15464f7",
+        "85cf2f64-7480-4360-bb86-dc42079e92c0",
+        "f25abbfa-a141-4de7-99ce-485fb8fae14f",
+        "2697c6a0-a499-4fe1-9de8-d07ae1a090ab",
+        "0bc3167d-1a6b-40de-be27-4f53cdcdb60c",
+        "94c0426f-4837-4463-858c-211bf62c8e29",
+        "66ef58f3-032a-4af1-91c5-d58b37a857a6",
+        "9e701ffa-2625-447c-8947-c39ec342b66d",
+        "ccc80a8a-cb4b-4b38-9686-725702d7f616",
+        "0d81cbb3-4c2d-4dc2-9dfe-b044c888104a",
+        "d4a27e3b-53d3-46b3-85a0-bc85778566b8",
+        "957c2621-8a70-4092-a9dc-f8fbdf999f2f",
+        "9db02438-c4cf-492e-a3a9-bf4e6d9d14f3",
+        "f1f3f7b5-ab17-4f77-97ec-4147c5692617",
+        "1e0eafef-3fa8-4308-81a4-5847840c6dbb",
+        "6daacb1b-da67-4d64-beae-e17782f66c39",
+        "6893570b-9554-4405-84eb-04afddfbe41d",
+        "569ad527-0dd1-4ad3-a751-cb398260a80c"
+      ],
+      "interpolation": "CUBIC_HERMITE",
+      "samples": [
+        {
+          "x": 10,
+          "y": 25.00000057237075,
+          "pressure": 0.5
+        },
+        {
+          "x": 10.399997404150213,
+          "y": 25.47102527138665,
+          "pressure": 0.5
+        },
+        {
+          "x": 10.799994808300426,
+          "y": 25.940754456646786,
+          "pressure": 0.5
+        },
+        {
+          "x": 11.200007276564094,
+          "y": 26.40790767850882,
+          "pressure": 0.5
+        },
+        {
+          "x": 11.600004680714306,
+          "y": 26.87120448733043,
+          "pressure": 0.5
+        },
+        {
+          "x": 12.000002084864548,
+          "y": 27.329371965525993,
+          "pressure": 0.5
+        },
+        {
+          "x": 12.39999948901476,
+          "y": 27.781152259623354,
+          "pressure": 0.5
+        },
+        {
+          "x": 12.799996893165002,
+          "y": 28.2253101123205,
+          "pressure": 0.5
+        },
+        {
+          "x": 13.199994297315214,
+          "y": 28.66063286248557,
+          "pressure": 0.5
+        },
+        {
+          "x": 13.600006765578883,
+          "y": 29.085915381043435,
+          "pressure": 0.5
+        },
+        {
+          "x": 14.000004169729095,
+          "y": 29.499997731259285,
+          "pressure": 0.5
+        },
+        {
+          "x": 14.400001573879308,
+          "y": 29.90175010462518,
+          "pressure": 0.5
+        },
+        {
+          "x": 14.79999897802955,
+          "y": 30.29006528880332,
+          "pressure": 0.5
+        },
+        {
+          "x": 15.199996382179762,
+          "y": 30.66388126379627,
+          "pressure": 0.5
+        },
+        {
+          "x": 15.599993786330003,
+          "y": 31.022173669890165,
+          "pressure": 0.5
+        },
+        {
+          "x": 16.000006254593643,
+          "y": 31.363963339711432,
+          "pressure": 0.5
+        },
+        {
+          "x": 16.400003658743884,
+          "y": 31.68830123411344,
+          "pressure": 0.5
+        },
+        {
+          "x": 16.800001062894097,
+          "y": 31.9943136345167,
+          "pressure": 0.5
+        },
+        {
+          "x": 17.199998467044338,
+          "y": 32.28114941851189,
+          "pressure": 0.5
+        },
+        {
+          "x": 17.59999587119455,
+          "y": 32.548032784256904,
+          "pressure": 0.5
+        },
+        {
+          "x": 17.999993275344764,
+          "y": 32.79422559019322,
+          "pressure": 0.5
+        },
+        {
+          "x": 18.400005743608432,
+          "y": 33.0190574832728,
+          "pressure": 0.5
+        },
+        {
+          "x": 18.800003147758645,
+          "y": 33.221910834844635,
+          "pressure": 0.5
+        },
+        {
+          "x": 19.200000551908886,
+          "y": 33.402220740654755,
+          "pressure": 0.5
+        },
+        {
+          "x": 19.5999979560591,
+          "y": 33.55950514907312,
+          "pressure": 0.5
+        },
+        {
+          "x": 19.99999536020934,
+          "y": 33.693334732866674,
+          "pressure": 0.5
+        },
+        {
+          "x": 20.399992764359553,
+          "y": 33.80332535714277,
+          "pressure": 0.5
+        },
+        {
+          "x": 20.80000523262322,
+          "y": 33.889198335802746,
+          "pressure": 0.5
+        },
+        {
+          "x": 21.200002636773434,
+          "y": 33.95069757891814,
+          "pressure": 0.5
+        },
+        {
+          "x": 21.600000040923675,
+          "y": 33.98766491329786,
+          "pressure": 0.5
+        },
+        {
+          "x": 21.999997445073888,
+          "y": 34.000002422204545,
+          "pressure": 0.5
+        },
+        {
+          "x": 22.3999948492241,
+          "y": 33.98766491329786,
+          "pressure": 0.5
+        },
+        {
+          "x": 22.80000731748777,
+          "y": 33.95069757891814,
+          "pressure": 0.5
+        },
+        {
+          "x": 23.20000472163798,
+          "y": 33.889198335802746,
+          "pressure": 0.5
+        },
+        {
+          "x": 23.600002125788222,
+          "y": 33.80332535714277,
+          "pressure": 0.5
+        },
+        {
+          "x": 23.999999529938435,
+          "y": 33.693334732866674,
+          "pressure": 0.5
+        },
+        {
+          "x": 24.399996934088676,
+          "y": 33.55950514907312,
+          "pressure": 0.5
+        },
+        {
+          "x": 24.79999433823889,
+          "y": 33.402220740654755,
+          "pressure": 0.5
+        },
+        {
+          "x": 25.200006806502557,
+          "y": 33.221910834844635,
+          "pressure": 0.5
+        },
+        {
+          "x": 25.60000421065277,
+          "y": 33.0190574832728,
+          "pressure": 0.5
+        },
+        {
+          "x": 26.00000161480301,
+          "y": 32.79422559019322,
+          "pressure": 0.5
+        },
+        {
+          "x": 26.399999018953224,
+          "y": 32.548032784256904,
+          "pressure": 0.5
+        },
+        {
+          "x": 26.799996423103437,
+          "y": 32.28114941851189,
+          "pressure": 0.5
+        },
+        {
+          "x": 27.199993827253678,
+          "y": 31.9943136345167,
+          "pressure": 0.5
+        },
+        {
+          "x": 27.600006295517318,
+          "y": 31.68830123411344,
+          "pressure": 0.5
+        },
+        {
+          "x": 28.00000369966756,
+          "y": 31.363963339711432,
+          "pressure": 0.5
+        },
+        {
+          "x": 28.40000110381777,
+          "y": 31.022173669890165,
+          "pressure": 0.5
+        },
+        {
+          "x": 28.799998507968013,
+          "y": 30.66388126379627,
+          "pressure": 0.5
+        },
+        {
+          "x": 29.199995912118226,
+          "y": 30.29006528880332,
+          "pressure": 0.5
+        },
+        {
+          "x": 29.59999331626844,
+          "y": 29.90175010462518,
+          "pressure": 0.5
+        },
+        {
+          "x": 30.000005784532107,
+          "y": 29.499997731259285,
+          "pressure": 0.5
+        },
+        {
+          "x": 30.400003188682348,
+          "y": 29.085915381043435,
+          "pressure": 0.5
+        },
+        {
+          "x": 30.80000059283256,
+          "y": 28.66063286248557,
+          "pressure": 0.5
+        },
+        {
+          "x": 31.199997996982773,
+          "y": 28.2253101123205,
+          "pressure": 0.5
+        },
+        {
+          "x": 31.599995401133015,
+          "y": 27.781152259623354,
+          "pressure": 0.5
+        },
+        {
+          "x": 31.999992805283227,
+          "y": 27.329371965525993,
+          "pressure": 0.5
+        },
+        {
+          "x": 32.400005273546896,
+          "y": 26.87120448733043,
+          "pressure": 0.5
+        },
+        {
+          "x": 32.80000267769711,
+          "y": 26.40790767850882,
+          "pressure": 0.5
+        },
+        {
+          "x": 33.20000008184735,
+          "y": 25.940754456646786,
+          "pressure": 0.5
+        },
+        {
+          "x": 33.59999748599756,
+          "y": 25.47102527138665,
+          "pressure": 0.5
+        },
+        {
+          "x": 33.999994890147775,
+          "y": 25.00000057237075,
+          "pressure": 0.5
+        },
+        {
+          "x": 34.40000735841144,
+          "y": 24.528975873354852,
+          "pressure": 0.5
+        },
+        {
+          "x": 34.800004762561684,
+          "y": 24.059246688094717,
+          "pressure": 0.5
+        },
+        {
+          "x": 35.2000021667119,
+          "y": 23.592093466232683,
+          "pressure": 0.5
+        },
+        {
+          "x": 35.59999957086211,
+          "y": 23.128796657411087,
+          "pressure": 0.5
+        },
+        {
+          "x": 35.99999697501235,
+          "y": 22.67062917921551,
+          "pressure": 0.5
+        },
+        {
+          "x": 36.399994379162564,
+          "y": 22.21884888511815,
+          "pressure": 0.5
+        },
+        {
+          "x": 36.80000684742623,
+          "y": 21.774691032421003,
+          "pressure": 0.5
+        },
+        {
+          "x": 37.200004251576445,
+          "y": 21.339368282255933,
+          "pressure": 0.5
+        },
+        {
+          "x": 37.600001655726686,
+          "y": 20.91408576369807,
+          "pressure": 0.5
+        },
+        {
+          "x": 37.9999990598769,
+          "y": 20.50000341348222,
+          "pressure": 0.5
+        },
+        {
+          "x": 38.39999646402711,
+          "y": 20.098251040116338,
+          "pressure": 0.5
+        },
+        {
+          "x": 38.79999386817735,
+          "y": 19.709935855938184,
+          "pressure": 0.5
+        },
+        {
+          "x": 39.20000633644102,
+          "y": 19.336119880945233,
+          "pressure": 0.5
+        },
+        {
+          "x": 39.600003740591234,
+          "y": 18.977827474851352,
+          "pressure": 0.5
+        },
+        {
+          "x": 40.00000114474146,
+          "y": 18.63603780503007,
+          "pressure": 0.5
+        },
+        {
+          "x": 40.39999854889167,
+          "y": 18.311699910628064,
+          "pressure": 0.5
+        },
+        {
+          "x": 40.7999959530419,
+          "y": 18.005687510224817,
+          "pressure": 0.5
+        },
+        {
+          "x": 41.19999335719213,
+          "y": 17.718844194172902,
+          "pressure": 0.5
+        },
+        {
+          "x": 41.59999829339907,
+          "y": 17.4519683604846,
+          "pressure": 0.5
+        },
+        {
+          "x": 42.00000322960601,
+          "y": 17.205768022491554,
+          "pressure": 0.5
+        },
+        {
+          "x": 42.400000633756235,
+          "y": 16.9809436614687,
+          "pressure": 0.5
+        },
+        {
+          "x": 42.79999803790646,
+          "y": 16.778090309896868,
+          "pressure": 0.5
+        },
+        {
+          "x": 43.2000029741134,
+          "y": 16.597772872030035,
+          "pressure": 0.5
+        },
+        {
+          "x": 43.60000037826363,
+          "y": 16.440488463611672,
+          "pressure": 0.5
+        },
+        {
+          "x": 43.99999778241384,
+          "y": 16.30666641187483,
+          "pressure": 0.5
+        },
+        {
+          "x": 44.4000027186208,
+          "y": 16.196668255542022,
+          "pressure": 0.5
+        },
+        {
+          "x": 44.80000012277101,
+          "y": 16.11080280893877,
+          "pressure": 0.5
+        },
+        {
+          "x": 45.19999752692124,
+          "y": 16.049303565823365,
+          "pressure": 0.5
+        },
+        {
+          "x": 45.60000246312818,
+          "y": 16.012336231443655,
+          "pressure": 0.5
+        },
+        {
+          "x": 45.999999867278405,
+          "y": 15.999998722536972,
+          "pressure": 0.5
+        },
+        {
+          "x": 46.39999727142863,
+          "y": 16.012336231443655,
+          "pressure": 0.5
+        },
+        {
+          "x": 46.80000220763557,
+          "y": 16.049303565823365,
+          "pressure": 0.5
+        },
+        {
+          "x": 47.1999996117858,
+          "y": 16.11080280893877,
+          "pressure": 0.5
+        },
+        {
+          "x": 47.59999701593601,
+          "y": 16.196668255542022,
+          "pressure": 0.5
+        },
+        {
+          "x": 48.000001952142966,
+          "y": 16.30666641187483,
+          "pressure": 0.5
+        },
+        {
+          "x": 48.39999935629318,
+          "y": 16.440488463611672,
+          "pressure": 0.5
+        },
+        {
+          "x": 48.799996760443406,
+          "y": 16.597772872030035,
+          "pressure": 0.5
+        },
+        {
+          "x": 49.20000169665035,
+          "y": 16.778090309896868,
+          "pressure": 0.5
+        },
+        {
+          "x": 49.599999100800574,
+          "y": 16.9809436614687,
+          "pressure": 0.5
+        },
+        {
+          "x": 49.9999965049508,
+          "y": 17.205768022491554,
+          "pressure": 0.5
+        },
+        {
+          "x": 50.40000144115774,
+          "y": 17.4519683604846,
+          "pressure": 0.5
+        },
+        {
+          "x": 50.79999884530797,
+          "y": 17.718844194172902,
+          "pressure": 0.5
+        },
+        {
+          "x": 51.19999624945818,
+          "y": 18.005687510224817,
+          "pressure": 0.5
+        },
+        {
+          "x": 51.600001185665135,
+          "y": 18.311699910628064,
+          "pressure": 0.5
+        },
+        {
+          "x": 51.99999858981535,
+          "y": 18.63603780503007,
+          "pressure": 0.5
+        },
+        {
+          "x": 52.4000035260223,
+          "y": 18.977827474851352,
+          "pressure": 0.5
+        },
+        {
+          "x": 52.800000930172516,
+          "y": 19.336119880945233,
+          "pressure": 0.5
+        },
+        {
+          "x": 53.19999833432274,
+          "y": 19.709935855938184,
+          "pressure": 0.5
+        },
+        {
+          "x": 53.60000327052968,
+          "y": 20.098251040116338,
+          "pressure": 0.5
+        },
+        {
+          "x": 54.00000067467991,
+          "y": 20.50000341348222,
+          "pressure": 0.5
+        },
+        {
+          "x": 54.39999807883014,
+          "y": 20.91408576369807,
+          "pressure": 0.5
+        },
+        {
+          "x": 54.80000301503708,
+          "y": 21.339368282255933,
+          "pressure": 0.5
+        },
+        {
+          "x": 55.200000419187305,
+          "y": 21.774691032421003,
+          "pressure": 0.5
+        },
+        {
+          "x": 55.59999782333752,
+          "y": 22.21884888511815,
+          "pressure": 0.5
+        },
+        {
+          "x": 56.00000275954447,
+          "y": 22.67062917921551,
+          "pressure": 0.5
+        },
+        {
+          "x": 56.400000163694685,
+          "y": 23.128796657411087,
+          "pressure": 0.5
+        },
+        {
+          "x": 56.79999756784491,
+          "y": 23.592093466232683,
+          "pressure": 0.5
+        },
+        {
+          "x": 57.20000250405185,
+          "y": 24.059246688094717,
+          "pressure": 0.5
+        },
+        {
+          "x": 57.59999990820208,
+          "y": 24.528975873354852,
+          "pressure": 0.5
+        },
+        {
+          "x": 57.999997312352306,
+          "y": 25.00000057237075,
+          "pressure": 0.5
+        }
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "b46d929c-f792-47d4-b37a-9bc4727e8524",
+      "kind": "INTERSECTION",
+      "entityIds": [
+        "0bc3167d-1a6b-40de-be27-4f53cdcdb60c",
+        "08e3a37c-16ec-418f-86ad-ebda3d9454be",
+        "535e6b54-e1f1-4288-830a-ae8bf50257dd"
+      ],
+      "source": "SNAP_CONFIRMED",
+      "status": "SATISFIED"
+    }
+  ],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

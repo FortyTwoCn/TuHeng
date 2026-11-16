@@ -1,4 +1,12 @@
 'use client';
+import { CurveControls } from './CurveControls';
+import {
+  curveClick,
+  curveCandidate,
+  orderedCurveMarks,
+  commitCurve,
+  type CurveDraft,
+} from './curve-session';
 import { primitivePreview, acceptPrimitive } from './primitive-preview';
 import { finishDrawing, rulerSamples } from './drawing-session';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -6,6 +14,9 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { Vec2, GeometryDocument } from '@tuheng/contracts';
 import {
   sub,
+  curvePath,
+  snapPenCurve,
+  intersectionCandidates,
   appendStrokeSample,
   distance,
   linkProjection,
@@ -113,6 +124,7 @@ export function Viewport(
     [previewDoc, setPreviewDoc] = useState<GeometryDocument | null>(null),
     [candidate, setCandidate] = useState<SnapCandidate | null>(null),
     [candidateView, setCandidateView] = useState(viewId);
+  const [curveDraft, setCurveDraft] = useState<CurveDraft | null>(null);
   const [operationView, setOperationView] = useState<string>(),
     [hoverView, setHoverView] = useState<string>();
   const [steps, setSteps] = useState<Vec2[]>([]),
@@ -152,6 +164,7 @@ export function Viewport(
     setCandidate(null);
     setMarquee(null);
     setSteps([]);
+    setCurveDraft(null);
     setOperationView(undefined);
     setReference(undefined);
     if (frame.current !== null) cancelAnimationFrame(frame.current);
@@ -185,7 +198,7 @@ export function Viewport(
         e.preventDefault();
       }
       if (e.key === 'Escape') {
-        if (!gesture.current && !axisDraft && steps.length === 0) return;
+        if (!gesture.current && !axisDraft && !curveDraft && steps.length === 0) return;
         e.preventDefault();
         e.stopPropagation();
         cancel();
@@ -206,7 +219,7 @@ export function Viewport(
       owner.removeEventListener('keyup', key as EventListener);
       window.removeEventListener('blur', blur);
     };
-  }, [cancel, axisDraft, steps]);
+  }, [cancel, axisDraft, curveDraft, steps]);
   const [previousRevision, setPreviousRevision] = useState(props.revision);
   if (previousRevision !== props.revision) {
     setPreviousRevision(props.revision);
@@ -214,6 +227,7 @@ export function Viewport(
     setConstructionPreview(null);
     setAxisDraft(null);
     setSteps([]);
+    setCurveDraft(null);
     setOperationView(undefined);
     setReference(undefined);
     setPreview([]);
@@ -225,6 +239,7 @@ export function Viewport(
     setPreviousTool(tool);
     setState('idle');
     setSteps([]);
+    setCurveDraft(null);
     setOperationView(undefined);
     setReference(undefined);
     setAxisDraft(null);
@@ -244,6 +259,7 @@ export function Viewport(
     props.commit(next);
     props.consumeSnap();
     setSteps([]);
+    setCurveDraft(null);
     setOperationView(undefined);
     setPreview([]);
     setPreviewDoc(null);
@@ -404,6 +420,7 @@ export function Viewport(
     const usesExisting =
       tool === 'select' ||
       tool === 'connect' ||
+      (tool === 'curve' && !curveDraft) ||
       (props.session.construction?.phase === 'position' &&
         (target?.kind === 'point' || target?.kind === 'endpoint'));
     return drawingViewAt(
@@ -518,6 +535,27 @@ export function Viewport(
             }
           })
         : hits[0];
+    if (g.tool === 'curve' && !readOnly) {
+      const draft = curveClick(
+        g.base,
+        curveDraft,
+        g.viewId,
+        sheetToLocal(g.base, g.viewId, p),
+        target?.id,
+        g.scale,
+        props.snapping && !props.skipSnap && !g.pausedSnap,
+        {
+          axes: props.axes && props.axesSnap,
+          hiddenLayers: props.hiddenLayers,
+          grid: props.gridSnap,
+          threshold: g.snapPixels,
+        },
+      );
+      setCurveDraft(draft);
+      setOperationView(draft.viewId);
+      setCandidate(null);
+      return;
+    }
     if (constructionClick(p, target, g.viewId)) return;
     if (axisDraft) {
       axisClick(p, target);
@@ -611,6 +649,20 @@ export function Viewport(
       return;
     }
     const raw = result.document;
+    if (g.tool === 'pen' && raw.entities.at(-1)?.kind === 'curve') {
+      const next =
+        props.snapping && !props.skipSnap && !g.pausedSnap
+          ? snapPenCurve(g.base, raw, role, g.scale, {
+              axes: props.axes && props.axesSnap,
+              hiddenLayers: props.hiddenLayers,
+              threshold: g.snapPixels,
+            })
+          : raw;
+      accept(next, raw);
+      if (result.rawStroke) setLastPen({ raw: result.rawStroke, next });
+      if (result.message) props.report(result.message);
+      return;
+    }
     let next = raw;
     const simple = ['point', 'segment', 'hidden', 'line', 'circle', 'arc'].includes(g.tool);
     if (simple) {
@@ -735,6 +787,19 @@ export function Viewport(
     if (!pointers.current.has(e.pointerId)) {
       const frameId = drawingFrame(local(e));
       setHoverView(frameId);
+      if (tool === 'curve' && !readOnly) {
+        const p = sheetToLocal(doc, frameId, local(e));
+        const c =
+          props.snapping && !props.skipSnap
+            ? curveCandidate(doc, frameId, p, cssScale(), {
+                axes: props.axes && props.axesSnap,
+                hiddenLayers: props.hiddenLayers,
+                grid: props.gridSnap,
+              })
+            : undefined;
+        setCandidate(c ?? null);
+        setCandidateView(frameId);
+      }
       if (steps.length && ['circle', 'arc'].includes(tool)) {
         const p = local(e),
           threshold =
@@ -864,7 +929,23 @@ export function Viewport(
         drag(g, p);
       } else if (g.tool === 'pen') {
         setPreview([...g.samples]);
-      } else if (!['projection', 'select'].includes(g.tool)) {
+        setCandidate(
+          props.snapping && !props.skipSnap && !g.pausedSnap
+            ? (intersectionCandidates(
+                g.base,
+                g.viewId,
+                sheetToLocal(g.base, g.viewId, p),
+                g.scale,
+                {
+                  axes: props.axes && props.axesSnap,
+                  hiddenLayers: props.hiddenLayers,
+                  threshold: g.snapPixels,
+                },
+              )[0] ?? null)
+            : null,
+        );
+        setCandidateView(g.viewId);
+      } else if (!['projection', 'select', 'curve'].includes(g.tool)) {
         setState('drawingPrimitive');
         const value = primitive(g, p);
         g.candidate = value.candidates.at(-1);
@@ -1009,6 +1090,42 @@ export function Viewport(
             axisDraft && ['side', 'confirm'].includes(axisDraft.phase) ? axisDraft.spec : null
           }
         />
+        {curveDraft && (
+          <g transform="scale(1 -1)" pointerEvents="none">
+            <path
+              data-transient="curve-preview"
+              d={curvePath(
+                orderedCurveMarks(curveDraft).map((m) =>
+                  localToSheet(doc, curveDraft.viewId, m.position),
+                ),
+              )}
+              fill="none"
+              stroke="#0f766e"
+              strokeWidth={2 / scale}
+            />
+            {curveDraft.marks.map((m, i) => {
+              const p = localToSheet(doc, curveDraft.viewId, m.position);
+              return (
+                <g key={i} data-transient="curve-knot">
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={(i < 2 ? 6 : 4) / scale}
+                    fill={curveDraft.finishAt === i ? '#0f766e' : 'white'}
+                    stroke="#0f766e"
+                    strokeWidth={1.5 / scale}
+                  />
+                  <text
+                    transform={`translate(${p.x + 8 / scale} ${p.y + 8 / scale}) scale(1 -1)`}
+                    fontSize={12 / scale}
+                  >
+                    {i < 2 ? `端点 ${i + 1}` : i - 1}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        )}
         {marquee && (
           <g data-selection-mode={marquee.mode} data-transient="marquee" pointerEvents="none">
             <rect
@@ -1043,6 +1160,28 @@ export function Viewport(
           />
         )}
       </svg>
+      {tool === 'curve' && !readOnly && (
+        <CurveControls
+          draft={curveDraft}
+          change={(draft) => {
+            setCurveDraft(draft);
+            if (!draft) setOperationView(undefined);
+            setCandidate(null);
+            setPreview([]);
+          }}
+          confirm={() => {
+            try {
+              if (curveDraft) {
+                const result = commitCurve(doc, curveDraft, role);
+                accept(result.next, result.raw);
+                props.report('曲线已创建，经过点可拖动调整');
+              }
+            } catch (error) {
+              fail(error);
+            }
+          }}
+        />
+      )}
       {candidate && (
         <div className="geo-snap-feedback" data-snap-feedback="true">
           吸附：

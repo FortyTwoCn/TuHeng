@@ -15,7 +15,8 @@ export type DrawingTool =
   | 'perpendicular-hidden'
   | 'circle'
   | 'arc'
-  | 'connect';
+  | 'connect'
+  | 'curve';
 export function addDrawing(
   doc: GeometryDocument,
   tool: DrawingTool,
@@ -65,6 +66,17 @@ export function addDrawing(
         return;
       }
       const id = crypto.randomUUID();
+      if (tool === 'curve') {
+        d.schemaVersion = 'tuheng.geometry/2.2.0';
+        d.entities.push({
+          ...base,
+          id,
+          kind: 'curve',
+          pointIds: positions.map(makePoint),
+          interpolation: 'CUBIC_HERMITE',
+        });
+        return;
+      }
       if (tool === 'circle' || tool === 'arc') {
         const center = makePoint(a, 0);
         if (tool === 'circle')
@@ -130,6 +142,25 @@ function penAppearance(
           : 'ANSWER_VISIBLE';
   return { layerId: doc.layers.find((l) => l.role === layerRole)!.id, lineStyle };
 }
+export function addCurve(
+  doc: GeometryDocument,
+  viewId: string,
+  positions: Vec2[],
+  role: 'teacher' | 'student',
+  existingIds?: string[],
+  style: PenStrokeStyle = 'visible',
+) {
+  const next = addDrawing(doc, 'curve', viewId, positions, role, undefined, existingIds);
+  const existing = new Set(doc.entities.map((e) => e.id));
+  return transact(
+    next,
+    (d) => {
+      for (const e of d.entities)
+        if (!existing.has(e.id)) Object.assign(e, penAppearance(d, role, style));
+    },
+    role,
+  );
+}
 export function addRawPenStroke(
   doc: GeometryDocument,
   viewId: string,
@@ -168,7 +199,9 @@ export function addPenStroke(
     fit = fitStroke(samples, { ...options, noisePixels: 3.4 });
   if (fit.kind === 'polyline') return addRawPenStroke(doc, viewId, samples, role, options);
   let next: GeometryDocument;
-  if (fit.kind === 'segment') {
+  if (fit.kind === 'curve') {
+    next = addCurve(doc, viewId, fit.points, role);
+  } else if (fit.kind === 'segment') {
     const tool =
       options.style === 'construction' ? 'line' : options.style === 'hidden' ? 'hidden' : 'segment';
     next = addDrawing(doc, tool, viewId, [fit.start, fit.end], role);

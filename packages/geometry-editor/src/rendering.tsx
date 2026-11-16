@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { GeometryDocument, GeometryEntity } from '@tuheng/contracts';
 import {
   arcSvgPath,
+  curvePath,
   clipLine,
   lineGeometry,
   point,
@@ -67,7 +68,14 @@ export const EntityShape = memo(function EntityShape({
         y2={ends[1].y}
       />
     );
-  } else if (e.kind === 'polyline')
+  } else if (e.kind === 'curve')
+    shape = (
+      <path
+        vectorEffect="non-scaling-stroke"
+        d={curvePath(e.pointIds.map((id) => point(doc, id)))}
+      />
+    );
+  else if (e.kind === 'polyline')
     shape = (
       <polyline
         vectorEffect="non-scaling-stroke"
@@ -122,7 +130,9 @@ export const EntityShape = memo(function EntityShape({
             ? [e.position]
             : e.kind === 'segment'
               ? [point(doc, e.startPoint), point(doc, e.endPoint)]
-              : []
+              : e.kind === 'curve'
+                ? e.pointIds.map((id) => point(doc, id))
+                : []
           ).map((p, i) => (
             <circle
               data-transient="handle"

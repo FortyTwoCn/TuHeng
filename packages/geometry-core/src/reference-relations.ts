@@ -4,7 +4,7 @@ import type {
   ReferenceRelation,
   Vec2,
 } from '@tuheng/contracts';
-import { closestReference, resolveReference } from './references';
+import { closestReference, resolveReference, referenceKey } from './references';
 import { localToSheet, sheetToLocal, sheetDeltaToLocal } from './sheet';
 import { add, scale, unit, lineGeometry, distance, dot, cross } from './math';
 export function referenceRelationGeometry(doc: GeometryDocument, r: ReferenceRelation) {
@@ -43,12 +43,19 @@ export function writeReferenceRelation(
   kind: ReferenceRelation['kind'],
   mode: ReferenceRelation['mode'],
   source: ReferenceRelation['source'] = 'USER',
+  replacePosition = true,
 ) {
-  doc.schemaVersion = 'tuheng.geometry/2.1.0';
+  if (doc.schemaVersion !== 'tuheng.geometry/2.2.0') doc.schemaVersion = 'tuheng.geometry/2.1.0';
   doc.referenceRelations ??= [];
   // A new explicit placement replaces the previous observation of the same kind, not unrelated bindings.
   doc.referenceRelations = doc.referenceRelations.filter(
-    (r) => !(r.targetId === targetId && r.kind === kind && r.mode === 'POSITION'),
+    (r) =>
+      !(
+        r.targetId === targetId &&
+        r.kind === kind &&
+        r.mode === 'POSITION' &&
+        (replacePosition || referenceKey(r.reference) === referenceKey(reference))
+      ),
   );
   doc.referenceRelations.push({ id: crypto.randomUUID(), targetId, reference, kind, mode, source });
 }

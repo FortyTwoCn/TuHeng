@@ -1,3 +1,4 @@
+import { curvePath } from './curves';
 import type { GeometryDocument } from '@tuheng/contracts';
 import { referenceGeometry, referenceKey, clipReference } from './references';
 import { localToSheet, sheetBounds, viewTransform } from './sheet';
@@ -26,7 +27,7 @@ export function exportSheetSvg(doc: GeometryDocument) {
     const ends = clipReference(r, box);
     if (ends)
       parts.push(
-        `<g data-reference-id="${escape(referenceKey(r.ref))}" ${r.ref.kind === 'projectionAxis' ? `data-axis-id="${escape(r.ref.systemId)}"` : ''} stroke="#64748b">${line(ends[0], ends[1])}${label(r.ref.kind==='baseAxis'?ends[1].x*.9:r.anchor.x+2,r.ref.kind==='baseAxis'?ends[1].y*.9:r.anchor.y+2,r.name)}</g>`,
+        `<g data-reference-id="${escape(referenceKey(r.ref))}" ${r.ref.kind === 'projectionAxis' ? `data-axis-id="${escape(r.ref.systemId)}"` : ''} stroke="#64748b">${line(ends[0], ends[1])}${label(r.ref.kind === 'baseAxis' ? ends[1].x * 0.9 : r.anchor.x + 2, r.ref.kind === 'baseAxis' ? ends[1].y * 0.9 : r.anchor.y + 2, r.name)}</g>`,
       );
   }
   for (const e of doc.entities) {
@@ -45,6 +46,8 @@ export function exportSheetSvg(doc: GeometryDocument) {
         ends = clipLine({ a, d: sub(b, a), finite: l.finite }, box);
       if (ends) shape = line(ends[0], ends[1]);
     }
+    if (e.kind === 'curve')
+      shape = `<path d="${curvePath(e.pointIds.map((id) => at(point(doc, id))))}" vector-effect="non-scaling-stroke"/>`;
     if (e.kind === 'polyline' || e.kind === 'plane') {
       const points = e.kind === 'polyline' ? e.points : planeOutline(doc, e);
       shape = `<polyline points="${points

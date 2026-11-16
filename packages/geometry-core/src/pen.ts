@@ -1,10 +1,11 @@
 import type { Vec2 } from '@tuheng/contracts';
-import { angle, distance, dot, sub } from './math';
+import { angle, distance, dot, sub, intersect } from './math';
 export type PenFit =
   | { kind: 'segment'; start: Vec2; end: Vec2 }
   | { kind: 'circle'; center: Vec2; radius: number }
   | { kind: 'arc'; center: Vec2; radius: number; startAngle: number; sweep: number }
-  | { kind: 'polyline'; points: Vec2[] };
+  | { kind: 'polyline'; points: Vec2[] }
+  | { kind: 'curve'; points: Vec2[] };
 export type PenStrokeStyle = 'visible' | 'hidden' | 'construction';
 export interface PenOptions {
   style?: PenStrokeStyle;
@@ -45,12 +46,13 @@ export function fitStroke(
   input: Vec2[],
   options: PenOptions | number = { cssPixelsPerMm: 4 },
 ): PenFit {
-  const fallback: PenFit = { kind: 'polyline', points: input.map((p) => ({ ...p })) };
-  if (input.length < 2) return fallback;
+  const raw: PenFit = { kind: 'polyline', points: input.map((p) => ({ ...p })) };
+  if (input.length < 2) return raw;
   const pixels = typeof options === 'number' ? 2.4 / options : options.cssPixelsPerMm;
+  const fallback = () => fitFreeCurve(input, pixels) ?? raw;
   const noise = typeof options === 'number' ? options : (options.noisePixels ?? 2.4) / pixels;
   const points = resampleStroke(input);
-  if (points.length < 2) return fallback;
+  if (points.length < 2) return fallback();
   const mean = points.reduce(
     (m, p) => ({ x: m.x + p.x / points.length, y: m.y + p.y / points.length }),
     { x: 0, y: 0 },
@@ -95,9 +97,9 @@ export function fitStroke(
     };
     return { kind: 'segment', start: at(start), end: at(end) };
   }
-  if (input.length < 6) return fallback;
+  if (input.length < 6) return fallback();
   const det = xx * yy - xy * xy;
-  if (Math.abs(det) < 1e-10) return fallback;
+  if (Math.abs(det) < 1e-10) return fallback();
   let center = { x: mean.x + (bx * yy - by * xy) / det, y: mean.y + (by * xx - bx * xy) / det };
   let radius = quantile(
     points.map((p) => distance(p, center)),
@@ -121,7 +123,7 @@ export function fitStroke(
     center = { x: center.x + dx / weights, y: center.y + dy / weights };
     radius += dr / weights;
   }
-  if (radius * pixels < 8 || radius > 1000) return fallback;
+  if (radius * pixels < 8 || radius > 1000) return fallback();
   const errors = points.map((p) => Math.abs(distance(p, center) - radius));
   const limit = Math.min(Math.max(noise, radius * 0.012), radius * 0.055);
   const trimmed = errors.filter((e) => e <= quantile(errors, 0.95));
@@ -130,7 +132,7 @@ export function fitStroke(
     Math.sqrt(trimmed.reduce((n, e) => n + e * e, 0) / trimmed.length) > limit * 0.8 ||
     quantile(errors, 1) > Math.max(noise * 3, radius * 0.16)
   )
-    return fallback;
+    return fallback();
   let sweep = 0,
     travel = 0;
   for (let i = 1; i < points.length; i++) {
@@ -140,9 +142,36 @@ export function fitStroke(
     travel += Math.abs(d);
   }
   if (travel > Math.abs(sweep) * 1.12 || Math.abs(sweep) < 40 || Math.abs(sweep) > 385)
-    return fallback;
+    return fallback();
   if (Math.abs(sweep) > 325 && chord < Math.max(noise * 2, radius * 0.14))
     return { kind: 'circle', center, radius };
-  if (Math.abs(sweep) > 350) return fallback;
+  if (Math.abs(sweep) > 350) return fallback();
   return { kind: 'arc', center, radius, startAngle: angle(sub(start, center)), sweep };
+}
+
+function fitFreeCurve(input: Vec2[], pixels: number): PenFit | undefined {
+  if (input.length < 8) return;
+  const samples = resampleStroke(input, 65);
+  const travel = samples.slice(1).reduce((n, p, i) => n + distance(p, samples[i]), 0);
+  const chord = distance(samples[0], samples.at(-1)!);
+  if (travel * pixels < 30 || chord < travel * 0.3) return;
+  // Reject corners, reversals and self crossings; those remain recoverable raw strokes.
+  for (let i = 1; i < samples.length - 1; i++) {
+    const a = sub(samples[i], samples[i - 1]),
+      b = sub(samples[i + 1], samples[i]);
+    const turn = Math.abs(Math.atan2(a.x * b.y - a.y * b.x, dot(a, b)));
+    if (turn > 0.3) return;
+  }
+  for (let i = 1; i < samples.length; i++)
+    for (let j = i + 2; j < samples.length; j++)
+      if (
+        intersect(
+          { a: samples[i - 1], d: sub(samples[i], samples[i - 1]), finite: true },
+          { a: samples[j - 1], d: sub(samples[j], samples[j - 1]), finite: true },
+        )
+      )
+        return;
+  const count = Math.min(96, Math.max(5, Math.ceil((travel * pixels) / 10)));
+  const points = resampleStroke(samples, count);
+  return { kind: 'curve', points };
 }

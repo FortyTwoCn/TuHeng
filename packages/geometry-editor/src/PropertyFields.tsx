@@ -18,6 +18,7 @@ export const entityNames = {
   circle: '圆',
   arc: '圆弧',
   polyline: '笔迹',
+  curve: '插值曲线',
   plane: '历史空间平面',
 };
 export function PropertyFields({
@@ -104,6 +105,7 @@ export function PropertyFields({
         {locked ? ' · 只读' : ''}
         {bindings.length ? ' · 已绑定' : ''}
       </p>
+      {e.kind === 'curve' && <p>依次经过 {e.pointIds.length} 个点；拖动经过点可调整曲线。</p>}
       <div className="geo-fields">
         {e.kind === 'point' && (
           <>

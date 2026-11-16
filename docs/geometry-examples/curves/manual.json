@@ -1,0 +1,280 @@
+{
+  "schemaVersion": "tuheng.geometry/2.2.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["x", "z"],
+      "signs": [1, 1]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["x", "y"],
+      "signs": [1, -1]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["y", "z"],
+      "signs": [1, 1]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "a7045462-4a29-4538-a6c5-4609d8dad3e1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 50,
+        "y": 40
+      },
+      "name": "P1",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "8702f65b-94d5-432b-b041-f2eb95a915fd",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 10
+      },
+      "name": "P2",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "9d4c5b02-a45a-43ad-997f-9fa60e8e2152",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "scope": "SHEET",
+      "kind": "line",
+      "anchor": {
+        "x": 35,
+        "y": 5
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "referenceEntityId": null
+    },
+    {
+      "id": "f83ac080-20d6-4884-9048-e90ad3d643e6",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "scope": "SHEET",
+      "kind": "line",
+      "anchor": {
+        "x": 5,
+        "y": 30
+      },
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "referenceEntityId": null
+    },
+    {
+      "id": "f911b66f-4970-43ad-bf8f-b25d6850ecba",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "scope": "SHEET",
+      "kind": "line",
+      "anchor": {
+        "x": 20,
+        "y": -10
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "referenceEntityId": null
+    },
+    {
+      "id": "6b936f85-4be6-4776-b360-d0032c83ea20",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 35,
+        "y": 30
+      },
+      "name": "P3",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "39a7ac55-1c73-4728-8300-c2d9934626a0",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 20,
+        "y": 0
+      },
+      "name": "P4",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "6fdc3b17-95f0-42e1-a624-ed832bb78839",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "curve",
+      "pointIds": [
+        "a7045462-4a29-4538-a6c5-4609d8dad3e1",
+        "6b936f85-4be6-4776-b360-d0032c83ea20",
+        "39a7ac55-1c73-4728-8300-c2d9934626a0",
+        "8702f65b-94d5-432b-b041-f2eb95a915fd"
+      ],
+      "interpolation": "CUBIC_HERMITE"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "72568578-676c-485b-8f0b-4b9a46ead208",
+      "kind": "INTERSECTION",
+      "entityIds": [
+        "6b936f85-4be6-4776-b360-d0032c83ea20",
+        "9d4c5b02-a45a-43ad-997f-9fa60e8e2152",
+        "f83ac080-20d6-4884-9048-e90ad3d643e6"
+      ],
+      "source": "SNAP_CONFIRMED",
+      "status": "SATISFIED"
+    }
+  ],
+  "referenceRelations": [
+    {
+      "id": "1fa6d33d-d3fc-4cfa-97a5-7c179be5647f",
+      "targetId": "39a7ac55-1c73-4728-8300-c2d9934626a0",
+      "reference": {
+        "kind": "baseAxis",
+        "axisId": "X"
+      },
+      "kind": "POINT_ON_REFERENCE",
+      "mode": "POSITION",
+      "source": "SNAP_CONFIRMED",
+      "status": "SATISFIED"
+    },
+    {
+      "id": "72ee8443-264c-4ef9-a6b0-516b0099798c",
+      "targetId": "39a7ac55-1c73-4728-8300-c2d9934626a0",
+      "reference": {
+        "kind": "entity",
+        "entityId": "f911b66f-4970-43ad-bf8f-b25d6850ecba"
+      },
+      "kind": "POINT_ON_REFERENCE",
+      "mode": "POSITION",
+      "source": "SNAP_CONFIRMED",
+      "status": "SATISFIED"
+    }
+  ],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

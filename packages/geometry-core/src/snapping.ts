@@ -3,7 +3,7 @@ import { add, distance, foot, intersect, lineGeometry, scale, sub, dot, unit } f
 import { viewAxes } from './projections';
 import { mergePoints } from './topology';
 import { transact } from './document';
-import { referenceGeometry, referenceKey, closestReference } from './references';
+import { referenceGeometry, referenceKey, closestReference, resolveReference } from './references';
 import { localToSheet, sheetToLocal } from './sheet';
 import { writeReferenceRelation } from './reference-relations';
 export const interactionThresholds = {
@@ -15,6 +15,7 @@ export interface SnapCandidate {
   id?: string;
   label?: string;
   reference?: GeometryTargetRef;
+  references?: GeometryTargetRef[];
   position: Vec2;
   entityIds: string[];
   kind:
@@ -73,6 +74,7 @@ export function snapCandidates(
         reference.name,
       );
     }
+  candidates.push(...intersectionCandidates(doc, viewId, p, cssPixelsPerMm, options));
   const entities = doc.entities.filter(
       (e) =>
         e.viewId === viewId &&
@@ -92,14 +94,6 @@ export function snapCandidates(
     }
     push(foot(p, a), [e.id], 'POINT_ON_LINE');
     if (a.finite) push(add(a.a, scale(a.d, 0.5)), [e.id], 'MIDPOINT');
-    for (const other of distance(p, foot(p, a)) <= threshold * 1.5
-      ? lines
-          .slice(i + 1)
-          .filter((e) => distance(p, foot(p, lineGeometry(doc, e))) <= threshold * 1.5)
-      : []) {
-      const at = intersect(a, lineGeometry(doc, other));
-      if (at) push(at, [e.id, other.id], 'INTERSECTION');
-    }
   }
   if (options.projection && ['VHW_PROJECTION', 'THREE_VIEW'].includes(doc.editorType)) {
     const derived = new Set(doc.auxiliarySystems?.map((a) => a.newViewId)),
@@ -168,6 +162,23 @@ export function confirmSnap(
   sourceId?: string,
   role: 'teacher' | 'student' = 'teacher',
 ) {
+  if (candidate.references && sourceId)
+    return transact(
+      after,
+      (d) => {
+        for (const [index, reference] of candidate.references!.entries())
+          writeReferenceRelation(
+            d,
+            sourceId,
+            reference,
+            'POINT_ON_REFERENCE',
+            'POSITION',
+            'SNAP_CONFIRMED',
+            index === 0,
+          );
+      },
+      role,
+    );
   if (candidate.reference && sourceId)
     return transact(
       after,
@@ -215,4 +226,66 @@ export function confirmSnap(
       source: 'SNAP_CONFIRMED',
     }),
   );
+}
+
+/** Real intersections in sheet coordinates, including finite segments and valid axis rays. */
+export function intersectionCandidates(
+  doc: GeometryDocument,
+  viewId: string,
+  position: Vec2,
+  pixels: number,
+  options: Parameters<typeof snapCandidates>[5] = {},
+): SnapCandidate[] {
+  const p = localToSheet(doc, viewId, position),
+    threshold = (options.threshold ?? 10) / pixels;
+  const references = [
+    ...(options.axes === false ? [] : referenceGeometry(doc).filter((r) => r.direction)),
+    ...doc.entities
+      .filter(
+        (e) =>
+          (e.viewId === viewId || e.scope === 'SHEET') &&
+          ['line', 'segment'].includes(e.kind) &&
+          !options.exclude?.includes(e.id) &&
+          !options.hiddenLayers?.includes(e.layerId),
+      )
+      .map((e) => resolveReference(doc, { kind: 'entity', entityId: e.id })),
+  ].filter((r) => distance(p, closestReference(p, r)) <= threshold * 1.5);
+  const result: SnapCandidate[] = [];
+  for (let i = 0; i < references.length; i++)
+    for (let j = i + 1; j < references.length; j++) {
+      const a = references[i],
+        b = references[j];
+      if (!a.direction || !b.direction) continue;
+      const q = intersect(
+        { a: a.anchor, d: a.direction, finite: a.extent === 'segment' },
+        { a: b.anchor, d: b.direction, finite: b.extent === 'segment' },
+      );
+      if (
+        !q ||
+        distance(q, closestReference(q, a)) > 1e-7 ||
+        distance(q, closestReference(q, b)) > 1e-7
+      )
+        continue;
+      const d = distance(p, q);
+      const refs = [a.ref, b.ref].sort((a, b) => referenceKey(a).localeCompare(referenceKey(b)));
+      const id = 'INTERSECTION:' + refs.map(referenceKey).join(',');
+      if (d > threshold * (options.previous?.id === id ? 1.5 : 1)) continue;
+      const legacy =
+        a.ref.kind === 'entity' &&
+        b.ref.kind === 'entity' &&
+        a.viewId === viewId &&
+        b.viewId === viewId;
+      result.push({
+        id,
+        kind: 'INTERSECTION',
+        label: `交点 · ${a.name} / ${b.name}`,
+        position: sheetToLocal(doc, viewId, q),
+        distance: d,
+        entityIds: legacy ? refs.flatMap((r) => (r.kind === 'entity' ? [r.entityId] : [])) : [],
+        ...(legacy ? {} : { references: refs }),
+      });
+    }
+  return result
+    .sort((a, b) => a.distance - b.distance || a.id!.localeCompare(b.id!))
+    .filter((c, i, all) => !all.slice(0, i).some((p) => distance(p.position, c.position) < 1e-7));
 }

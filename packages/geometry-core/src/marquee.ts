@@ -9,6 +9,7 @@ import {
   lineGeometry,
   point,
   planeOutline,
+  entityPath,
   type Bounds,
 } from './math';
 export type SelectionMode = 'window' | 'crossing';
@@ -64,7 +65,13 @@ export function entityInMarquee(
     }
     return candidates.some((p) => inside(p, b) && relevant(angle(sub(p, c))));
   }
-  const p = (e.kind === 'polyline' ? e.points : planeOutline(doc, e)).map(at);
+  const p = (
+    e.kind === 'curve'
+      ? entityPath(doc, e, b)
+      : e.kind === 'polyline'
+        ? e.points
+        : planeOutline(doc, e)
+  ).map(at);
   return mode === 'window'
     ? p.every((v) => inside(v, b))
     : p.some(

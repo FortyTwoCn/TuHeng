@@ -175,6 +175,10 @@ export function exportGeometryNarrative(
       lines.push(
         `${prefix} ${e.kind === 'circle' ? '圆' : '圆弧'}，圆心 ${e.center}，半径 ${e.radius} mm${e.kind === 'arc' ? `，起始角 ${e.startAngle}°，有向扫角 ${e.sweep}°，弧长 ${(((Math.abs(e.sweep) * Math.PI) / 180) * e.radius).toFixed(3)} mm` : ''}。`,
       );
+    if (e.kind === 'curve')
+      lines.push(
+        `${prefix} 三次 Hermite 插值曲线，依次穿过 ${e.pointIds.join('、')}；端点 ${e.pointIds[0]} 与 ${e.pointIds.at(-1)}，局部坐标与实际点引用一致。`,
+      );
     if (e.kind === 'polyline') lines.push(`${prefix} 未拟合笔迹，共 ${e.points.length} 个轨迹点。`);
     if (e.kind === 'plane')
       lines.push(

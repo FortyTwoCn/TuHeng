@@ -33,6 +33,7 @@ export const commandRegistry: CommandEntry[] = [
     requiresEdit: true,
     appliesTo: 'any',
   },
+  { id: 'curve', name: '曲线', group: 'line', kind: 'tool', requiresEdit: true, appliesTo: 'any' },
   { id: 'hidden', name: '虚线', group: 'line', kind: 'tool', requiresEdit: true, appliesTo: 'any' },
   { id: 'line', name: '辅助线', group: 'line', kind: 'tool', requiresEdit: true, appliesTo: 'any' },
   { id: 'circle', name: '圆', group: 'round', kind: 'tool', requiresEdit: true, appliesTo: 'any' },

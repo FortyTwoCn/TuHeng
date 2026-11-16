@@ -18,3 +18,6 @@ export * from './marquee';
 export * from './preview';
 export * from './commands';
 export * from './reference-relations';
+
+export * from './curves';
+export * from './curve-snapping';

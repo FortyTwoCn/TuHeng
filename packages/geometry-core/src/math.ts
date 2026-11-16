@@ -1,4 +1,5 @@
 import type { GeometryDocument, GeometryEntity, Vec2, Vec3 } from '@tuheng/contracts';
+import { flattenCurve } from './curves';
 import { projectPoint } from './projections';
 export const add = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x + b.x, y: a.y + b.y });
 export const sub = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x - b.x, y: a.y - b.y });
@@ -110,6 +111,7 @@ export function entityPath(doc: GeometryDocument, e: GeometryEntity, box: Bounds
   if (e.kind === 'point') return [e.position];
   if (e.kind === 'line' || e.kind === 'segment') return clipLine(lineGeometry(doc, e), box) ?? [];
   if (e.kind === 'polyline') return e.points;
+  if (e.kind === 'curve') return flattenCurve(e.pointIds.map((id) => point(doc, id)));
   if (e.kind === 'plane') return planeOutline(doc, e);
   const c = point(doc, e.center),
     start = e.kind === 'arc' ? e.startAngle : 0,

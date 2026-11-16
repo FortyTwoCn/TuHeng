@@ -23,6 +23,8 @@ export function mergePoints(
           if (e.startPoint === sourceId) e.startPoint = targetId;
           if (e.endPoint === sourceId) e.endPoint = targetId;
         }
+        if (e.kind === 'curve')
+          e.pointIds = e.pointIds.map((id) => (id === sourceId ? targetId : id));
         if ((e.kind === 'circle' || e.kind === 'arc') && e.center === sourceId) e.center = targetId;
       }
       // Constraints that collapse to identity are removed; incompatible projection identity is rejected by Schema.
@@ -96,6 +98,8 @@ export function disconnectEndpoint(
         if (target.startPoint === pointId) target.startPoint = id;
         if (target.endPoint === pointId) target.endPoint = id;
       }
+      if (target.kind === 'curve')
+        target.pointIds = target.pointIds.map((p) => (p === pointId ? id : p));
       if (target.kind === 'circle' || target.kind === 'arc') target.center = id;
     },
     role,

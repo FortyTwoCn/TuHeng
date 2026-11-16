@@ -110,6 +110,7 @@ export function transact(
 }
 export function pointReferences(e: GeometryEntity): string[] {
   if (e.kind === 'segment') return [e.startPoint, e.endPoint];
+  if (e.kind === 'curve') return e.pointIds;
   if (e.kind === 'circle' || e.kind === 'arc') return [e.center];
   return [];
 }
@@ -217,6 +218,7 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
           e.endPoint = mapping.get(e.endPoint)!;
         }
         if (e.kind === 'circle' || e.kind === 'arc') e.center = mapping.get(e.center)!;
+        if (e.kind === 'curve') e.pointIds = e.pointIds.map((id) => mapping.get(id)!);
         if (e.kind === 'line' && e.referenceEntityId)
           e.referenceEntityId = mapping.get(e.referenceEntityId) ?? e.referenceEntityId;
         if (e.kind === 'plane' && e.referencePlaneId)
