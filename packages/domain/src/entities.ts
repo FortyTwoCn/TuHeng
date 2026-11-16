@@ -30,9 +30,26 @@ export interface Entities {
     tokenVersion: number;
     createdAt: Date;
   };
-  course: Row & { title: string; code: string };
+  school: Row & { code: string; name: string; active: boolean; rosterVersion: number };
+  assignmentRecipient: Row & {
+    assignmentId: string;
+    studentId: string;
+    schoolId: string;
+    classIds: string[];
+    reviewerIds: string[];
+    revision: number;
+    active: boolean;
+    inferred: boolean;
+    createdAt: Date;
+  };
+  course: Row & { title: string; code: string; schoolId?: string | null };
   courseOffering: Row & { courseId: string; term: string };
-  teachingClass: Row & { offeringId: string; name: string };
+  teachingClass: Row & {
+    offeringId: string;
+    name: string;
+    schoolId?: string | null;
+    archived?: boolean;
+  };
   enrollment: Row & { userId: string; classId: string };
   teachingGrant: Row & { userId: string; classId: string };
   knowledgePoint: Row & { title: string; chapter: string };
@@ -52,7 +69,13 @@ export interface Entities {
       createdAt: Date;
     };
   assignment: Row & {
-    classId: string;
+    classId: string | null;
+    schoolId?: string | null;
+    audience?: import('@tuheng/contracts').AudienceSelection & {
+      reviewerIds: string[];
+      rosterVersion: number;
+    };
+    audienceRevision?: number;
     creatorId: string;
     title: string;
     status: string;

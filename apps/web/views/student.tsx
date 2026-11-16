@@ -121,7 +121,7 @@ export async function AssignmentList({
   search,
 }: {
   a: Actor;
-  area: 'student' | 'teacher';
+  area: 'student' | 'teacher' | 'school' | 'admin';
   search: Record<string, string | undefined>;
 }) {
   const [all, classes] = await Promise.all([
@@ -141,7 +141,7 @@ export async function AssignmentList({
         title="作业管理"
         description="查看题目、提交状态与批改反馈，保留每一次学习记录。"
         action={
-          area === 'teacher' ? (
+          area !== 'student' ? (
             <Link className="button primary" href="/teacher/assignments/new">
               ＋ 布置作业
             </Link>
@@ -161,7 +161,7 @@ export async function AssignmentList({
         <select name="status" aria-label="按状态筛选" defaultValue={search.status}>
           <option value="">全部状态</option>
           <option value="PUBLISHED">已发布</option>
-          {area === 'teacher' && <option value="DRAFT">草稿</option>}
+          {area !== 'student' && <option value="DRAFT">草稿</option>}
         </select>
         <button className="button secondary">筛选</button>
       </form>

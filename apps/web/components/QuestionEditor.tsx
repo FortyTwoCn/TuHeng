@@ -17,12 +17,14 @@ const kinds = [
   ['OTHER', '其他（人工复核）'],
 ];
 export function QuestionEditor({
+  area = 'teacher',
   knowledge,
   selftest = false,
   folders = [],
   initial,
   questionId,
 }: {
+  area?: 'teacher' | 'school' | 'admin';
   knowledge: { id: string; title: string }[];
   selftest?: boolean;
   folders?: { id: string; title: string }[];
@@ -122,7 +124,7 @@ export function QuestionEditor({
             router.push('/student/selftests');
           } else {
             await action('question', { question, questionId });
-            router.push('/teacher/questions');
+            router.push(`/${area}/questions`);
           }
           router.refresh();
         } catch (e) {

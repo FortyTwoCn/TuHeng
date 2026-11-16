@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { GeometryDocument } from '@tuheng/contracts';
+import { GeometryDocument, AudienceSelection } from '@tuheng/contracts';
 import { database, prisma } from '@tuheng/database';
 import * as domain from '@tuheng/domain';
 import * as infra from '@tuheng/infrastructure';
@@ -56,7 +56,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
         const p = z
           .object({
             title,
-            classId: id,
+            classId: id.optional(),
+            audience: AudienceSelection.optional(),
+            rosterVersion: z.number().int().optional(),
+            reviewerIds: z.array(id).max(50).optional(),
             questionVersionIds: z.array(id).min(1).max(50),
             startsAt: z.coerce.date(),
             dueAt: z.coerce.date(),
@@ -69,7 +72,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
         break;
       }
       case 'assignment-publish':
-        result = await domain.publishAssignment(database, a, z.object({ id }).parse(body).id);
+        result = await domain.publishAssignment(
+          database,
+          a,
+          z.object({ id }).parse(body).id,
+          z.number().int().optional().parse(body.rosterVersion),
+        );
         break;
       case 'draft': {
         const p = z
@@ -254,9 +262,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
       }
       case 'export': {
         const p = z.object({ classId: id }).parse(body);
-        await domain.requireClass(database, a, p.classId, true);
+        domain.requireRole(a, 'TEACHER');
+        const recipients = a.schoolId
+          ? (
+              await database.list('assignmentRecipient', { schoolId: a.schoolId, active: true })
+            ).filter((r) => r.classIds.includes(p.classId) && r.reviewerIds.includes(a.id))
+          : [];
+        if (!recipients.length) await domain.requireClass(database, a, p.classId, true);
         const enrollments = await database.list('enrollment', { classId: p.classId });
-        const assignments = await database.list('assignment', { classId: p.classId });
+        const assignments = (await domain.listAssignments(database, a)).filter(
+          (v) => v.classId === p.classId || recipients.some((r) => r.assignmentId === v.id),
+        );
         const items = await database.list('assignmentItem', {
           assignmentId: { in: assignments.map((v) => v.id) },
         });
@@ -268,6 +284,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
           const user = await database.get('user', s.userId);
           const item = items.find((i) => i.id === s.itemId)!;
           const ass = assignments.find((v) => v.id === item.assignmentId)!;
+          if (!(await domain.isAssignmentReviewer(database, a, ass, s.userId))) continue;
+          if (
+            ass.audienceRevision &&
+            !recipients.some((r) => r.assignmentId === ass.id && r.studentId === s.userId)
+          )
+            continue;
           const q = await database.get('questionVersion', item.questionVersionId);
           for (const at of await database.list('submissionAttempt', { submissionId: s.id })) {
             const d = at.publishedDecisionId

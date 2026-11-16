@@ -122,6 +122,7 @@ export async function TeacherDashboard({ a }: { a: Actor }) {
   );
 }
 export async function QuestionsView({ a, segments }: { a: Actor; segments: string[] }) {
+  const area = a.kind === 'SCHOOL_ADMIN' ? 'school' : a.kind === 'SITE_ADMIN' ? 'admin' : 'teacher';
   const knowledge = await database.list('knowledgePoint');
   if (segments[1] === 'new')
     return (
@@ -131,7 +132,7 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
           title="创建题目"
           description="先确认题意、参考答案与评分细则，再用于正式作业。"
         />
-        <QuestionEditor knowledge={knowledge} />
+        <QuestionEditor area={area} knowledge={knowledge} />
       </>
     );
   const questions = await domain.listQuestions(database, a);
@@ -159,7 +160,7 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
         title="题库管理"
         description="以版本保存题目、答案与评分依据，让历史作答可追溯。"
         action={
-          <Link className="button primary" href="/teacher/questions/new">
+          <Link className="button primary" href={`/${area}/questions/new`}>
             ＋ 创建题目
           </Link>
         }
@@ -192,7 +193,7 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
                     </td>
                     <td>{formatPoints(q.maxPoints)}</td>
                     <td>
-                      <Link className="button ghost" href={`/teacher/questions/${q.id}`}>
+                      <Link className="button ghost" href={`/${area}/questions/${q.id}`}>
                         编辑新版本
                       </Link>
                       <ActionButton
@@ -234,6 +235,7 @@ export async function NewAssignment({ a }: { a: Actor }) {
         description="保存草稿后检查题目与发布对象，再正式发布。"
       />
       <AssignmentEditor
+        identity={{ id: a.id, kind: a.kind ?? 'TEACHER', schoolId: a.schoolId }}
         classes={await domain.visibleClasses(database, a)}
         questions={await domain.listQuestions(database, a)}
       />
@@ -454,18 +456,46 @@ export async function AnalyticsView({ a }: { a: Actor }) {
           {await Promise.all(
             classes.map(async (c) => {
               const enrollment = await database.list('enrollment', { classId: c.id });
-              const ass = assignments.filter((x) => x.classId === c.id && x.status === 'PUBLISHED');
+              const recipients = a.schoolId
+                ? (
+                    await database.list('assignmentRecipient', {
+                      schoolId: a.schoolId,
+                      active: true,
+                    })
+                  ).filter((r) => r.classIds.includes(c.id) && r.reviewerIds.includes(a.id))
+                : [];
+              const ass = assignments.filter(
+                (x) =>
+                  (x.classId === c.id || recipients.some((r) => r.assignmentId === x.id)) &&
+                  x.status === 'PUBLISHED',
+              );
               const its = await database.list('assignmentItem', {
                 assignmentId: { in: ass.map((x) => x.id) },
               });
-              const subs = await database.list('submission', {
+              const allSubs = await database.list('submission', {
                 itemId: { in: its.map((x) => x.id) },
+              });
+              const subs = allSubs.filter((s) => {
+                const assignmentId = its.find((i) => i.id === s.itemId)?.assignmentId;
+                return (
+                  !ass.find((a) => a.id === assignmentId)?.audienceRevision ||
+                  recipients.some(
+                    (r) => r.assignmentId === assignmentId && r.studentId === s.userId,
+                  )
+                );
               });
               const at = await database.list('submissionAttempt', {
                 submissionId: { in: subs.map((s) => s.id) },
               });
               const submitted = new Set(at.map((at) => at.submissionId)).size,
-                expected = enrollment.length * its.length;
+                expected = its.reduce(
+                  (count, item) =>
+                    count +
+                    (ass.find((a) => a.id === item.assignmentId)?.audienceRevision
+                      ? recipients.filter((r) => r.assignmentId === item.assignmentId).length
+                      : enrollment.length),
+                  0,
+                );
               return (
                 <div className="list-item" key={c.id}>
                   <div className="grow">

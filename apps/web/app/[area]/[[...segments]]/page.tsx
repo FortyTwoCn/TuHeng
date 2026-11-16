@@ -43,22 +43,31 @@ export default async function Workspace({
       view = <AccountSetup realm={area === 'student' ? 'STUDENT' : 'STAFF'} security />;
     else if (area === 'school') {
       requireRole(a, 'SCHOOL_ADMIN');
-      view = (
-        <OrganizationConsole
-          identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
-          initial={
-            section === 'teachers'
-              ? 'teachers'
-              : section === 'classes'
-                ? 'classes'
-                : section === 'imports'
-                  ? 'imports'
-                  : section === 'delivery'
-                    ? 'delivery'
-                    : 'students'
-          }
-        />
-      );
+      if (section === 'assignments')
+        view =
+          segments[1] === 'new'
+            ? await NewAssignment({ a })
+            : segments[1]
+              ? await AssignmentDetails({ a, id: segments[1] })
+              : await AssignmentList({ a, area, search });
+      else if (section === 'questions') view = await QuestionsView({ a, segments });
+      else
+        view = (
+          <OrganizationConsole
+            identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
+            initial={
+              section === 'teachers'
+                ? 'teachers'
+                : section === 'classes'
+                  ? 'classes'
+                  : section === 'imports'
+                    ? 'imports'
+                    : section === 'delivery'
+                      ? 'delivery'
+                      : 'students'
+            }
+          />
+        );
     } else if (area === 'student') {
       requireRole(a, 'STUDENT');
       if (section === 'dashboard') view = await StudentDashboard({ a });
@@ -106,6 +115,14 @@ export default async function Workspace({
           />
         );
       else if (section === 'mail') view = <SMTPSettings />;
+      else if (section === 'assignments')
+        view =
+          segments[1] === 'new'
+            ? await NewAssignment({ a })
+            : segments[1]
+              ? await AssignmentDetails({ a, id: segments[1] })
+              : await AssignmentList({ a, area: 'admin', search });
+      else if (section === 'questions') view = await QuestionsView({ a, segments });
       else if (section === 'models') view = await ModelsView({ a });
       else if (section === 'jobs') view = await JobsView({ a, search });
       else if (section === 'audit') view = await AuditView({ a });

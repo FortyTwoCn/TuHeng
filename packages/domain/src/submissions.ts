@@ -2,7 +2,7 @@ import { GradingRequest } from '@tuheng/contracts';
 import { exportGeometryBundle } from '@tuheng/geometry-core';
 import { validateAnswerGeometry } from './geometry';
 import type { Actor, DataPort, Entities } from './entities';
-import { ensure, requireClass, checkSubmissionWindow, audit } from './policy';
+import { ensure, requireAssignmentRecipient, checkSubmissionWindow, audit } from './policy';
 import { ownAssets } from './teaching';
 export async function scheduleRun(
   tx: DataPort,
@@ -95,13 +95,8 @@ export async function saveDraft(
   ensure(item, 'NOT_FOUND', 404);
   const ass = await db.get('assignment', item.assignmentId);
   ensure(ass, 'NOT_FOUND', 404);
-  await requireClass(db, a, ass.classId);
   checkSubmissionWindow(ass, new Date());
-  ensure(
-    (await db.list('enrollment', { userId: a.id, classId: ass.classId })).length,
-    'ENROLLMENT_REQUIRED',
-    403,
-  );
+  await requireAssignmentRecipient(db, a, ass);
   return db.transaction(async (tx) => {
     const question = await tx.get('questionVersion', item.questionVersionId);
     const draftGeometry = validateAnswerGeometry(question?.geometryDocument, geometry);
@@ -157,11 +152,7 @@ export async function submitAnswer(
       ensure(item, 'NOT_FOUND', 404);
       const ass = await tx.get('assignment', item.assignmentId);
       ensure(ass, 'NOT_FOUND', 404);
-      ensure(
-        (await tx.list('enrollment', { userId: a.id, classId: ass.classId })).length,
-        'ENROLLMENT_REQUIRED',
-        403,
-      );
+      await requireAssignmentRecipient(tx, a, ass);
       checkSubmissionWindow(ass, new Date());
       let s = (await tx.list('submission', { userId: a.id, itemId: item.id }))[0];
       if (!s)

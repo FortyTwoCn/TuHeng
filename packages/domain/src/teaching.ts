@@ -1,4 +1,7 @@
 import { QuestionInput, Rubric } from '@tuheng/contracts';
+import type { AudienceSelection } from '@tuheng/contracts';
+import { resolveAudience, freezeAssignmentAudience } from './audience';
+import { requireAssignmentManager } from './policy';
 import type { Actor, DataPort } from './entities';
 import { ensure, requireRole, requireClass, audit } from './policy';
 export async function ownAssets(db: DataPort, a: Actor, ids: string[], purpose?: string) {
@@ -27,7 +30,7 @@ export async function createQuestion(
       'QUESTION_GEOMETRY_MUST_BE_STEM',
     );
   }
-  if (!privateSelf) requireRole(a, 'TEACHER');
+  if (!privateSelf) requireRole(a, 'TEACHER', 'SCHOOL_ADMIN', 'ADMIN');
   else {
     data.confirmed = false;
     data.reference.verified = false;
@@ -68,7 +71,10 @@ export async function createAssignment(
   a: Actor,
   input: {
     title: string;
-    classId: string;
+    classId?: string;
+    audience?: AudienceSelection;
+    rosterVersion?: number;
+    reviewerIds?: string[];
     questionVersionIds: string[];
     startsAt: Date;
     dueAt: Date;
@@ -77,8 +83,22 @@ export async function createAssignment(
     releaseAnswers: boolean;
   },
 ) {
-  requireRole(a, 'TEACHER');
-  await requireClass(db, a, input.classId, true);
+  requireRole(a, 'TEACHER', 'SCHOOL_ADMIN', 'ADMIN');
+  let audience = input.audience;
+  if (!audience && a.schoolId && input.classId)
+    audience = {
+      version: 1,
+      schoolId: a.schoolId,
+      include: { allEligibleInScope: false, classIds: [input.classId], studentIds: [] },
+      exclude: { studentIds: [] },
+    };
+  const resolved = audience ? await resolveAudience(db, a, audience) : null;
+  if (!resolved) {
+    ensure(input.classId, 'AUDIENCE_REQUIRED');
+    await requireClass(db, a, input.classId, true);
+  }
+  if (resolved && input.rosterVersion !== undefined)
+    ensure(resolved.rosterVersion === input.rosterVersion, 'AUDIENCE_PREVIEW_STALE', 409);
   ensure(input.dueAt > input.startsAt, 'INVALID_DATES');
   ensure(input.questionVersionIds.length > 0, 'EMPTY_ASSIGNMENT');
   for (const id of input.questionVersionIds) {
@@ -90,8 +110,31 @@ export async function createAssignment(
     ensure(v.confirmed && v.reference.verified, 'QUESTION_NOT_CONFIRMED');
   }
   return db.transaction(async (tx) => {
-    const { questionVersionIds, ...data } = input;
-    const assignment = await tx.create('assignment', { ...data, creatorId: a.id, status: 'DRAFT' });
+    const { questionVersionIds, reviewerIds } = input;
+    const data = {
+      title: input.title,
+      classId: input.classId ?? null,
+      startsAt: input.startsAt,
+      dueAt: input.dueAt,
+      allowLate: input.allowLate,
+      maxAttempts: input.maxAttempts,
+      releaseAnswers: input.releaseAnswers,
+    };
+    const assignment = await tx.create('assignment', {
+      ...data,
+      creatorId: a.id,
+      status: 'DRAFT',
+      ...(resolved
+        ? {
+            schoolId: resolved.selection.schoolId,
+            audience: {
+              ...resolved.selection,
+              reviewerIds: a.kind === 'TEACHER' ? [a.id] : (reviewerIds ?? []),
+              rosterVersion: resolved.rosterVersion,
+            },
+          }
+        : {}),
+    });
     for (const [position, id] of questionVersionIds.entries())
       await tx.create('assignmentItem', {
         assignmentId: assignment.id,
@@ -102,14 +145,20 @@ export async function createAssignment(
     return assignment;
   });
 }
-export async function publishAssignment(db: DataPort, a: Actor, id: string) {
-  requireRole(a, 'TEACHER');
+export async function publishAssignment(
+  db: DataPort,
+  a: Actor,
+  id: string,
+  rosterVersion?: number,
+) {
+  requireRole(a, 'TEACHER', 'SCHOOL_ADMIN', 'ADMIN');
   return db.transaction(async (tx) => {
     const ass = await tx.get('assignment', id);
     ensure(ass, 'NOT_FOUND', 404);
-    await requireClass(tx, a, ass.classId, true);
+    await requireAssignmentManager(tx, a, ass);
     ensure(ass.status === 'DRAFT', 'ALREADY_PUBLISHED');
     ensure((await tx.list('assignmentItem', { assignmentId: id })).length, 'EMPTY_ASSIGNMENT');
+    if (ass.audience) await freezeAssignmentAudience(tx, a, ass, rosterVersion);
     await tx.update('assignment', id, { status: 'PUBLISHED' });
     await audit(tx, a, 'ASSIGNMENT_PUBLISHED', id);
     return { id };

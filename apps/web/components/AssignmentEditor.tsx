@@ -1,11 +1,16 @@
 'use client';
-import { useState } from 'react';
+import { AudiencePicker } from './identity/AudiencePicker';
+import { identityRequest } from './identity/client';
+import type { AudienceSelection, AccountKind } from '@tuheng/contracts';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { action } from './Actions';
 export function AssignmentEditor({
   classes,
   questions,
+  identity,
 }: {
+  identity: { id: string; kind: AccountKind; schoolId?: string | null };
   classes: { id: string; name: string }[];
   questions: {
     id: string;
@@ -19,6 +24,35 @@ export function AssignmentEditor({
     [selected, setSelected] = useState<string[]>([]),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const [schools, setSchools] = useState<{ id: string; name: string; code: string }[]>([]),
+    [schoolQuery, setSchoolQuery] = useState('');
+  const [audience, setAudience] = useState<AudienceSelection>({
+    version: 1,
+    schoolId: identity.schoolId ?? '',
+    include: {
+      allEligibleInScope: false,
+      classIds: classes.length === 1 ? [classes[0].id] : [],
+      studentIds: [],
+    },
+    exclude: { studentIds: [] },
+  });
+  const [preview, setPreview] = useState<{ count: number; rosterVersion: number }>(),
+    [reviewers, setReviewers] = useState<{ id: string; name: string; loginId: string }[]>([]),
+    [reviewerIds, setReviewerIds] = useState<string[]>(
+      identity.kind === 'TEACHER' ? [identity.id] : [],
+    );
+  useEffect(() => {
+    if (identity.kind === 'SITE_ADMIN')
+      identityRequest('/api/organization/schools?q=' + encodeURIComponent(schoolQuery)).then((r) =>
+        setSchools(r.items),
+      );
+  }, [identity.kind, schoolQuery]);
+  useEffect(() => {
+    if (audience.schoolId && identity.kind !== 'TEACHER')
+      identityRequest(
+        '/api/organization/accounts?schoolId=' + audience.schoolId + '&kind=TEACHER',
+      ).then((r) => setReviewers(r.items));
+  }, [audience.schoolId, identity.kind]);
   return (
     <form
       className="editor"
@@ -29,7 +63,9 @@ export function AssignmentEditor({
         try {
           const r = await action('assignment', {
             title: f.get('title'),
-            classId: f.get('classId'),
+            audience,
+            rosterVersion: preview?.rosterVersion,
+            reviewerIds,
             questionVersionIds: selected,
             startsAt: new Date(String(f.get('startsAt'))).toISOString(),
             dueAt: new Date(String(f.get('dueAt'))).toISOString(),
@@ -37,7 +73,9 @@ export function AssignmentEditor({
             maxAttempts: Number(f.get('maxAttempts')),
             releaseAnswers: f.get('releaseAnswers') === 'on',
           });
-          router.push(`/teacher/assignments/${r.id}`);
+          router.push(
+            `/${identity.kind === 'TEACHER' ? 'teacher' : identity.kind === 'SCHOOL_ADMIN' ? 'school' : 'admin'}/assignments/${r.id}`,
+          );
           router.refresh();
         } catch (e) {
           setError((e as Error).message);
@@ -53,16 +91,37 @@ export function AssignmentEditor({
             作业标题
             <input name="title" required placeholder="第一章 · 点的投影作业" />
           </label>
-          <label>
-            教学班
-            <select name="classId" aria-label="教学班" required>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {identity.kind === 'SITE_ADMIN' && (
+            <>
+              <label>
+                搜索学校
+                <input value={schoolQuery} onChange={(e) => setSchoolQuery(e.target.value)} />
+              </label>
+              <label>
+                操作学校
+                <select
+                  value={audience.schoolId}
+                  required
+                  onChange={(e) => {
+                    setAudience({
+                      version: 1,
+                      schoolId: e.target.value,
+                      include: { allEligibleInScope: false, classIds: [], studentIds: [] },
+                      exclude: { studentIds: [] },
+                    });
+                    setReviewerIds([]);
+                  }}
+                >
+                  <option value="">请选择学校</option>
+                  {schools.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} · {s.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
           <label>
             开始时间（当前设备时区）
             <input type="datetime-local" name="startsAt" required />
@@ -87,6 +146,31 @@ export function AssignmentEditor({
           </label>
         </div>
       </section>
+      {audience.schoolId && (
+        <AudiencePicker value={audience} onChange={setAudience} onPreview={setPreview} />
+      )}
+      {identity.kind !== 'TEACHER' && (
+        <section className="panel">
+          <h2>指定复核教师</h2>
+          <p>所选教师仅获得本作业接收人的复核权限；管理账号不能发布正式成绩。</p>
+          {reviewers.map((t) => (
+            <label key={t.id}>
+              <input
+                type="checkbox"
+                checked={reviewerIds.includes(t.id)}
+                onChange={(e) =>
+                  setReviewerIds(
+                    e.target.checked
+                      ? [...reviewerIds, t.id]
+                      : reviewerIds.filter((id) => id !== t.id),
+                  )
+                }
+              />
+              {t.name} · {t.loginId}
+            </label>
+          ))}
+        </section>
+      )}
       <section className="panel">
         <h2>从已确认题库选择</h2>
         {questions
@@ -123,7 +207,10 @@ export function AssignmentEditor({
           {error}
         </p>
       )}
-      <button className="button primary" disabled={busy || !selected.length}>
+      <button
+        className="button primary"
+        disabled={busy || !selected.length || !preview?.count || !reviewerIds.length}
+      >
         保存作业草稿
       </button>
     </form>

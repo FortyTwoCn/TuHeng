@@ -7,3 +7,5 @@ export * from './learning';
 export * from './queries';
 
 export * from './identity';
+
+export * from './audience';

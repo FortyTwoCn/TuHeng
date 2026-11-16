@@ -1,6 +1,14 @@
 import { GradingResult } from '@tuheng/contracts';
 import type { Actor, DataPort, Entities } from './entities';
-import { ensure, hasRole, requireRole, requireClass, attemptContext } from './policy';
+import {
+  ensure,
+  hasRole,
+  requireRole,
+  attemptContext,
+  requireAssignmentRecipient,
+  requireAssignmentManager,
+  isAssignmentReviewer,
+} from './policy';
 export async function visibleClasses(db: DataPort, a: Actor) {
   const grants = hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT')
     ? await db.list('teachingGrant', { userId: a.id })
@@ -11,38 +19,70 @@ export async function visibleClasses(db: DataPort, a: Actor) {
 }
 export async function listAssignments(db: DataPort, a: Actor) {
   const classes = await visibleClasses(db, a);
-  const assignments = await db.list(
-    'assignment',
-    { classId: { in: classes.map((c) => c.id) } },
-    { orderBy: 'dueAt', desc: true },
+  const legacy = (
+    await db.list(
+      'assignment',
+      { classId: { in: classes.map((c) => c.id) } },
+      { orderBy: 'dueAt', desc: true },
+    )
+  ).filter(
+    (v) =>
+      !v.audienceRevision &&
+      (v.status === 'PUBLISHED' || hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT')),
   );
-  return assignments.filter(
-    (v) => v.status === 'PUBLISHED' || hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT'),
+  const recipientRows =
+    a.kind === 'STUDENT'
+      ? await db.list('assignmentRecipient', { studentId: a.id, active: true })
+      : a.schoolId
+        ? (await db.list('assignmentRecipient', { schoolId: a.schoolId, active: true })).filter(
+            (r) => r.reviewerIds.includes(a.id),
+          )
+        : [];
+  const assigned = recipientRows.length
+    ? await db.list('assignment', {
+        id: { in: [...new Set(recipientRows.map((r) => r.assignmentId))] },
+      })
+    : [];
+  const created = hasRole(a, 'TEACHER', 'ADMIN', 'SCHOOL_ADMIN')
+    ? await db.list('assignment', { creatorId: a.id })
+    : [];
+  return [...new Map([...legacy, ...assigned, ...created].map((v) => [v.id, v])).values()].sort(
+    (a, b) => b.dueAt.getTime() - a.dueAt.getTime(),
   );
 }
 export async function assignmentDetails(db: DataPort, a: Actor, id: string) {
   const assignment = await db.get('assignment', id);
   ensure(assignment, 'NOT_FOUND', 404);
-  await requireClass(db, a, assignment.classId);
-  const teacher =
-    hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT') &&
-    (await db.list('teachingGrant', { userId: a.id, classId: assignment.classId })).length > 0;
+  const teacher = await isAssignmentReviewer(db, a, assignment);
+  const manager = assignment.creatorId === a.id && hasRole(a, 'TEACHER', 'ADMIN', 'SCHOOL_ADMIN');
+  if (!teacher && !manager) await requireAssignmentRecipient(db, a, assignment);
+  if (manager) await requireAssignmentManager(db, a, assignment);
   ensure(
-    teacher || (assignment.status === 'PUBLISHED' && new Date() >= assignment.startsAt),
+    teacher || manager || (assignment.status === 'PUBLISHED' && new Date() >= assignment.startsAt),
     'NOT_AVAILABLE',
     403,
   );
   const items = await db.list('assignmentItem', { assignmentId: id }, { orderBy: 'position' });
   return {
-    assignment,
+    assignment: a.kind === 'STUDENT' ? { ...assignment, audience: undefined } : assignment,
     teacher,
+    manager,
     items: await Promise.all(
       items.map(async (item) => {
         const q = await db.get('questionVersion', item.questionVersionId);
         ensure(q, 'NOT_FOUND');
+        const grantedRecipients = assignment.audienceRevision
+          ? (await db.list('assignmentRecipient', { assignmentId: id, active: true }))
+              .filter((r) => r.reviewerIds.includes(a.id))
+              .map((r) => r.studentId)
+          : null;
         const submissions = await db.list('submission', {
           itemId: item.id,
-          ...(!teacher ? { userId: a.id } : {}),
+          ...(!teacher
+            ? { userId: a.id }
+            : grantedRecipients
+              ? { userId: { in: grantedRecipients } }
+              : {}),
         });
         const attempts = await db.list(
           'submissionAttempt',
@@ -51,6 +91,7 @@ export async function assignmentDetails(db: DataPort, a: Actor, id: string) {
         );
         const allowedReference =
           teacher ||
+          manager ||
           (assignment.releaseAnswers &&
             attempts.some((at) => at.ownerId === a.id && at.publishedDecisionId));
         return {
@@ -74,10 +115,9 @@ export async function viewAttempt(db: DataPort, a: Actor, id: string) {
   const q = await db.get('questionVersion', attempt.questionVersionId);
   ensure(q, 'NOT_FOUND');
   const teacher =
-    attempt.source === 'ASSIGNMENT' &&
-    hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT') &&
-    assignment &&
-    (await db.list('teachingGrant', { userId: a.id, classId: assignment.classId })).length > 0;
+    attempt.source === 'ASSIGNMENT' && assignment
+      ? await isAssignmentReviewer(db, a, assignment, attempt.ownerId)
+      : false;
   const showSuggestions = teacher || attempt.source !== 'ASSIGNMENT';
   const runs = await db.list('gradingRun', { attemptId: id }, { orderBy: 'createdAt', desc: true });
   const suggestions = showSuggestions
@@ -127,7 +167,14 @@ export async function listReviews(db: DataPort, a: Actor) {
   const items = await db.list('assignmentItem', {
     assignmentId: { in: assignments.map((v) => v.id) },
   });
-  const submissions = await db.list('submission', { itemId: { in: items.map((v) => v.id) } });
+  const allSubmissions = await db.list('submission', { itemId: { in: items.map((v) => v.id) } });
+  const submissions = [];
+  for (const s of allSubmissions) {
+    const ass = assignments.find(
+      (v) => v.id === items.find((i) => i.id === s.itemId)?.assignmentId,
+    );
+    if (ass && (await isAssignmentReviewer(db, a, ass, s.userId))) submissions.push(s);
+  }
   const attempts = await db.list(
     'submissionAttempt',
     { submissionId: { in: submissions.map((s) => s.id) } },
@@ -236,11 +283,15 @@ export async function canReadAsset(
     for (const item of items) {
       const ass = await db.get('assignment', item.assignmentId);
       if (!ass) continue;
-      const grant =
-        hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT') &&
-        (await db.list('teachingGrant', { userId: a.id, classId: ass.classId })).length;
+      const grant = await isAssignmentReviewer(db, a, ass);
       if (grant) return asset;
-      const enrolled = (await db.list('enrollment', { userId: a.id, classId: ass.classId })).length;
+      let enrolled = false;
+      try {
+        await requireAssignmentRecipient(db, a, ass);
+        enrolled = true;
+      } catch {
+        /* other assigned references may authorize this asset */
+      }
       if (enrolled && ass.status === 'PUBLISHED' && new Date() >= ass.startsAt) {
         if (stem) return asset;
         if (ass.releaseAnswers) {

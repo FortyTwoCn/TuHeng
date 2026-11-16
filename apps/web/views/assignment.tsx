@@ -3,6 +3,8 @@ import { database } from '@tuheng/database';
 import { assignmentDetails, type Actor } from '@tuheng/domain';
 import { Panel, PageTitle, Badge } from '@tuheng/ui';
 import { formatPoints } from '@tuheng/contracts';
+import { ReviseAudience } from '../components/identity/ReviseAudience';
+import { PublishAudience } from '../components/identity/PublishAudience';
 import { ActionButton } from '../components/Actions';
 import { SubmissionEditor } from '../components/SubmissionEditor';
 import { DrawingViewer } from '../components/DrawingViewer';
@@ -10,7 +12,7 @@ import { GeometryEditor } from '@tuheng/geometry-editor';
 import { date, Status } from './shared';
 export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
   const detail = await assignmentDetails(database, a, id);
-  const { assignment, teacher, items } = detail;
+  const { assignment, teacher, manager, items } = detail;
   return (
     <>
       <PageTitle
@@ -26,15 +28,26 @@ export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
           <span>{assignment.allowLate ? '允许迟交' : '不允许迟交'}</span>
           <span>最多提交 {assignment.maxAttempts} 次</span>
         </div>
-        {teacher && assignment.status === 'DRAFT' && (
-          <ActionButton
-            name="assignment-publish"
-            data={{ id }}
-            confirm="发布后将固定题目和评分细则版本，是否发布？"
-            className="button primary"
-          >
-            正式发布作业
-          </ActionButton>
+        {(teacher || manager) &&
+          assignment.status === 'DRAFT' &&
+          (assignment.audience ? (
+            <PublishAudience assignmentId={id} />
+          ) : (
+            <ActionButton
+              name="assignment-publish"
+              data={{ id }}
+              confirm="发布后将固定题目和评分细则版本，是否发布？"
+              className="button primary"
+            >
+              正式发布作业
+            </ActionButton>
+          ))}
+        {manager && assignment.status === 'PUBLISHED' && assignment.audience && (
+          <ReviseAudience
+            assignmentId={id}
+            initial={assignment.audience}
+            revision={assignment.audienceRevision ?? 0}
+          />
         )}
         {teacher && (
           <p className="small muted">版本已冻结。学生提交后，在批改复核工作台逐项确认。</p>
@@ -59,7 +72,7 @@ export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
                 <span>{item.question.chapter}</span>
               </div>
               {assets.length > 0 && <DrawingViewer assets={assets} />}
-              {teacher && item.question.geometryDocument && (
+              {(teacher || manager) && item.question.geometryDocument && (
                 <GeometryEditor value={item.question.geometryDocument} readOnly role="teacher" />
               )}
               <details>
@@ -97,6 +110,8 @@ export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
                     <p className="muted">尚无学生提交。</p>
                   )}
                 </>
+              ) : manager ? (
+                <p>此作业由指定教师复核；管理权限不开放学生私有作答。</p>
               ) : (
                 <>
                   {item.attempts.length > 0 && (
