@@ -474,6 +474,7 @@ model IdentitySequence {
 }
 
 model VerificationChallenge {
+  tokenVersion Int @default(-1)
   id          String    @id @default(uuid())
   realm       String
   purpose     String
@@ -702,4 +703,16 @@ model AIInvocationAttempt {
   invocation AIInvocation @relation(fields: [invocationId], references: [id])
   @@unique([invocationId, ordinal])
   @@index([providerId, createdAt])
+}
+
+model UserNotification {
+  id String @id @default(uuid())
+  userId String
+  assignmentId String
+  kind String
+  revision Int
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([userId, assignmentId, kind, revision])
+  @@index([userId, readAt, createdAt])
 }

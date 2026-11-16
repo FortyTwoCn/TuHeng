@@ -1,3 +1,4 @@
+import { prepareLogin } from './identity-login';
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { GeometryDocument } from '@tuheng/contracts';
@@ -16,11 +17,11 @@ for (const viewport of [
       const origin = new URL(baseURL!).origin;
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
-      await page.goto('/login?callbackUrl=%2Fgeometry');
+      await prepareLogin(page, 'student', '/geometry');
       await expect(page.locator('form')).toHaveAttribute('method', 'post');
-      await page.getByLabel('账号邮箱').fill('student@tuheng.local');
+      await page.getByLabel('已绑定邮箱', { exact: true }).fill('student@tuheng.local');
       await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
-      await page.getByRole('button', { name: '进入图衡' }).tap();
+      await page.getByRole('button', { name: '登录', exact: true }).tap();
       await expect(page).toHaveURL(origin + '/geometry');
       await expect(page.locator('.geometry-editor')).toBeVisible();
       const capabilities = await page.evaluate(() => ({

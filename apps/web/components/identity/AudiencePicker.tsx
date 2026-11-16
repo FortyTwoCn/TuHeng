@@ -10,6 +10,8 @@ type Browse = {
   rosterVersion: number;
   people: { id: string; name: string; studentNumber: string; selected: boolean }[];
   total: number;
+  teacherTotal: number;
+  classTotal: number;
   teachers: Node[];
   classes: Node[];
   unassigned: number;
@@ -56,6 +58,9 @@ export function AudiencePicker({
   const [browse, setBrowse] = useState<Browse>(),
     [query, setQuery] = useState(''),
     [page, setPage] = useState(0),
+    [teacherPage, setTeacherPage] = useState(0),
+    [classPage, setClassPage] = useState(0),
+    [treeQuery, setTreeQuery] = useState(''),
     [teacherId, setTeacherId] = useState(''),
     [classId, setClassId] = useState(''),
     [selectedOnly, setSelectedOnly] = useState(false),
@@ -72,6 +77,9 @@ export function AudiencePicker({
           selection: value,
           query,
           page,
+          teacherPage,
+          classPage,
+          treeQuery,
           teacherId: teacherId || undefined,
           classId: classId || undefined,
           selectedOnly,
@@ -93,7 +101,18 @@ export function AudiencePicker({
       current = false;
       clearTimeout(timer);
     };
-  }, [value, query, page, teacherId, classId, selectedOnly, onPreview]);
+  }, [
+    value,
+    query,
+    page,
+    teacherPage,
+    classPage,
+    treeQuery,
+    teacherId,
+    classId,
+    selectedOnly,
+    onPreview,
+  ]);
   async function toggle(
     target: 'ALL' | 'TEACHER' | 'CLASS' | 'STUDENT',
     targetId: string | undefined,
@@ -153,6 +172,17 @@ export function AudiencePicker({
       </label>
       <div className="audience-columns">
         <div>
+          <label>
+            搜索教师或班级
+            <input
+              value={treeQuery}
+              onChange={(e) => {
+                setTreeQuery(e.target.value);
+                setTeacherPage(0);
+                setClassPage(0);
+              }}
+            />
+          </label>
           <details open>
             <summary>按教师浏览</summary>
             {browse?.teachers.map((t) => (
@@ -164,6 +194,7 @@ export function AudiencePicker({
                   onClick={() => {
                     setTeacherId(teacherId === t.id ? '' : t.id);
                     setClassId('');
+                    setClassPage(0);
                     setPage(0);
                   }}
                 >
@@ -177,6 +208,22 @@ export function AudiencePicker({
                 />
               </div>
             ))}
+            <div className="identity-inline">
+              <button
+                type="button"
+                disabled={!teacherPage}
+                onClick={() => setTeacherPage(teacherPage - 1)}
+              >
+                上一页教师
+              </button>
+              <button
+                type="button"
+                disabled={(teacherPage + 1) * 20 >= (browse?.teacherTotal ?? 0)}
+                onClick={() => setTeacherPage(teacherPage + 1)}
+              >
+                下一页教师
+              </button>
+            </div>
           </details>
           <details open>
             <summary>按班级浏览</summary>
@@ -211,6 +258,22 @@ export function AudiencePicker({
                 />
               </div>
             ))}
+            <div className="identity-inline">
+              <button
+                type="button"
+                disabled={!classPage}
+                onClick={() => setClassPage(classPage - 1)}
+              >
+                上一页班级
+              </button>
+              <button
+                type="button"
+                disabled={(classPage + 1) * 20 >= (browse?.classTotal ?? 0)}
+                onClick={() => setClassPage(classPage + 1)}
+              >
+                下一页班级
+              </button>
+            </div>
             {!!browse?.unassigned && (
               <button
                 type="button"

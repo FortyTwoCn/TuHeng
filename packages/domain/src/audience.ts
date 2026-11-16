@@ -1,4 +1,4 @@
-import { AudienceSelection } from '@tuheng/contracts';
+import { AudienceSelection, ReviewerAssignment } from '@tuheng/contracts';
 import type { Actor, DataPort, Entities } from './entities';
 import { ensure, audit } from './policy';
 import { requireSchoolScope } from './identity';
@@ -80,18 +80,32 @@ export async function freezeAssignmentAudience(
       403,
     );
   }
+  const reviewerMap = await resolveReviewerAssignments(
+    db,
+    actor,
+    resolved,
+    reviewerIds,
+    assignment.audience.reviewerAssignments ?? [],
+  );
   const revision = (assignment.audienceRevision ?? 0) + 1;
-  for (const person of resolved.recipients)
+  for (const person of resolved.recipients) {
     await db.create('assignmentRecipient', {
       assignmentId: assignment.id,
       studentId: person.studentId,
       schoolId: resolved.selection.schoolId,
       classIds: person.classIds,
-      reviewerIds,
+      reviewerIds: reviewerMap.get(person.studentId)!,
       revision,
       active: true,
       inferred: false,
     });
+    await db.create('userNotification', {
+      userId: person.studentId,
+      assignmentId: assignment.id,
+      kind: 'ASSIGNMENT_PUBLISHED',
+      revision,
+    });
+  }
   await db.update('assignment', assignment.id, { audienceRevision: revision });
   await audit(db, actor, 'ASSIGNMENT_AUDIENCE_FROZEN', assignment.id, {
     revision,
@@ -107,6 +121,7 @@ export async function reviseAssignmentAudience(
   expectedRevision: number,
   expectedRosterVersion: number,
   reviewerIds: string[],
+  reviewerAssignments: ReviewerAssignment[] = [],
 ) {
   return db.transaction(async (tx) => {
     const ass = await tx.get('assignment', id);
@@ -130,6 +145,13 @@ export async function reviseAssignmentAudience(
         403,
       );
     }
+    const reviewerMap = await resolveReviewerAssignments(
+      tx,
+      actor,
+      resolved,
+      reviewers,
+      reviewerAssignments,
+    );
     const old = await tx.list('assignmentRecipient', { assignmentId: id }),
       ids = new Set(resolved.recipients.map((r) => r.studentId)),
       revision = expectedRevision + 1;
@@ -145,6 +167,13 @@ export async function reviseAssignmentAudience(
         });
         ensure(!attempts.length, 'CANNOT_REMOVE_SUBMITTED_RECIPIENT', 409);
         await tx.update('assignmentRecipient', row.id, { active: false, revision });
+        if (row.active)
+          await tx.create('userNotification', {
+            userId: row.studentId,
+            assignmentId: id,
+            kind: 'ASSIGNMENT_REMOVED',
+            revision,
+          });
       }
     }
     for (const person of resolved.recipients) {
@@ -154,18 +183,26 @@ export async function reviseAssignmentAudience(
         studentId: person.studentId,
         schoolId: resolved.selection.schoolId,
         classIds: person.classIds,
-        reviewerIds: reviewers,
+        reviewerIds: reviewerMap.get(person.studentId)!,
         revision,
         active: true,
         inferred: false,
       };
       if (existing) await tx.update('assignmentRecipient', existing.id, data);
       else await tx.create('assignmentRecipient', data);
+      if (!existing?.active)
+        await tx.create('userNotification', {
+          userId: person.studentId,
+          assignmentId: id,
+          kind: 'ASSIGNMENT_ADDED',
+          revision,
+        });
     }
     await tx.update('assignment', id, {
       audience: {
         ...resolved.selection,
         reviewerIds: reviewers,
+        reviewerAssignments,
         rosterVersion: resolved.rosterVersion,
       },
       audienceRevision: revision,
@@ -179,4 +216,50 @@ export async function reviseAssignmentAudience(
     });
     return { revision, count: resolved.count };
   });
+}
+
+export async function resolveReviewerAssignments(
+  db: DataPort,
+  actor: Actor,
+  resolved: Awaited<ReturnType<typeof resolveAudience>>,
+  defaults: string[],
+  input: unknown,
+) {
+  const rules = ReviewerAssignment.array().max(50).parse(input);
+  ensure(actor.kind !== 'TEACHER' || rules.length === 0, 'REVIEWER_DELEGATION_FORBIDDEN', 403);
+  const allTeachers = [...new Set([...defaults, ...rules.map((r) => r.teacherId)])];
+  for (const id of allTeachers) {
+    const user = await db.get('user', id);
+    ensure(
+      user?.kind === 'TEACHER' && user.active && user.schoolId === resolved.selection.schoolId,
+      'REVIEWER_SCOPE_FORBIDDEN',
+      403,
+    );
+  }
+  const allowed = new Set(resolved.recipients.map((r) => r.studentId)),
+    overrides = new Map<string, Set<string>>();
+  for (const rule of rules) {
+    ensure(
+      rule.selection.schoolId === resolved.selection.schoolId,
+      'REVIEWER_SCOPE_FORBIDDEN',
+      403,
+    );
+    const subset = await resolveAudience(db, actor, rule.selection);
+    ensure(
+      subset.recipients.every((r) => allowed.has(r.studentId)),
+      'REVIEWER_OUTSIDE_AUDIENCE',
+    );
+    for (const person of subset.recipients) {
+      const teachers = overrides.get(person.studentId) ?? new Set<string>();
+      teachers.add(rule.teacherId);
+      overrides.set(person.studentId, teachers);
+    }
+  }
+  const result = new Map<string, string[]>();
+  for (const person of resolved.recipients) {
+    const teachers = [...(overrides.get(person.studentId) ?? new Set(defaults))];
+    ensure(teachers.length, 'REVIEWER_REQUIRED');
+    result.set(person.studentId, teachers);
+  }
+  return result;
 }

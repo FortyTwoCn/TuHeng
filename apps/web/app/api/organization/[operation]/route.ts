@@ -13,6 +13,7 @@ const Commands = z.discriminatedUnion('operation', [
     administratorName: text,
     proof: z.string(),
   }),
+  z.object({ operation: z.literal('rename-school'), id, name: text, proof: z.string() }),
   z.object({ operation: z.literal('create-teacher'), schoolId: id, name: text }),
   z.object({
     operation: z.literal('create-course'),
@@ -72,6 +73,9 @@ export async function POST(request: Request, context: { params: Promise<{ operat
     switch (input.operation) {
       case 'create-school':
         data = await org.createSchoolWithAdmin(a, input, input.proof);
+        break;
+      case 'rename-school':
+        data = await org.renameSchool(a, input.id, input.name, input.proof);
         break;
       case 'create-teacher':
         data = await org.createTeacher(a, input);

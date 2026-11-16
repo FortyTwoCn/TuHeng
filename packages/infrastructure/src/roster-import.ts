@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@tuheng/database';
 import { RosterRow, AccountKind } from '@tuheng/contracts';
 import { accountRoles, ensure, requireSchoolScope, type Actor } from '@tuheng/domain';
-import { parseRosterXlsx } from './roster-xlsx';
+import { parseRosterXlsx, RosterColumnMap } from './roster-xlsx';
 import {
   createAccountInTransaction,
   createDeliveryBatch,
@@ -25,7 +25,11 @@ export const ImportMapping = z.object({
   rowGroups: z.record(z.string(), z.string()).default({}),
   classes: z.record(z.string(), z.string()).default({}),
 });
-const Scope = z.object({ offeringId: z.string(), kind: z.enum(['SCHOOL', 'TEACHER']) });
+const Scope = z.object({
+  offeringId: z.string(),
+  kind: z.enum(['SCHOOL', 'TEACHER']),
+  columnMap: RosterColumnMap.optional(),
+});
 type Mapping = z.infer<typeof ImportMapping>;
 export type ImportIssue = { row: number; column: string; reason: string };
 async function scopeCheck(actor: Actor, schoolId: string, scope: z.infer<typeof Scope>) {
@@ -174,13 +178,17 @@ export async function previewRosterImport(
     kind: 'SCHOOL' | 'TEACHER';
     filename: string;
     bytes: Buffer;
+    columnMap?: Record<string, number>;
   },
 ) {
   const scope = Scope.parse(input);
   await scopeCheck(actor, input.schoolId, scope);
-  const parsed = await parseRosterXlsx(input.bytes, input.filename, input.kind);
+  const parsed = await parseRosterXlsx(input.bytes, input.filename, input.kind, scope.columnMap);
   if (parsed.errors.length) return { errors: parsed.errors };
-  const fingerprint = createHash('sha256').update(input.bytes).digest('hex');
+  const fingerprint = createHash('sha256')
+    .update(input.bytes)
+    .update(scope.columnMap ? JSON.stringify(Object.entries(scope.columnMap).sort()) : '')
+    .digest('hex');
   const prior = await prisma.rosterImportBatch.findUnique({
     where: {
       creatorId_schoolId_fingerprint: {
@@ -253,10 +261,11 @@ export async function mapRosterImport(actor: Actor, id: string, input: unknown) 
     409,
   );
   const school = await prisma.school.findUniqueOrThrow({ where: { id: batch.schoolId } });
-  await prisma.rosterImportBatch.update({
-    where: { id },
+  const changed = await prisma.rosterImportBatch.updateMany({
+    where: { id, status: 'PREVIEW', mapping: { equals: batch.mapping as Prisma.InputJsonValue } },
     data: { mapping: json(mapping), rosterVersion: school.rosterVersion },
   });
+  ensure(changed.count === 1, 'IMPORT_MAPPING_CONFLICT', 409);
   return rosterImportStatus(actor, id);
 }
 export async function commitRosterImport(

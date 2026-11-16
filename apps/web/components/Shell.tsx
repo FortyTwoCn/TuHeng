@@ -15,6 +15,7 @@ import {
 import type { Actor } from '@tuheng/domain';
 import { Logout } from './Actions';
 import { BrandLogo } from './BrandLogo';
+import { MobileNavigation } from './MobileNavigation';
 const menus = {
   student: [
     ['dashboard', '学习概览', LayoutDashboard],
@@ -137,12 +138,24 @@ export function Shell({
         </main>
       </div>
       <nav className="mobile-nav" aria-label="移动端主导航">
-        {menu.slice(0, area === 'student' ? 4 : 5).map(([path, label, Icon]) => (
+        {menu.slice(0, 4).map(([path, label, Icon]) => (
           <Link className={current === path ? 'active' : ''} href={`/${area}/${path}`} key={path}>
             <Icon size={21} />
             <span>{label}</span>
           </Link>
         ))}
+        <MobileNavigation
+          items={menu
+            .slice(4)
+            .filter(([path]) => path !== 'security')
+            .map(([path, label]) => ({
+              href: `/${area}/${path}`,
+              label,
+              active: current === path,
+            }))}
+          securityHref={`/${area}/security`}
+          realm={a.realm ?? (area === 'student' ? 'STUDENT' : 'STAFF')}
+        />
       </nav>
     </div>
   );

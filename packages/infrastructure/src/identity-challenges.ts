@@ -72,6 +72,7 @@ export async function requestVerification(input: {
         realm,
         purpose,
         accountId: account.id,
+        tokenVersion: account.tokenVersion,
         targetEmail: email,
         digest: securityDigest(`${id}:${realm}:${purpose}:${account.id}:${email}:${code}`),
         expiresAt: new Date(Date.now() + 300000),
@@ -103,6 +104,17 @@ export async function consumeVerification(input: {
       row.failures >= 5 ||
       (input.accountId && row.accountId !== input.accountId) ||
       (input.email && row.targetEmail !== normalizedEmail(input.email))
+    )
+      return null;
+    const account = await tx.user.findUnique({
+      where: { id: row.accountId },
+      include: { school: true },
+    });
+    if (
+      !account?.active ||
+      account.tokenVersion !== row.tokenVersion ||
+      account.realm !== row.realm ||
+      (account.schoolId && !account.school?.active)
     )
       return null;
     const digest = securityDigest(

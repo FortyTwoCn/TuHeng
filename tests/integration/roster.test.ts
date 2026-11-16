@@ -1,7 +1,9 @@
+import { resetIdentityFixtureThrottle } from '../identity-fixture';
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { randomBytes, randomUUID } from 'node:crypto';
 import ExcelJS from 'exceljs';
 import { prisma } from '@tuheng/database';
+import { securityDigest } from '../../packages/infrastructure/src/security-throttle';
 import type { Actor } from '@tuheng/domain';
 import { loadIdentity, changeOwnPassword } from '../../packages/infrastructure/src/identity-auth';
 import { reauthenticate } from '../../packages/infrastructure/src/identity-security';
@@ -10,6 +12,7 @@ import {
   createCourseOffering,
   createTeacher,
   createClass,
+  resetAccountPassword,
 } from '../../packages/infrastructure/src/organization';
 import { parseRosterXlsx, rosterTemplate } from '../../packages/infrastructure/src/roster-xlsx';
 import {
@@ -31,6 +34,7 @@ let root: Actor,
   batchId: string,
   credentialBatchId: string;
 beforeAll(async () => {
+  await resetIdentityFixtureThrottle();
   process.env.TUHENG_SECRET_KEYS = JSON.stringify({ test: randomBytes(32).toString('base64') });
   process.env.TUHENG_SECRET_ACTIVE_KEY = 'test';
   process.env.QUEUE_NAMESPACE = 'identity-roster-test';
@@ -73,6 +77,27 @@ describe.sequential('real XLSX, import and credential delivery', () => {
     await expect(parseRosterXlsx(bytes, 'students.xlsm', 'SCHOOL')).rejects.toThrow(
       'XLSX_REQUIRED',
     );
+  });
+  it('IM08: explicit column mapping retains text identifiers and rejects duplicate mappings', async () => {
+    const wb = new ExcelJS.Workbook(),
+      sheet = wb.addWorksheet('名单');
+    sheet.addRow(['姓名', '学籍', '班级名称']);
+    sheet.addRow(['测试学生', '000019', '一班']);
+    const bytes = Buffer.from(await wb.xlsx.writeBuffer());
+    const parsed = await parseRosterXlsx(bytes, 'mapped.xlsx', 'TEACHER', {
+      班级: 3,
+      学号: 2,
+      学生姓名: 1,
+    });
+    expect(parsed.rows[0]).toMatchObject({
+      studentNumber: '000019',
+      name: '测试学生',
+      className: '一班',
+    });
+    expect(parsed.errors).toEqual([]);
+    await expect(
+      parseRosterXlsx(bytes, 'mapped.xlsx', 'TEACHER', { 班级: 1, 学号: 1, 学生姓名: 2 }),
+    ).rejects.toThrow('XLSX_COLUMN_MAPPING_INVALID');
   });
   it('IM02: preflight changes no formal accounts and requires explicit teacher mapping', async () => {
     const count = await prisma.user.count({ where: { schoolId } });
@@ -152,6 +177,45 @@ describe.sequential('real XLSX, import and credential delivery', () => {
     expect(
       (await prisma.secretRecord.findUniqueOrThrow({ where: { id: secret.secretId } })).ciphertext,
     ).toBe('');
+  });
+  it('IM06/ID09: expired links, delivery windows and reset credentials cannot be reused', async () => {
+    const teacher = await createTeacher(root, { schoolId, name: '短期凭据测试' });
+    const first = await prepareCredentialDownload(
+      root,
+      teacher.credentialBatchId,
+      'TEACHER',
+      proof,
+    );
+    await prisma.credentialDownload.update({
+      where: { id: securityDigest(first.token) },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await expect(downloadCredentials(root, first.token)).rejects.toThrow('DOWNLOAD_EXPIRED');
+    const pending = await prepareCredentialDownload(
+      root,
+      teacher.credentialBatchId,
+      'TEACHER',
+      proof,
+    );
+    const reset = await resetAccountPassword(root, teacher.id, proof);
+    await expect(downloadCredentials(root, pending.token)).rejects.toThrow(
+      'NO_AVAILABLE_INITIAL_CREDENTIALS',
+    );
+    await expect(loadIdentity(teacher.id, 'STAFF', 0, true)).rejects.toThrow('SESSION_REVOKED');
+    const current = await prepareCredentialDownload(
+      root,
+      reset.credentialBatchId,
+      'TEACHER',
+      proof,
+    );
+    expect((await downloadCredentials(root, current.token)).bytes.length).toBeGreaterThan(1000);
+    await prisma.credentialDeliveryBatch.update({
+      where: { id: reset.credentialBatchId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await expect(
+      prepareCredentialDownload(root, reset.credentialBatchId, 'TEACHER', proof),
+    ).rejects.toThrow('CREDENTIAL_DELIVERY_EXPIRED');
   });
   it('ID10: teacher cannot create another teacher or attach a cross-school class', async () => {
     const created = await createTeacher(root, { schoolId, name: '另一个教师' });

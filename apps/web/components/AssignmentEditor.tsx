@@ -1,7 +1,8 @@
 'use client';
+import { ReviewerAssignments, TeacherPicker } from './identity/ReviewerAssignments';
 import { AudiencePicker } from './identity/AudiencePicker';
 import { identityRequest } from './identity/client';
-import type { AudienceSelection, AccountKind } from '@tuheng/contracts';
+import type { AudienceSelection, AccountKind, ReviewerAssignment } from '@tuheng/contracts';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { action } from './Actions';
@@ -37,7 +38,7 @@ export function AssignmentEditor({
     exclude: { studentIds: [] },
   });
   const [preview, setPreview] = useState<{ count: number; rosterVersion: number }>(),
-    [reviewers, setReviewers] = useState<{ id: string; name: string; loginId: string }[]>([]),
+    [reviewerAssignments, setReviewerAssignments] = useState<ReviewerAssignment[]>([]),
     [reviewerIds, setReviewerIds] = useState<string[]>(
       identity.kind === 'TEACHER' ? [identity.id] : [],
     );
@@ -47,12 +48,6 @@ export function AssignmentEditor({
         setSchools(r.items),
       );
   }, [identity.kind, schoolQuery]);
-  useEffect(() => {
-    if (audience.schoolId && identity.kind !== 'TEACHER')
-      identityRequest(
-        '/api/organization/accounts?schoolId=' + audience.schoolId + '&kind=TEACHER',
-      ).then((r) => setReviewers(r.items));
-  }, [audience.schoolId, identity.kind]);
   return (
     <form
       className="editor"
@@ -66,6 +61,7 @@ export function AssignmentEditor({
             audience,
             rosterVersion: preview?.rosterVersion,
             reviewerIds,
+            reviewerAssignments,
             questionVersionIds: selected,
             startsAt: new Date(String(f.get('startsAt'))).toISOString(),
             dueAt: new Date(String(f.get('dueAt'))).toISOString(),
@@ -110,6 +106,7 @@ export function AssignmentEditor({
                       exclude: { studentIds: [] },
                     });
                     setReviewerIds([]);
+                    setReviewerAssignments([]);
                   }}
                 >
                   <option value="">请选择学校</option>
@@ -149,26 +146,20 @@ export function AssignmentEditor({
       {audience.schoolId && (
         <AudiencePicker value={audience} onChange={setAudience} onPreview={setPreview} />
       )}
-      {identity.kind !== 'TEACHER' && (
+      {identity.kind !== 'TEACHER' && audience.schoolId && (
         <section className="panel">
           <h2>指定复核教师</h2>
           <p>所选教师仅获得本作业接收人的复核权限；管理账号不能发布正式成绩。</p>
-          {reviewers.map((t) => (
-            <label key={t.id}>
-              <input
-                type="checkbox"
-                checked={reviewerIds.includes(t.id)}
-                onChange={(e) =>
-                  setReviewerIds(
-                    e.target.checked
-                      ? [...reviewerIds, t.id]
-                      : reviewerIds.filter((id) => id !== t.id),
-                  )
-                }
-              />
-              {t.name} · {t.loginId}
-            </label>
-          ))}
+          <TeacherPicker
+            schoolId={audience.schoolId}
+            value={reviewerIds}
+            onChange={setReviewerIds}
+          />
+          <ReviewerAssignments
+            schoolId={audience.schoolId}
+            value={reviewerAssignments}
+            onChange={setReviewerAssignments}
+          />
         </section>
       )}
       <section className="panel">

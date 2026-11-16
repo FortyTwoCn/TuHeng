@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { actor } from '../../../../lib/auth';
 import { checkOrigin, limitedBody, errorResponse } from '../../../../lib/http';
-import { rosterTemplate } from '../../../../../../packages/infrastructure/src/roster-xlsx';
+import {
+  rosterTemplate,
+  RosterColumnMap,
+} from '../../../../../../packages/infrastructure/src/roster-xlsx';
 import {
   previewRosterImport,
   mapRosterImport,
@@ -27,6 +30,9 @@ export async function POST(request: Request, context: { params: Promise<{ operat
         kind: a.kind === 'TEACHER' ? 'TEACHER' : 'SCHOOL',
         filename: url.searchParams.get('filename') ?? '',
         bytes,
+        columnMap: url.searchParams.has('columns')
+          ? RosterColumnMap.parse(JSON.parse(url.searchParams.get('columns')!))
+          : undefined,
       });
     } else {
       const body = JSON.parse((await limitedBody(request, 2 * 1024 * 1024)).toString());

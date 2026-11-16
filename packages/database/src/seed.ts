@@ -10,6 +10,11 @@ if (
   );
 const password = process.env.SEED_PASSWORD;
 if (!password || password.length < 12) throw new Error('Set SEED_PASSWORD, at least 12 characters');
+await prisma.school.upsert({
+  where: { id: 'school-demo' },
+  create: { id: 'school-demo', code: 'TEST-DEMO', name: '图衡自动化测试学校' },
+  update: {},
+});
 for (const [id, role, name] of [
   ['student', 'STUDENT', '林同学'],
   ['student2', 'STUDENT', '陈同学'],
@@ -27,18 +32,28 @@ for (const [id, role, name] of [
       kind: role === 'ADMIN' ? 'SITE_ADMIN' : role,
       realm: role === 'STUDENT' ? 'STUDENT' : 'STAFF',
       loginId: role === 'ADMIN' ? 'admin' : role === 'TEACHER' ? 'T000001' : null,
+      schoolId: role === 'ADMIN' ? null : 'school-demo',
+      studentNumber: role === 'STUDENT' ? (id === 'student' ? '001' : '002') : null,
       emailNormalized: `${id}@tuheng.local`,
       emailVerifiedAt: new Date(),
       mustChangePassword: false,
       installationComplete: role === 'ADMIN',
     },
-    update: {},
+    update: {
+      schoolId: role === 'ADMIN' ? null : 'school-demo',
+      studentNumber: role === 'STUDENT' ? (id === 'student' ? '001' : '002') : null,
+    },
   });
 }
 await prisma.course.upsert({
   where: { id: 'course-demo' },
-  create: { id: 'course-demo', title: '画法几何及机械制图（演示课程）', code: 'DEMO-GE101' },
-  update: {},
+  create: {
+    id: 'course-demo',
+    schoolId: 'school-demo',
+    title: '画法几何及机械制图（演示课程）',
+    code: 'DEMO-GE101',
+  },
+  update: { schoolId: 'school-demo' },
 });
 await prisma.courseOffering.upsert({
   where: { id: 'offering-demo' },
@@ -47,8 +62,13 @@ await prisma.courseOffering.upsert({
 });
 await prisma.teachingClass.upsert({
   where: { id: 'class-demo' },
-  create: { id: 'class-demo', offeringId: 'offering-demo', name: '机械工程 2601 · 演示班' },
-  update: {},
+  create: {
+    id: 'class-demo',
+    schoolId: 'school-demo',
+    offeringId: 'offering-demo',
+    name: '机械工程 2601 · 演示班',
+  },
+  update: { schoolId: 'school-demo' },
 });
 for (const userId of ['student', 'student2'])
   await prisma.enrollment.upsert({

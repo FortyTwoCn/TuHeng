@@ -446,3 +446,16 @@ export async function updateClass(
   });
   return { classId };
 }
+
+export async function renameSchool(actor: Actor, id: string, name: string, proof: string) {
+  ensure(actor.kind === 'SITE_ADMIN', 'FORBIDDEN', 403);
+  await requireRecentAuthentication(actor, proof);
+  ensure(name.trim().length > 0 && name.trim().length <= 100, 'SCHOOL_NAME_INVALID');
+  return prisma.$transaction(async (tx) => {
+    const school = await tx.school.update({ where: { id }, data: { name: name.trim() } });
+    await tx.auditLog.create({
+      data: { actorId: actor.id, action: 'SCHOOL_RENAMED', resourceId: id, details: {} },
+    });
+    return school;
+  });
+}

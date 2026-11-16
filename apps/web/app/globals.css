@@ -1398,7 +1398,8 @@ footer {
     justify-content: space-around;
     box-shadow: 0 -4px 16px #12334405;
   }
-  .mobile-nav a {
+  .mobile-nav > a,
+  .mobile-nav > .mobile-more {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1407,6 +1408,53 @@ footer {
     font-size: 9px;
     flex: 1;
     min-height: 44px;
+  }
+  .mobile-nav > .mobile-more {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    justify-content: center;
+  }
+  .mobile-navigation-sheet {
+    width: min(440px, calc(100% - 24px));
+    max-height: calc(100vh - 100px);
+    max-height: calc(100dvh - 100px);
+    margin: auto auto calc(80px + env(safe-area-inset-bottom));
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    color: var(--ink);
+    background: white;
+    overflow-y: auto;
+  }
+  .mobile-navigation-sheet::backdrop {
+    background: #122f4260;
+  }
+  .mobile-navigation-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .mobile-navigation-sheet nav {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .mobile-navigation-sheet a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: 8px;
+  }
+  .mobile-navigation-sheet a[aria-current='page'] {
+    background: #e5f4f1;
+    color: var(--teal);
+  }
+  .mobile-navigation-sheet button {
+    min-height: 44px;
+    min-width: 44px;
   }
   .mobile-nav a.active {
     color: var(--teal);
@@ -1539,6 +1587,8 @@ footer {
   gap: 16px;
 }
 .identity-choice,
+.identity-form,
+.identity-card-list,
 .identity-panel,
 .identity-list article {
   background: white;
@@ -1552,6 +1602,7 @@ footer {
   text-decoration: none;
 }
 .identity-entry label,
+.identity-console label,
 .identity-panel label {
   display: grid;
   gap: 6px;
@@ -1559,6 +1610,8 @@ footer {
   min-width: 0;
 }
 .identity-entry input,
+.identity-console input,
+.identity-console select,
 .identity-entry select,
 .identity-panel input,
 .identity-panel select,
@@ -1576,6 +1629,8 @@ footer {
   align-items: center;
   margin-block: 12px;
 }
+.identity-console button,
+.identity-panel button,
 .identity-inline button,
 .identity-tabs button,
 .identity-reauth button {
@@ -1630,13 +1685,48 @@ footer {
 .identity-table-scroll table {
   min-width: 640px;
 }
+.identity-console input[type='checkbox'],
 .identity-panel input[type='checkbox'] {
   width: 22px;
   min-height: 22px;
 }
-.organization-console {
+.organization-console,
+.identity-console {
   min-width: 0;
 }
+.identity-console p,
+.identity-console code {
+  overflow-wrap: anywhere;
+}
+.identity-console .checkbox-label {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.identity-console .identity-form {
+  max-width: 900px;
+}
+.identity-console button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.identity-console button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+}
+.identity-console fieldset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.identity-console .identity-reauth {
+  max-width: 540px;
+}
+.identity-console input[type='checkbox'] {
+  flex: none;
+}
+
+.identity-console details > summary,
 .organization-console details > summary {
   min-height: 44px;
   padding-block: 10px;

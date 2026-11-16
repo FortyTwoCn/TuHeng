@@ -2,6 +2,8 @@
 
 <img src="apps/web/public/brand/tuheng-logo.svg" alt="图衡几何图标" width="96" height="96" />
 
+四类账号（站点管理员、学校、教师、学生）、学生/教师管理双认证域；支持学校四列/教师三列 XLSX 导入、限时凭据交付、按人冻结的作业名单、后台 AI 供应商/模型/模块规则及 SMTP。实现和验证见[身份与 AI 重构](docs/IDENTITY_AI_REFACTOR.md)。
+
 工程图学教学闭环。Next.js + TypeScript 模块化单体，独立 Node Worker 与可替换视觉评分核心。
 
 几何编辑器支持 VHW、三视图、正等轴测和斜二等轴。登录后访问 `/geometry` 独立作图，或在教师建题时选择几何作答方式。升级需执行 `npm install`、`npm run db:generate`、`npm run db:migrate`。使用与契约见 [几何编辑器架构](docs/GEOMETRY_EDITOR_ARCHITECTURE.md)。
@@ -24,20 +26,21 @@ VHW 与三视图现在采用同一张展开图纸、共享原点和镜头。拖�
 
 ## 本地运行
 
-Node 22+、Docker Compose。复制 `.env.example` 为 `.env`，设置 AUTH_SECRET 和 SEED_PASSWORD（至少 12 字符）。
+Node 22+，PostgreSQL、Redis 和 S3 兼容对象存储（可使用现有本地服务或 Docker Compose）。复制 `.env.example` 为 `.env`，设置独立的 AUTH_SECRET、数据库和对象存储配置。
 
 ```sh
 npm ci
 docker compose up -d
 npm run db:generate
 npm run db:migrate
-npm run db:seed
+npm run identity:secrets -- --initialize
+npm run identity:bootstrap -- --output .runtime/admin-delivery.txt
 npm run dev
 # 另一个终端
 npm run worker
 ```
 
-访问 http://localhost:3000 。测试账户 student@tuheng.local、teacher@tuheng.local、admin@tuheng.local 使用 SEED_PASSWORD。seed 仅本地显式执行，数据标记为演示。
+访问 http://localhost:3000/login/staff，使用固定 ID `admin` 和本地受限交付文件中的临时密码。首次登录必须改密，在安装向导中配置/启用 SMTP，再通过真实邮件验证码绑定邮箱。安装完成后创建学校、教师和学生；不存在公开注册或固定初始密码。已有数据库先执行[迁移说明](docs/IDENTITY_AI_REFACTOR.md)，不要重复 bootstrap 或重建库。
 
 平板通过局域网访问时，在 `.env` 增加 `APP_ALLOWED_ORIGINS=http://本机局域网IP:3000`，重启 `npm run dev`，在平板打开该地址。`NEXTAUTH_URL=http://localhost:3000` 可保留供本机使用；多个受信任地址用逗号分隔，必须包含协议和端口，不使用通配符。IP 变化后需更新配置。开发资源、登录跳转和保存接口共用这些应用地址；操作与排查见 [局域网开发与平板访问](docs/OPERATIONS.md#局域网开发与平板访问)。
 
@@ -52,10 +55,8 @@ npm run build
 npm run test:e2e
 ```
 
-架构与权限见 docs/。实际完成/限制、精确测试结果与下一步见 docs/DELIVERY.md。
+架构与权限见 docs/。当前账号、组织与 AI 重构的逐项完成情况、测试、迁移和限制见 [验收报告](docs/IDENTITY_AI_ACCEPTANCE.md)；docs/DELIVERY.md 保留早期交付历史。
 
 在管理员 AI 中心维护版本化配置，无需改 .env 或重启 Web/Worker。旧任务沿用旧配置，可在管理页选择“使用当前配置新建运行”。详见 [运行与恢复](docs/OPERATIONS.md)。
 
-Playwright 首次使用先 `npx playwright install chromium`；已有系统 Chromium 时可用 `PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e`。集成测试应在隔离测试数据库运行；本地验收时先停止普通 Worker，避免它抢占测试任务。
-
-本环境本地演示账户初始密码为 `TuHeng-Dev-2026!`（仅本地测试）。自行安装时使用 `.env` 中配置的 SEED_PASSWORD；不要在正式环境复用演示账号或密码。
+Playwright 首次使用先 `npx playwright install chromium`；已有系统 Chromium 时可用 `PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e`。集成测试使用隔离数据库、私有测试桶与独立队列。仅自动化测试库可显式设置 `SEED_TEST_ACCOUNTS=1` 和自定义 `SEED_PASSWORD` 后执行 `npm run db:seed`，生成的四个测试账号不可用于部署。身份浏览器用例还需将本地 SMTP `127.0.0.1:1026` 加入测试服务的出口白名单，并运行同一测试库/队列的真实 Worker；详见[测试记录](docs/IDENTITY_AI_ACCEPTANCE.md)。

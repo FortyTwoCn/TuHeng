@@ -54,6 +54,11 @@ export function RosterImportWizard({
   teacher?: boolean;
   offerings: { id: string; term: string; course: { title: string } }[];
 }) {
+  const columnNames = teacher
+    ? ['班级', '学号', '学生姓名']
+    : ['教师名', '班级', '学号', '学生姓名'];
+  const [customColumns, setCustomColumns] = useState(false),
+    [columns, setColumns] = useState<Record<string, number>>({});
   const [offering, setOffering] = useState(''),
     [preview, setPreview] = useState<Preview>(),
     [mapping, setMapping] = useState<Mapping>(),
@@ -107,6 +112,31 @@ export function RosterImportWizard({
           ))}
         </select>
       </label>
+      <details>
+        <summary>列映射（使用非标准列顺序时）</summary>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={customColumns}
+            onChange={(e) => setCustomColumns(e.target.checked)}
+          />
+          手动指定列位置
+        </label>
+        {customColumns &&
+          columnNames.map((name, i) => (
+            <label key={name}>
+              {name}所在列（A=1）
+              <input
+                type="number"
+                min={1}
+                max={8}
+                value={columns[name] ?? i + 1}
+                onChange={(e) => setColumns((c) => ({ ...c, [name]: Number(e.target.value) }))}
+              />
+            </label>
+          ))}
+        <p>第一行为列名，第二行开始读取数据。改变映射后重新上传预检。</p>
+      </details>
       <label>
         上传 XLSX（最多 5 MB、5000 行）
         <input
@@ -124,6 +154,13 @@ export function RosterImportWizard({
                 offeringId: offering,
                 filename: f.name,
               });
+              if (customColumns)
+                params.set(
+                  'columns',
+                  JSON.stringify(
+                    Object.fromEntries(columnNames.map((h, i) => [h, columns[h] ?? i + 1])),
+                  ),
+                );
               const response = await fetch('/api/roster/preview?' + params, {
                 method: 'POST',
                 headers: {

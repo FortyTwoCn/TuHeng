@@ -14,7 +14,7 @@
 | SMTP / 密钥        | 无公共实现                                | 无验证码、无安装闭环                        | SecretStore、受限出口、版本化 SMTP、验证码和安装向导             |
 | 几何 / 自测 / 成绩 | geometry-*、learning、decisions           | 已有统一图纸、曲线、正式成绩教师发布        | 保留契约、实体 ID、权限、队列和历史；加入身份及受众回归          |
 
-## 权限矩阵（目标约束）
+## 权限矩阵（已实施约束）
 
 | 操作          | admin                    | 学校                   | 教师                 | 学生             |
 | ------------- | ------------------------ | ---------------------- | -------------------- | ---------------- |
@@ -47,7 +47,7 @@
 - E：AI Provider/Model/Binding 管理 → 协议适配 → Gateway/任务快照/共享并发 → 保留 grading-core 与 outbox；无模型提交回归。
 - F：响应式真实浏览器、迁移/恢复演练；typecheck、lint、unit、integration、E2E、build；逐项记录结果与限制。
 
-验收编号采用附件 ID01–11、IM01–07、AU01–06、AI01–08、EM01–03。当前仅完成审查，不把计划标为已实现。实际 SMTP 投递、协议替身测试与真实模型调用分别记录；无凭据不伪称外部服务通过。本轮不调用付费模型验证，不新增照片识别、不改几何格式、不创建第二套评分流程。
+验收编号采用附件 ID01–11、IM01–07、AU01–06、AI01–08、EM01–03。本文件保留各阶段当时的记录；当前完成状态和最终实测见 [验收报告](IDENTITY_AI_ACCEPTANCE.md)。实际 SMTP 投递、协议替身测试与真实模型调用分别记录；无凭据不伪称外部服务通过。本轮不调用付费模型验证，不新增照片识别、不改几何格式、不创建第二套评分流程。
 
 ## 阶段 B 进行记录（2026-11-16）
 
@@ -55,7 +55,7 @@
 - 学生与 STAFF 各自 NextAuth 配置、签名派生、cookie、CSRF 和 JWT audience；原共享认证接口返回 410。首次设置状态在数据库与服务端 guard 检查。
 - 新密码限制 12 字符 / 72 UTF-8 字节；随机临时密码 20 字符；验证码 HMAC 摘要、5 分钟/60 秒重发间隔/5 次错误、锁行单次消费；多维限流。邮件同步发送，不持久化验证码正文。
 - AES-256-GCM SecretStore，AAD 绑定 ID/用途；密钥轮换由 keyId 区分。出站 DNS 校验后绑定连接地址，禁止重定向/内网，部署白名单可允许本地 SMTP。
-- NextAuth v4 的可选 nodemailer 7 peer 与当前安全版本冲突；实际 EmailService 仅使用别名 tuheng-smtp-client（nodemailer 10.6.0），未强制忽略 peer。ExcelJS 4.4.0（MIT）用于后续 XLSX；已记录其间接依赖审计，待 F 阶段处理适用更新。
+- NextAuth v4 的可选 nodemailer 7 peer 与当前安全版本冲突；实际 EmailService 仅使用别名 tuheng-smtp-client（nodemailer 10.6.0），未强制忽略 peer。ExcelJS 4.4.0（MIT）用于后续 XLSX；间接依赖告警及可达范围记录在 F 阶段验收报告，未强制跨主版本升级。
 - 类型检查通过；身份安全单元 6/6、真实 PostgreSQL + 本地 SMTP 接收器集成 4/4。集成曾因未解码 MIME 提取了错误验证码失败，改为解码实际收到的 MIME 后通过，未固定验证码或绕过验证。
 - 数据库账号无 CREATE DATABASE 权限，改用现有测试库内独立 identity_refactor schema；没有修改数据库用户权限。Prisma adapter 与 SQL search_path 均显式指定该 schema。
 - 尚未完成浏览器双会话、旧入口关闭的完整回归、组织/导入/受众/AI 阶段和真实外部 SMTP/模型验收。上述记录不是整轮交付结论。
@@ -90,3 +90,15 @@
 - 已验证：协议/评分单元 35 项；数据库/Redis/本地 HTTP 协议替身及原工作流集成 21 项通过。测试捕获到原 429 错误码已改为统一 MODEL_RATE_LIMIT，更新契约断言后通过。类型检查通过。
 - 本地 HTTP 替身只证明请求协议和安全流程，没有调用真实 OpenAI/Anthropic，没有宣称真实模型评分或外部服务已通过。管理测试按钮会明确要求确认费用。
 - 协议参考：[OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)、[Anthropic Messages](https://platform.claude.com/docs/en/api/http/messages/create)、[Vision](https://platform.claude.com/docs/en/build-with-claude/vision)、[Structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)。Anthropic 传统 2023-06-01/x-api-key 与 2026-10-21/Bearer 可明确选择，不靠品牌猜测协议。
+
+## 阶段 F：业务贯通、迁移与交付
+
+完成真实浏览器的 admin/学校/教师/学生首次设置、双域同时登录及分别退出、六种登录方式、找回密码、学校交付卡、两类 XLSX 上传/Worker 执行/凭据下载。公共接收人选择与班级/个人复核分工、补发/移除通知接入实际业务。手机更多导航可进入全部工作空间功能，组织与受众的班级/教师列表支持分页搜索。
+
+新增三类安全收口：挑战绑定账号 tokenVersion，改密等安全操作后在途验证码失效；受限根邮箱恢复 CLI；大响应立即关闭连接及 IP 主机的 TLS SNI 处理。服务端身份/资源范围校验保持启用。
+
+实际开发库按显式开发映射回填 6 个账号、1 班和 12 个作业；四个增量迁移已执行。原备份恢复到隔离 schema 后再次迁移及回填成功，七类受保护数据数量和 SHA-256 完全一致。2000 人名册和 2002 行导入经过真实进程中断/恢复验证。不会把测试名册或临时 SMTP/协议替身配置写入开发业务库。
+
+当前真实调用点仅 grading.assignment 与 grading.selftest；未来照片识别等必须新增有实际业务的 taskKey 和输入/输出契约，复用 Gateway/SecretStore/预算，不在编辑器或页面复制协议与密钥代码。当前不开放未实现的 AI 模块。
+
+本阶段各验收编号、实际命令、截图、容量数据与未验证条件统一维护在 [IDENTITY_AI_ACCEPTANCE.md](IDENTITY_AI_ACCEPTANCE.md)，本文件中 B–E 的早期计数不是最终测试总数。

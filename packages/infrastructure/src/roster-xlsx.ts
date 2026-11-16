@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { fromBuffer } from 'yauzl';
 import { ensure } from '@tuheng/domain';
+import { z } from 'zod';
 import { RosterRow } from '@tuheng/contracts';
 
 export const rosterHeaders = (kind: 'SCHOOL' | 'TEACHER') =>
@@ -68,7 +69,13 @@ async function validateZip(bytes: Buffer) {
     });
   });
 }
-export async function parseRosterXlsx(bytes: Buffer, filename: string, kind: 'SCHOOL' | 'TEACHER') {
+export const RosterColumnMap = z.record(z.string(), z.number().int().min(1).max(8));
+export async function parseRosterXlsx(
+  bytes: Buffer,
+  filename: string,
+  kind: 'SCHOOL' | 'TEACHER',
+  columnMap?: Record<string, number>,
+) {
   ensure(/\.xlsx$/i.test(filename) && !/\.xlsm$/i.test(filename), 'XLSX_REQUIRED');
   await validateZip(bytes);
   const workbook = new ExcelJS.Workbook();
@@ -77,18 +84,26 @@ export async function parseRosterXlsx(bytes: Buffer, filename: string, kind: 'SC
   const sheet = workbook.worksheets[0],
     headers = rosterHeaders(kind);
   ensure(sheet.rowCount <= 5001 && sheet.columnCount <= 8, 'XLSX_ROW_OR_COLUMN_LIMIT');
-  const actualHeaders = headers.map((_h, i) => sheet.getCell(1, i + 1).text.trim());
+  const map = columnMap ? RosterColumnMap.parse(columnMap) : undefined;
+  const columns = headers.map((h, i) => (map ? map[h] : i + 1));
   ensure(
-    actualHeaders.every((h, i) => h === headers[i]),
-    'XLSX_HEADERS_MISMATCH',
+    columns.every((c) => Number.isInteger(c) && c >= 1 && c <= 8) &&
+      new Set(columns).size === headers.length &&
+      (!map || Object.keys(map).length === headers.length),
+    'XLSX_COLUMN_MAPPING_INVALID',
   );
+  if (!map)
+    ensure(
+      headers.every((h, i) => sheet.getCell(1, columns[i]).text.trim() === h),
+      'XLSX_HEADERS_MISMATCH',
+    );
   const rows: RosterRow[] = [],
     errors: { row: number; column: string; reason: string }[] = [];
   for (let r = 2; r <= sheet.rowCount; r++) {
     const values: string[] = [];
-    if (headers.every((_h, i) => sheet.getCell(r, i + 1).value == null)) continue;
+    if (headers.every((_h, i) => sheet.getCell(r, columns[i]).value == null)) continue;
     for (let c = 1; c <= headers.length; c++) {
-      const cell = sheet.getCell(r, c),
+      const cell = sheet.getCell(r, columns[c - 1]),
         v = cell.value;
       if (typeof v !== 'string') {
         errors.push({

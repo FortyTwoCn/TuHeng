@@ -1,3 +1,4 @@
+import { Notifications } from '../components/identity/Notifications';
 import { ErrorBookList } from '../components/ErrorBookList';
 import Link from 'next/link';
 import { database } from '@tuheng/database';
@@ -32,6 +33,7 @@ export async function StudentDashboard({ a }: { a: Actor }) {
           </Link>
         }
       />
+      <Notifications />
       <div className="stats">
         <Stat
           title="课程作业"

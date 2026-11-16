@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { GeometryDocument, AudienceSelection } from '@tuheng/contracts';
+import { GeometryDocument, AudienceSelection, ReviewerAssignment } from '@tuheng/contracts';
 import { database, prisma } from '@tuheng/database';
 import * as domain from '@tuheng/domain';
 import * as infra from '@tuheng/infrastructure';
@@ -60,6 +60,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
             audience: AudienceSelection.optional(),
             rosterVersion: z.number().int().optional(),
             reviewerIds: z.array(id).max(50).optional(),
+            reviewerAssignments: z.array(ReviewerAssignment).max(50).optional(),
             questionVersionIds: z.array(id).min(1).max(50),
             startsAt: z.coerce.date(),
             dueAt: z.coerce.date(),

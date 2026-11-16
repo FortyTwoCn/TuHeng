@@ -63,3 +63,8 @@ export const RosterRow = z.object({
   name: z.string().trim().min(1).max(100),
 });
 export type RosterRow = z.infer<typeof RosterRow>;
+
+export const ReviewerAssignment = z
+  .object({ teacherId: z.string().min(1), selection: AudienceSelection })
+  .strict();
+export type ReviewerAssignment = z.infer<typeof ReviewerAssignment>;

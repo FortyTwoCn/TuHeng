@@ -1,0 +1,23 @@
+{
+  "schema": "identity_capacity_1794828292913",
+  "environment": {
+    "node": "v26.13.0",
+    "platform": "win32",
+    "cpu": "AMD Ryzen 9 8940HX with Radeon Graphics        "
+  },
+  "studentsBefore": 2000,
+  "studentsAfter": 2002,
+  "classes": 5,
+  "pageSize": 20,
+  "threePagesMs": 12.029500000000098,
+  "searchMs": 4.154199999999946,
+  "resolveAudienceMs": 75.54309999999987,
+  "selected": 1999,
+  "previewRows": 2002,
+  "previewMs": 284.2827000000002,
+  "interruptedAt": 100,
+  "resumedStatus": "SUCCEEDED",
+  "executeIncludingInterruptionMs": 191592.9271,
+  "newCredentialItems": 2,
+  "idempotentRerun": true
+}

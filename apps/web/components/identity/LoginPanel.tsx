@@ -8,6 +8,23 @@ import { identityRequest, realmSignIn } from './client';
 export function LoginPanel({ realm }: { realm: AuthRealm }) {
   const [mode, setMode] = useState<'ID' | 'EMAIL' | 'CODE' | 'RECOVER'>('ID');
   const [schools, setSchools] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [recent, setRecent] = useState<{ id: string; name: string; code: string }>();
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      try {
+        const value = JSON.parse(localStorage.getItem('tuheng-recent-school') ?? 'null');
+        if (
+          value &&
+          typeof value.id === 'string' &&
+          typeof value.name === 'string' &&
+          typeof value.code === 'string'
+        )
+          setRecent(value);
+      } catch {
+        /* Preference storage is optional. */
+      }
+    });
+  }, []);
   const [school, setSchool] = useState(''),
     [query, setQuery] = useState(''),
     [page, setPage] = useState(0),
@@ -19,6 +36,7 @@ export function LoginPanel({ realm }: { realm: AuthRealm }) {
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   useEffect(() => {
+    if (realm !== 'STUDENT') return;
     const abort = new AbortController();
     const timer = setTimeout(() => {
       fetch(`/api/schools?q=${encodeURIComponent(query)}&page=${page}`, { signal: abort.signal })
@@ -33,7 +51,7 @@ export function LoginPanel({ realm }: { realm: AuthRealm }) {
       clearTimeout(timer);
       abort.abort();
     };
-  }, [query, page]);
+  }, [query, page, realm]);
   useEffect(() => {
     if (!seconds) return;
     const timer = setTimeout(() => setSeconds((v) => v - 1), 1000);
@@ -112,7 +130,7 @@ export function LoginPanel({ realm }: { realm: AuthRealm }) {
                 schoolId: school,
                 password: String(f.get('password') ?? ''),
                 challengeId: challenge,
-                code: String(f.get('code') ?? ''),
+                ...(codeMode ? { code: String(f.get('code') ?? '') } : {}),
               });
               const status = await identityRequest('/api/identity/status?realm=' + realm);
               const fallback =
@@ -155,8 +173,28 @@ export function LoginPanel({ realm }: { realm: AuthRealm }) {
               </label>
               <label>
                 学校
-                <select value={school} required onChange={(e) => setSchool(e.target.value)}>
+                <select
+                  value={school}
+                  required
+                  onChange={(e) => {
+                    setSchool(e.target.value);
+                    const chosen = schools.find((s) => s.id === e.target.value);
+                    if (chosen) {
+                      setRecent(chosen);
+                      try {
+                        localStorage.setItem('tuheng-recent-school', JSON.stringify(chosen));
+                      } catch {
+                        /* optional preference */
+                      }
+                    }
+                  }}
+                >
                   <option value="">请选择学校</option>
+                  {recent && school === recent.id && !schools.some((s) => s.id === recent.id) && (
+                    <option value={recent.id}>
+                      {recent.name}（{recent.code}）
+                    </option>
+                  )}
                   {schools.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}（{s.code}）
@@ -164,6 +202,15 @@ export function LoginPanel({ realm }: { realm: AuthRealm }) {
                   ))}
                 </select>
               </label>
+              {recent && (
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => setSchool(recent.id)}
+                >
+                  上次选择：{recent.name}
+                </button>
+              )}
               <div className="identity-inline">
                 <button type="button" disabled={!page} onClick={() => setPage((p) => p - 1)}>
                   上一页
@@ -177,13 +224,20 @@ export function LoginPanel({ realm }: { realm: AuthRealm }) {
           {mode === 'ID' ? (
             <label>
               {realm === 'STUDENT' ? '学号' : '登录 ID / 已绑定邮箱'}
-              <input name="identifier" autoComplete="username" required maxLength={254} />
+              <input
+                key="identifier"
+                name="identifier"
+                autoComplete="username"
+                required
+                maxLength={254}
+              />
             </label>
           ) : (
             <label>
               已绑定邮箱
               <input
                 type="email"
+                key="email"
                 name="email"
                 autoComplete="email"
                 value={email}

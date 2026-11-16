@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AudienceSelection } from '@tuheng/contracts';
+import { AudienceSelection, ReviewerAssignment } from '@tuheng/contracts';
 import { database, prisma } from '@tuheng/database';
 import {
   audienceScope,
@@ -15,6 +15,9 @@ const RequestInput = z.object({
   selection: AudienceSelection,
   query: z.string().max(100).default(''),
   page: z.number().int().min(0).max(10000).default(0),
+  teacherPage: z.number().int().min(0).max(10000).default(0),
+  classPage: z.number().int().min(0).max(10000).default(0),
+  treeQuery: z.string().max(100).default(''),
   teacherId: z.string().optional(),
   classId: z.string().optional(),
   selectedOnly: z.boolean().default(false),
@@ -35,6 +38,7 @@ export async function POST(request: Request) {
           revision: z.number().int(),
           rosterVersion: z.number().int(),
           reviewerIds: z.array(z.string()).min(1).max(50),
+          reviewerAssignments: z.array(ReviewerAssignment).max(50).default([]),
         })
         .parse(raw);
       return Response.json({
@@ -46,6 +50,7 @@ export async function POST(request: Request) {
           p.revision,
           p.rosterVersion,
           p.reviewerIds,
+          p.reviewerAssignments,
         ),
       });
     }
@@ -165,6 +170,14 @@ export async function POST(request: Request) {
       total: scope.students.filter((s) => ids.has(s.id)).length,
       selected: scope.students.filter((s) => ids.has(s.id) && selected.has(s.id)).length,
     });
+    const filteredTeachers = teachers.filter(
+      (t) =>
+        !b.treeQuery ||
+        (t.name + ' ' + t.loginId).toLowerCase().includes(b.treeQuery.toLowerCase()),
+    );
+    const filteredClasses = classes
+      .filter((c) => !b.treeQuery || c.name.toLowerCase().includes(b.treeQuery.toLowerCase()))
+      .sort((a, b) => a.name.localeCompare(b.name));
     return Response.json(
       {
         data: {
@@ -173,20 +186,20 @@ export async function POST(request: Request) {
           count: resolved.count,
           eligibleCount: resolved.eligibleCount,
           excluded: resolved.excluded,
-          people: people
-            .slice(b.page * 30, (b.page + 1) * 30)
-            .map((s) => ({
-              id: s.id,
-              name: s.name,
-              studentNumber: s.studentNumber,
-              selected: selected.has(s.id),
-            })),
+          people: people.slice(b.page * 30, (b.page + 1) * 30).map((s) => ({
+            id: s.id,
+            name: s.name,
+            studentNumber: s.studentNumber,
+            selected: selected.has(s.id),
+          })),
           total: people.length,
-          teachers: teachers
-            .slice(0, 100)
+          teacherTotal: filteredTeachers.length,
+          classTotal: filteredClasses.length,
+          teachers: filteredTeachers
+            .slice(b.teacherPage * 20, (b.teacherPage + 1) * 20)
             .map((t) => ({ ...t, ...count(classPeople(teacherClasses(t.id))) })),
-          classes: classes
-            .slice(0, 100)
+          classes: filteredClasses
+            .slice(b.classPage * 20, (b.classPage + 1) * 20)
             .map((c) => ({ id: c.id, name: c.name, ...count(classPeople([c.id])) })),
           unassigned:
             a.kind === 'TEACHER'

@@ -9,6 +9,7 @@ type Version = {
   config: SMTPConfig;
   enabled: boolean;
   secretConfigured: boolean;
+  secretSuffix: string;
 };
 export function SMTPSettings() {
   const [versions, setVersions] = useState<Version[]>([]),
@@ -106,6 +107,34 @@ export function SMTPSettings() {
           </select>
         </label>
         <label>
+          回复邮箱（可选）
+          <input
+            type="email"
+            value={draft.replyTo ?? ''}
+            onChange={(e) => setDraft((v) => ({ ...v, replyTo: e.target.value || undefined }))}
+          />
+        </label>
+        <label>
+          连接超时（毫秒）
+          <input
+            type="number"
+            min={1000}
+            max={30000}
+            value={draft.timeoutMs}
+            onChange={(e) => setDraft((v) => ({ ...v, timeoutMs: Number(e.target.value) }))}
+          />
+        </label>
+        <label>
+          每分钟发送上限
+          <input
+            type="number"
+            min={1}
+            max={500}
+            value={draft.perMinute}
+            onChange={(e) => setDraft((v) => ({ ...v, perMinute: Number(e.target.value) }))}
+          />
+        </label>
+        <label>
           密码 / 授权码
           <input name="password" type="password" autoComplete="new-password" />
         </label>
@@ -126,9 +155,17 @@ export function SMTPSettings() {
             </h3>
             <p>
               {v.config.host}:{v.config.port} · {v.enabled ? '启用' : '停用'} ·{' '}
-              {v.secretConfigured ? '凭据已配置' : '未配置凭据'}
+              {v.secretConfigured ? '凭据已配置 · 尾号 ' + v.secretSuffix : '未配置凭据'}
             </p>
             <div className="identity-inline">
+              {v.secretConfigured && (
+                <button
+                  disabled={!proof || busy}
+                  onClick={() => act({ action: 'REVOKE_KEY', id: v.id })}
+                >
+                  撤销此版本凭据
+                </button>
+              )}
               <button onClick={() => setDraft(v.config)}>载入此版本编辑</button>
               <button disabled={!proof || busy} onClick={() => act({ action: 'VERIFY', id: v.id })}>
                 测试连接

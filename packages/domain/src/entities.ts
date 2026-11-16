@@ -30,6 +30,14 @@ export interface Entities {
     tokenVersion: number;
     createdAt: Date;
   };
+  userNotification: Row & {
+    userId: string;
+    assignmentId: string;
+    kind: string;
+    revision: number;
+    readAt: Date | null;
+    createdAt: Date;
+  };
   school: Row & { code: string; name: string; active: boolean; rosterVersion: number };
   assignmentRecipient: Row & {
     assignmentId: string;
@@ -73,6 +81,7 @@ export interface Entities {
     schoolId?: string | null;
     audience?: import('@tuheng/contracts').AudienceSelection & {
       reviewerIds: string[];
+      reviewerAssignments?: import('@tuheng/contracts').ReviewerAssignment[];
       rosterVersion: number;
     };
     audienceRevision?: number;

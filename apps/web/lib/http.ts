@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { ZodError } from 'zod';
 import { DomainError } from '@tuheng/domain';
 import { allowedAppOrigins } from './app-origins';
@@ -39,4 +40,13 @@ export function errorResponse(e: unknown) {
     { error: 'OPERATION_FAILED', hint: '请重试；如仍失败，请让管理员通过任务编号或操作审计定位。' },
     { status: 500 },
   );
+}
+
+/** Only a deployment-controlled proxy may supply the network identity. */
+export function trustedClientNetworkKey(
+  headers: Headers | Record<string, string | string[] | undefined>,
+) {
+  if (process.env.TUHENG_TRUST_PROXY_IP !== '1') return 'unknown';
+  const value = headers instanceof Headers ? headers.get('x-real-ip') : headers['x-real-ip'];
+  return typeof value === 'string' && isIP(value.trim()) ? value.trim() : 'unknown';
 }

@@ -45,6 +45,7 @@ export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
         {manager && assignment.status === 'PUBLISHED' && assignment.audience && (
           <ReviseAudience
             assignmentId={id}
+            canAssign={a.kind !== 'TEACHER'}
             initial={assignment.audience}
             revision={assignment.audienceRevision ?? 0}
           />

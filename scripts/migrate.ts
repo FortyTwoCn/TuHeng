@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Client } from 'pg';
 import { readdir, readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { migrationChecksum, matchesMigrationChecksum } from './migration-checksum';
 const client = new Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
 try {
@@ -13,12 +13,12 @@ try {
     .filter((n) => /^\d/.test(n))
     .sort()) {
     const sql = await readFile(`packages/database/prisma/migrations/${name}/migration.sql`, 'utf8');
-    const checksum = createHash('sha256').update(sql).digest('hex');
+    const checksum = migrationChecksum(sql);
     const result = await client.query('SELECT checksum FROM "_tuheng_migrations" WHERE name=$1', [
       name,
     ]);
     if (result.rowCount) {
-      if (result.rows[0].checksum !== checksum)
+      if (!matchesMigrationChecksum(sql, result.rows[0].checksum))
         throw new Error(`Migration checksum changed: ${name}`);
       continue;
     }

@@ -1,9 +1,10 @@
 import nodemailer from 'tuheng-smtp-client';
+import { isIP } from 'node:net';
 import { prisma } from '@tuheng/database';
 import { SMTPConfig, EmailAddress, type VerificationPurpose } from '@tuheng/contracts';
 import { ensure, requireSMTPManager, type Actor } from '@tuheng/domain';
 import { explicitlyAllowed, resolveOutbound } from './outbound';
-import { readSecret, storeSecret } from './secret-store';
+import { readSecret, storeSecret, revokeSecret } from './secret-store';
 import { rateLimit } from './security-throttle';
 import { requireRecentAuthentication } from './identity-security';
 
@@ -19,7 +20,8 @@ export async function saveSMTP(actor: Actor, input: unknown, password?: string, 
   const config = SMTPConfig.parse(input);
   await resolveOutbound(config.host, config.port, 'SMTP');
   ensure(
-    config.tls !== 'LOCAL_TEST' || explicitlyAllowed(config.host, config.port),
+    config.tls !== 'LOCAL_TEST' ||
+      (process.env.NODE_ENV !== 'production' && explicitlyAllowed(config.host, config.port)),
     'SMTP_TLS_REQUIRED',
   );
   ensure(!/[\r\n]/.test(config.fromName + config.username + config.name), 'INVALID_MAIL_HEADER');
@@ -57,7 +59,8 @@ async function smtpTransport(id?: string) {
   const config = SMTPConfig.parse(row.config);
   const [address] = await resolveOutbound(config.host, config.port, 'SMTP');
   ensure(
-    config.tls !== 'LOCAL_TEST' || explicitlyAllowed(config.host, config.port),
+    config.tls !== 'LOCAL_TEST' ||
+      (process.env.NODE_ENV !== 'production' && explicitlyAllowed(config.host, config.port)),
     'SMTP_TLS_REQUIRED',
   );
   const transport = nodemailer.createTransport({
@@ -66,7 +69,7 @@ async function smtpTransport(id?: string) {
     secure: config.tls === 'TLS',
     requireTLS: config.tls === 'STARTTLS',
     ignoreTLS: config.tls === 'LOCAL_TEST',
-    tls: { servername: config.host, rejectUnauthorized: true },
+    tls: { ...(!isIP(config.host) ? { servername: config.host } : {}), rejectUnauthorized: true },
     auth: config.username
       ? { user: config.username, pass: row.secretId ? await readSecret(row.secretId, 'SMTP') : '' }
       : undefined,
@@ -82,12 +85,21 @@ async function smtpTransport(id?: string) {
 }
 export async function manageSMTP(
   actor: Actor,
-  action: 'VERIFY' | 'TEST' | 'ENABLE' | 'DISABLE',
+  action: 'VERIFY' | 'TEST' | 'ENABLE' | 'DISABLE' | 'REVOKE_KEY',
   id: string,
   proof?: string,
   recipient?: string,
 ) {
   await smtpManager(actor, proof);
+  if (action === 'REVOKE_KEY' || action === 'DISABLE') {
+    const row = await prisma.sMTPConfigurationVersion.findUniqueOrThrow({ where: { id } });
+    if (action === 'REVOKE_KEY' && row.secretId) await revokeSecret(row.secretId);
+    await prisma.sMTPConfigurationVersion.update({ where: { id }, data: { enabled: false } });
+    await prisma.auditLog.create({
+      data: { actorId: actor.id, action: 'SMTP_' + action, resourceId: id, details: {} },
+    });
+    return { status: action };
+  }
   const { row, transport, config } = await smtpTransport(id);
   try {
     if (action === 'VERIFY') await transport.verify();
@@ -101,7 +113,7 @@ export async function manageSMTP(
         html: '<p>图衡邮件服务测试。SMTP 接受不等于已送达收件箱。</p>',
       });
     }
-    if (action === 'ENABLE' || action === 'DISABLE')
+    if (action === 'ENABLE')
       await prisma.$transaction(async (tx) => {
         await tx.sMTPConfigurationVersion.updateMany({ data: { enabled: false } });
         if (action === 'ENABLE')
@@ -178,5 +190,58 @@ export async function sendVerificationMail(challengeId: string, code: string) {
     throw new Error('SMTP_SEND_FAILED');
   } finally {
     transport.close();
+  }
+}
+
+export async function sendSecurityNotice(
+  accountId: string,
+  recipient: string | null,
+  event: 'PASSWORD_CHANGED' | 'PASSWORD_RECOVERED' | 'EMAIL_CHANGED',
+) {
+  if (!recipient) return;
+  let deliveryId: string | undefined;
+  let transport: Awaited<ReturnType<typeof smtpTransport>>['transport'] | undefined;
+  try {
+    const smtp = await smtpTransport();
+    transport = smtp.transport;
+    await rateLimit('smtp-budget:' + smtp.row.id, smtp.config.perMinute, 60000);
+    const delivery = await prisma.emailDelivery.create({
+      data: { smtpId: smtp.row.id, purpose: event, expiresAt: new Date(Date.now() + 600000) },
+    });
+    deliveryId = delivery.id;
+    const description =
+      event === 'EMAIL_CHANGED'
+        ? '更换了绑定邮箱'
+        : event === 'PASSWORD_RECOVERED'
+          ? '完成了密码找回'
+          : '修改了登录密码';
+    const text = `您的图衡账号刚刚${description}。若非本人操作，请立即联系学校或站点管理员处理。此邮件不包含密码。`;
+    await transport.sendMail({
+      from: { name: smtp.config.fromName, address: smtp.config.fromEmail },
+      to: EmailAddress.parse(recipient),
+      subject: '图衡账号安全通知',
+      text,
+      html: `<p>${escapeHTML(text)}</p>`,
+    });
+    await prisma.emailDelivery.update({
+      where: { id: delivery.id },
+      data: { status: 'SUBMITTED_TO_SMTP' },
+    });
+  } catch {
+    if (deliveryId)
+      await prisma.emailDelivery.update({
+        where: { id: deliveryId },
+        data: { status: 'FAILED', errorCode: 'SMTP_SEND_FAILED' },
+      });
+    await prisma.auditLog.create({
+      data: {
+        actorId: accountId,
+        action: 'SECURITY_NOTICE_FAILED',
+        resourceId: accountId,
+        details: { event },
+      },
+    });
+  } finally {
+    transport?.close();
   }
 }

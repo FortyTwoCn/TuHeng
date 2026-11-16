@@ -1,12 +1,13 @@
+import { prepareLogin } from './identity-login';
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { choose, settings, closePanels, properties } from './editor-controls';
 import { performanceDocument } from '../geometry-fixtures';
 async function login(page: Page, who = 'teacher') {
-  await page.goto('/login');
-  await page.getByLabel('账号邮箱').fill(`${who}@tuheng.local`);
+  await prepareLogin(page, who);
+  await page.getByLabel('已绑定邮箱', { exact: true }).fill(`${who}@tuheng.local`);
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
-  await page.getByRole('button', { name: '进入图衡' }).click();
+  await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/${who}/dashboard`));
 }
 async function draw(page: Page, tool: string, x = 150, y = 130) {
@@ -21,10 +22,11 @@ test('anonymous geometry visits return through login and a lost session returns 
   await page.goto('/geometry');
   await expect(page).toHaveURL('/login?callbackUrl=%2Fgeometry');
   await expect(page.getByText('暂时无法加载')).toHaveCount(0);
+  await prepareLogin(page, 'student', '/geometry');
   await expect(page.locator('.geometry-editor')).toHaveCount(0);
-  await page.getByLabel('账号邮箱').fill('student@tuheng.local');
+  await page.getByLabel('已绑定邮箱', { exact: true }).fill('student@tuheng.local');
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
-  await page.getByRole('button', { name: '进入图衡' }).click();
+  await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/geometry');
   await expect(page.locator('.geometry-editor')).toBeVisible();
   await context.clearCookies();
@@ -34,10 +36,10 @@ test('anonymous geometry visits return through login and a lost session returns 
 });
 
 test('external login return URLs stay inside the application', async ({ page }) => {
-  await page.goto('/login?callbackUrl=https%3A%2F%2Fexample.invalid%2Fgeometry');
-  await page.getByLabel('账号邮箱').fill('student@tuheng.local');
+  await prepareLogin(page, 'student', 'https://example.invalid/geometry');
+  await page.getByLabel('已绑定邮箱', { exact: true }).fill('student@tuheng.local');
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
-  await page.getByRole('button', { name: '进入图衡' }).click();
+  await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/student/dashboard');
 });
 
@@ -230,7 +232,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await expect(teacher).toHaveURL('/teacher/questions');
   await teacher.goto('/teacher/assignments/new');
   await teacher.getByLabel('作业标题').fill(title);
-  await teacher.getByLabel('教学班', { exact: true }).selectOption('class-demo');
+  await expect(teacher.getByText('已选 2 人', { exact: false })).toBeVisible();
   await teacher.getByLabel('开始时间（当前设备时区）').fill('2026-01-01T08:00');
   await teacher.getByLabel('截止时间（当前设备时区）').fill('2027-12-31T23:59');
   await teacher
@@ -241,7 +243,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await teacher.getByRole('button', { name: '保存作业草稿' }).click();
   await expect(teacher).toHaveURL(/\/teacher\/assignments\/[a-f0-9-]{36}$/);
   const assignment = new URL(teacher.url()).pathname.replace('/teacher/', '/student/');
-  await teacher.getByRole('button', { name: '正式发布作业' }).click();
+  await teacher.getByRole('button', { name: '确认名单并正式发布' }).click();
   await login(student, 'student');
   await student.goto(assignment);
   await draw(student, '虚线', 180, 140);

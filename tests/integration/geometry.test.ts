@@ -1,4 +1,4 @@
-import { afterAll, expect, it } from 'vitest';
+import { beforeAll, afterAll, expect, it } from 'vitest';
 import { database as db, prisma } from '@tuheng/database';
 import {
   createQuestion,
@@ -20,14 +20,40 @@ import {
 } from '@tuheng/geometry-core';
 import { executeGradingRun } from '../../packages/infrastructure/src/grading-runner';
 import { MockVisionProvider } from '@tuheng/ai-providers';
+import { aiFixture } from '../ai-fixture';
 import { requestFixture, evaluationFixture } from '../fixtures';
+beforeAll(async () => {
+  const ai = await aiFixture();
+  await ai.bind('grading.assignment');
+});
 afterAll(() => prisma.$disconnect());
 it.each([false, true])(
   'freezes geometry answers (curve=%s), denies stem tampering and cross-student access, and passes structured evidence through the existing worker',
   async (withCurve) => {
-    const teacher: Actor = { id: 'teacher', name: '教师', roles: ['TEACHER'] },
-      student: Actor = { id: 'student', name: '学生', roles: ['STUDENT'] },
-      other: Actor = { id: 'student2', name: '其他学生', roles: ['STUDENT'] };
+    const teacher: Actor = {
+        id: 'teacher',
+        name: '教师',
+        roles: ['TEACHER'],
+        kind: 'TEACHER',
+        realm: 'STAFF',
+        schoolId: 'school-demo',
+      },
+      student: Actor = {
+        id: 'student',
+        name: '学生',
+        roles: ['STUDENT'],
+        kind: 'STUDENT',
+        realm: 'STUDENT',
+        schoolId: 'school-demo',
+      },
+      other: Actor = {
+        id: 'student2',
+        name: '其他学生',
+        roles: ['STUDENT'],
+        kind: 'STUDENT',
+        realm: 'STUDENT',
+        schoolId: 'school-demo',
+      };
     const fixture = requestFixture();
     const stem = addDrawing(
       createDocument('VHW_PROJECTION'),

@@ -1,3 +1,5 @@
+import { resetIdentityFixtureThrottle } from '../identity-fixture';
+import { spawnSync } from 'node:child_process';
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { prisma, database as db } from '@tuheng/database';
@@ -32,6 +34,7 @@ let server: Server,
   snapshot: AISnapshot;
 let received = 0;
 beforeAll(async () => {
+  await resetIdentityFixtureThrottle();
   process.env.QUEUE_NAMESPACE = `ai-${tag}`;
   server = createServer((req, res) => {
     let body = '';
@@ -257,6 +260,57 @@ describe.sequential(
           proof,
         }),
       ).rejects.toMatchObject({ status: 403 });
+    });
+    it('AI08: explicit legacy import encrypts once, stays disabled and never invokes a provider', async () => {
+      const provider = await prisma.aIProviderVersion.findFirstOrThrow({
+        where: { providerId: fixture.provider.id },
+        orderBy: { version: 'desc' },
+      });
+      const legacy = await prisma.modelConfigurationVersion.create({
+        data: {
+          provider: 'migration-fixture',
+          baseUrl: (provider.config as { baseUrl: string }).baseUrl,
+          model: 'migration-only',
+          outputMode: 'prompt_json',
+          timeoutMs: 10000,
+          concurrency: 1,
+          keyEnv: 'AI_MIGRATION_TEST_KEY',
+        },
+      });
+      const env = { ...process.env, AI_MIGRATION_TEST_KEY: 'migration-test-key-local-only' };
+      const args = [
+        '--import',
+        'tsx',
+        'scripts/ai-import-environment.ts',
+        '--legacy-id',
+        legacy.id,
+        '--protocol',
+        'OPENAI_CHAT_COMPLETIONS',
+        '--confirm-import',
+      ];
+      const first = spawnSync(process.execPath, args, { env, encoding: 'utf8', windowsHide: true });
+      expect(first.status, first.stderr).toBe(0);
+      const output = JSON.parse(first.stdout);
+      expect(output.enabled).toBe(false);
+      expect(output.credentialImported).toBe(true);
+      expect(first.stdout).not.toContain(env.AI_MIGRATION_TEST_KEY);
+      const p = await prisma.aIProvider.findUniqueOrThrow({
+        where: { id: output.providerId },
+        include: { versions: true },
+      });
+      const secret = await prisma.secretRecord.findUniqueOrThrow({
+        where: { id: p.versions[0].secretId! },
+      });
+      expect(secret.ciphertext).not.toContain(env.AI_MIGRATION_TEST_KEY);
+      const again = spawnSync(process.execPath, args, { env, encoding: 'utf8', windowsHide: true });
+      expect(again.status).not.toBe(0);
+      expect(again.stderr).toContain('LEGACY_AI_ALREADY_IMPORTED');
+      expect(
+        await prisma.auditLog.count({
+          where: { resourceId: legacy.id, action: 'LEGACY_AI_IMPORTED' },
+        }),
+      ).toBe(1);
+      expect(received).toBe(1);
     });
     it('AI07: old serialized request remains readable; legacy run never falls back to environment key', async () => {
       const prior = await prisma.gradingRun.findUniqueOrThrow({ where: { id: runId } });

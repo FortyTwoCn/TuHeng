@@ -134,12 +134,14 @@ export function TextAction({
   );
 }
 export function Logout({ realm = 'STAFF' }: { realm?: 'STAFF' | 'STUDENT' }) {
+  const router = useRouter();
   return (
     <button
       className="logout"
       onClick={async () => {
         await realmSignOut(realm);
-        window.location.assign('/login');
+        router.push('/login');
+        router.refresh();
       }}
     >
       退出登录

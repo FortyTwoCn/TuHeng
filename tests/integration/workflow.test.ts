@@ -22,6 +22,7 @@ import { aiFixture } from '../ai-fixture';
 import { requestFixture, evaluationFixture } from '../fixtures';
 const tag = `IT-${Date.now()}`;
 process.env.QUEUE_NAMESPACE = tag;
+let schoolId: string;
 let teacher: Actor,
   student: Actor,
   other: Actor,
@@ -35,28 +36,55 @@ let teacher: Actor,
   attemptId: string,
   decisionId: string;
 async function makeActor(name: string, roles: Actor['roles']) {
+  if (roles.includes('ADMIN')) {
+    const u = await prisma.user.findUniqueOrThrow({ where: { id: 'admin' } });
+    return {
+      id: u.id,
+      name: u.name,
+      kind: 'SITE_ADMIN' as const,
+      realm: 'STAFF' as const,
+      roles: ['ADMIN'] as Actor['roles'],
+      schoolId: null,
+    };
+  }
+  const kind = roles.includes('TEACHER') ? ('TEACHER' as const) : ('STUDENT' as const);
   const u = await db.create('user', {
     name: `[自动化测试]${name}`,
     email: `${name}-${tag}@test.invalid`,
     passwordHash: await hash('Integration-Only-2026!', 4),
     roles,
+    kind,
+    realm: kind === 'STUDENT' ? 'STUDENT' : 'STAFF',
+    schoolId,
+    mustChangePassword: false,
+    emailNormalized: `${name}-${tag}@test.invalid`,
+    emailVerifiedAt: new Date(),
   });
-  return { id: u.id, name: u.name, roles };
+  return {
+    id: u.id,
+    name: u.name,
+    roles,
+    kind,
+    realm: kind === 'STUDENT' ? ('STUDENT' as const) : ('STAFF' as const),
+    schoolId,
+  };
 }
 beforeAll(async () => {
   await ensureBucket();
   const ai = await aiFixture();
   await ai.bind('grading.assignment');
   await ai.bind('grading.selftest');
+  schoolId = (await prisma.school.create({ data: { code: tag, name: '工作流集成测试学校' } })).id;
   teacher = await makeActor('teacher', ['TEACHER']);
   student = await makeActor('student', ['STUDENT']);
   other = await makeActor('other', ['STUDENT']);
   outsider = await makeActor('outsider', ['TEACHER']);
   admin = await makeActor('admin', ['ADMIN']);
-  const course = await db.create('course', { title: `[自动化测试]${tag}`, code: tag });
+  const course = await db.create('course', { title: `[自动化测试]${tag}`, code: tag, schoolId });
   const offering = await db.create('courseOffering', { courseId: course.id, term: tag });
   const cls = await db.create('teachingClass', {
     offeringId: offering.id,
+    schoolId,
     name: `[自动化测试]${tag}`,
   });
   classId = cls.id;

@@ -39,7 +39,25 @@ export async function prepareCredentialDownload(
   });
   return { token, expiresInSeconds: 120 };
 }
-export async function downloadCredentials(actor: Actor, token: string) {
+export type SchoolCredentialCard = {
+  school: string;
+  name: string;
+  loginId: string;
+  password: string;
+  expiresAt: string;
+};
+type CredentialFile = { bytes: Buffer; filename: string };
+export function downloadCredentials(actor: Actor, token: string): Promise<CredentialFile>;
+export function downloadCredentials(
+  actor: Actor,
+  token: string,
+  format: 'card',
+): Promise<SchoolCredentialCard>;
+export async function downloadCredentials(
+  actor: Actor,
+  token: string,
+  format: 'xlsx' | 'card' = 'xlsx',
+): Promise<CredentialFile | SchoolCredentialCard> {
   const ticket = await prisma.$transaction(async (tx) => {
     const id = securityDigest(token);
     await tx.$queryRaw`SELECT id FROM "CredentialDownload" WHERE id = ${id} FOR UPDATE`;
@@ -52,6 +70,7 @@ export async function downloadCredentials(actor: Actor, token: string) {
     await tx.credentialDownload.update({ where: { id }, data: { consumedAt: new Date() } });
     return row;
   });
+  ensure(format !== 'card' || ticket.kind === 'SCHOOL_ADMIN', 'CARD_KIND_FORBIDDEN', 403);
   const batch = await requireCredentialBatch(actor, ticket.batchId);
   requireIdentityManager(actor, batch.schoolId!, AccountKind.parse(ticket.kind));
   const school = await prisma.school.findUniqueOrThrow({ where: { id: batch.schoolId! } });
@@ -123,6 +142,10 @@ export async function downloadCredentials(actor: Actor, token: string) {
       details: { kind: ticket.kind, available: rows.length, unavailable },
     },
   });
+  if (format === 'card') {
+    const [school, name, loginId, password, expiresAt] = rows[0];
+    return { school, name, loginId, password, expiresAt };
+  }
   return {
     bytes: Buffer.from(await workbook.xlsx.writeBuffer()),
     filename:

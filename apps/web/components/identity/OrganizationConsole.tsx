@@ -59,6 +59,12 @@ export function OrganizationConsole({
     [busy, setBusy] = useState(false),
     [batchId, setBatchId] = useState(''),
     [filterClass, setFilterClass] = useState('');
+  const [classChoiceQuery, setClassChoiceQuery] = useState(''),
+    [classChoicePage, setClassChoicePage] = useState(0),
+    [classChoiceTotal, setClassChoiceTotal] = useState(0);
+  const [teacherChoiceQuery, setTeacherChoiceQuery] = useState(''),
+    [teacherChoicePage, setTeacherChoicePage] = useState(0),
+    [teacherChoiceTotal, setTeacherChoiceTotal] = useState(0);
   const loadSchools = useCallback(async () => {
     if (!root) return;
     const r = await identityRequest(
@@ -93,19 +99,49 @@ export function OrganizationConsole({
     }
     const [o, t, c] = await Promise.all([
       identityRequest('/api/organization/offerings?schoolId=' + schoolId),
-      identityRequest('/api/organization/accounts?schoolId=' + schoolId + '&kind=TEACHER'),
-      identityRequest('/api/organization/classes?schoolId=' + schoolId),
+      identityRequest(
+        '/api/organization/accounts?schoolId=' +
+          schoolId +
+          '&kind=TEACHER&q=' +
+          encodeURIComponent(teacherChoiceQuery) +
+          '&page=' +
+          teacherChoicePage,
+      ),
+      identityRequest(
+        '/api/organization/classes?schoolId=' +
+          schoolId +
+          '&q=' +
+          encodeURIComponent(classChoiceQuery) +
+          '&page=' +
+          classChoicePage,
+      ),
     ]);
     setOfferings(o);
     setTeachers(t.items);
+    setTeacherChoiceTotal(t.total);
+    setClassChoiceTotal(c.total);
     if (tab !== 'classes') setClasses(c.items);
-  }, [schoolId, query, page, tab, filterClass]);
+  }, [
+    schoolId,
+    query,
+    page,
+    tab,
+    filterClass,
+    classChoiceQuery,
+    classChoicePage,
+    teacherChoiceQuery,
+    teacherChoicePage,
+  ]);
   useEffect(() => {
-    const timer = setTimeout(() => { loadSchools().catch((e) => setMessage(e.message)); }, 150);
+    const timer = setTimeout(() => {
+      loadSchools().catch((e) => setMessage(e.message));
+    }, 150);
     return () => clearTimeout(timer);
   }, [loadSchools]);
   useEffect(() => {
-    const timer = setTimeout(() => { load().catch((e) => setMessage(e.message)); }, 150);
+    const timer = setTimeout(() => {
+      load().catch((e) => setMessage(e.message));
+    }, 150);
     return () => clearTimeout(timer);
   }, [load]);
   async function command(operation: string, data: Record<string, unknown>) {
@@ -237,6 +273,16 @@ export function OrganizationConsole({
             {schools.map((s) => (
               <article key={s.id}>
                 <h2>{s.name}</h2>
+                <details>
+                  <summary>编辑学校名称</summary>
+                  <form onSubmit={(e) => command('rename-school', { ...formData(e), id: s.id })}>
+                    <label>
+                      学校名称
+                      <input name="name" defaultValue={s.name} required maxLength={100} />
+                    </label>
+                    <button disabled={!proof || busy}>保存名称</button>
+                  </form>
+                </details>
                 <p>
                   {s.code} · {s._count.users} 个账号 · {s.active ? '启用' : '停用'}
                 </p>
@@ -316,6 +362,69 @@ export function OrganizationConsole({
                   创建并生成初始凭据
                 </button>
               </form>
+            </details>
+          )}
+          {(tab === 'students' || (tab === 'classes' && !teacher)) && (
+            <details className="identity-panel">
+              <summary>查找表单中的{tab === 'students' ? '班级' : '教师'}选项</summary>
+              <p>下面的新增与调整表单使用当前这一页的选项，可搜索全部授权对象。</p>
+              {tab === 'students' ? (
+                <>
+                  <label>
+                    搜索班级选项
+                    <input
+                      value={classChoiceQuery}
+                      onChange={(e) => {
+                        setClassChoiceQuery(e.target.value);
+                        setClassChoicePage(0);
+                      }}
+                    />
+                  </label>
+                  <div className="identity-inline">
+                    <button
+                      disabled={!classChoicePage}
+                      onClick={() => setClassChoicePage((p) => p - 1)}
+                    >
+                      上一页班级选项
+                    </button>
+                    <span>{classChoiceTotal} 个班级</span>
+                    <button
+                      disabled={(classChoicePage + 1) * 20 >= classChoiceTotal}
+                      onClick={() => setClassChoicePage((p) => p + 1)}
+                    >
+                      下一页班级选项
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <label>
+                    搜索教师选项
+                    <input
+                      value={teacherChoiceQuery}
+                      onChange={(e) => {
+                        setTeacherChoiceQuery(e.target.value);
+                        setTeacherChoicePage(0);
+                      }}
+                    />
+                  </label>
+                  <div className="identity-inline">
+                    <button
+                      disabled={!teacherChoicePage}
+                      onClick={() => setTeacherChoicePage((p) => p - 1)}
+                    >
+                      上一页教师选项
+                    </button>
+                    <span>{teacherChoiceTotal} 位教师</span>
+                    <button
+                      disabled={(teacherChoicePage + 1) * 20 >= teacherChoiceTotal}
+                      onClick={() => setTeacherChoicePage((p) => p + 1)}
+                    >
+                      下一页教师选项
+                    </button>
+                  </div>
+                </>
+              )}
             </details>
           )}
           {tab === 'students' && (

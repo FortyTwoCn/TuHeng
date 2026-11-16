@@ -148,11 +148,70 @@ describe.sequential('assignment recipients actually authorize business operation
     );
     await expect(requireAssignmentReviewer(db, teacher, ass!, student.id)).resolves.toBeUndefined();
   });
+  it('AU06: publication notifications and per-person review grants follow the actual recipient snapshot', async () => {
+    expect(
+      await prisma.userNotification.count({
+        where: { assignmentId, userId: student.id, kind: 'ASSIGNMENT_PUBLISHED' },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.userNotification.count({ where: { assignmentId, userId: excluded.id } }),
+    ).toBe(0);
+    const rootUser = await prisma.user.findUniqueOrThrow({ where: { id: 'admin' } });
+    const root: Actor = {
+      id: rootUser.id,
+      name: rootUser.name,
+      kind: 'SITE_ADMIN',
+      roles: ['ADMIN'],
+      realm: 'STAFF',
+      schoolId: null,
+    };
+    const all = { ...selection, exclude: { studentIds: [] } };
+    await reviseAssignmentAudience(
+      db,
+      root,
+      assignmentId,
+      all,
+      1,
+      1,
+      [teacher.id],
+      [
+        {
+          teacherId: other.id,
+          selection: {
+            ...selection,
+            include: { allEligibleInScope: false, classIds: [], studentIds: [student.id] },
+            exclude: { studentIds: [] },
+          },
+        },
+      ],
+    );
+    const ass = (await db.get('assignment', assignmentId))!;
+    await expect(requireAssignmentReviewer(db, other, ass, student.id)).resolves.toBeUndefined();
+    await expect(requireAssignmentReviewer(db, other, ass, excluded.id)).rejects.toThrow(
+      'REVIEWER_NOT_ASSIGNED',
+    );
+    await expect(requireAssignmentReviewer(db, teacher, ass, student.id)).rejects.toThrow(
+      'REVIEWER_NOT_ASSIGNED',
+    );
+    expect(
+      await prisma.userNotification.count({
+        where: { assignmentId, userId: excluded.id, kind: 'ASSIGNMENT_ADDED' },
+      }),
+    ).toBe(1);
+    // Restore the original expression through an explicit audited revision.
+    await reviseAssignmentAudience(db, root, assignmentId, selection, 2, 1, [teacher.id]);
+    expect(
+      await prisma.userNotification.count({
+        where: { assignmentId, userId: excluded.id, kind: 'ASSIGNMENT_REMOVED' },
+      }),
+    ).toBe(1);
+  });
   it('AU02/04: explicit roster revision adds an individual and rejects stale preview', async () => {
     await expect(
-      reviseAssignmentAudience(db, teacher, assignmentId, selection, 1, 0, [teacher.id]),
+      reviseAssignmentAudience(db, teacher, assignmentId, selection, 3, 0, [teacher.id]),
     ).rejects.toThrow('AUDIENCE_PREVIEW_STALE');
-    await reviseAssignmentAudience(db, teacher, assignmentId, selection, 1, 1, [teacher.id]);
+    await reviseAssignmentAudience(db, teacher, assignmentId, selection, 3, 1, [teacher.id]);
     expect((await listAssignments(db, late)).map((a) => a.id)).toContain(assignmentId);
     expect((await listAssignments(db, excluded)).map((a) => a.id)).not.toContain(assignmentId);
   });

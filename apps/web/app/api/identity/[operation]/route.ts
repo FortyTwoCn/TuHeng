@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { prisma } from '@tuheng/database';
 import { AuthRealm, VerificationPurpose } from '@tuheng/contracts';
 import { actor, rotateIdentitySession } from '../../../../lib/auth';
-import { checkOrigin, limitedBody, errorResponse } from '../../../../lib/http';
+import {
+  checkOrigin,
+  limitedBody,
+  errorResponse,
+  trustedClientNetworkKey,
+} from '../../../../lib/http';
 import { requestVerification } from '../../../../../../packages/infrastructure/src/identity-challenges';
 import {
   changeOwnPassword,
@@ -29,7 +34,13 @@ export async function POST(request: Request, context: { params: Promise<{ operat
         ? await actor(realm, true)
         : undefined;
       return Response.json(
-        { data: await requestVerification({ ...v, actor: a }) },
+        {
+          data: await requestVerification({
+            ...v,
+            actor: a,
+            ipKey: trustedClientNetworkKey(request.headers),
+          }),
+        },
         { headers: { 'Cache-Control': 'no-store' } },
       );
     }

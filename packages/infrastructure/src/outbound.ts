@@ -59,7 +59,11 @@ export const guardedFetch: typeof fetch = async (input, init) => {
   try {
     const response = await fetch(url, { ...init, redirect: 'error', dispatcher } as RequestInit);
     const declared = Number(response.headers.get('content-length') ?? 0);
-    ensure(declared <= 4 * 1024 * 1024, 'PROVIDER_RESPONSE_TOO_LARGE');
+    if (declared > 4 * 1024 * 1024) {
+      // Release the connection immediately instead of waiting for a rejected body's timeout.
+      await response.body?.cancel();
+      throw new Error('PROVIDER_RESPONSE_TOO_LARGE');
+    }
     const reader = response.body?.getReader();
     const chunks: Uint8Array[] = [];
     let bytes = 0;

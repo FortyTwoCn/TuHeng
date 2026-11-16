@@ -75,6 +75,7 @@ export async function createAssignment(
     audience?: AudienceSelection;
     rosterVersion?: number;
     reviewerIds?: string[];
+    reviewerAssignments?: import('@tuheng/contracts').ReviewerAssignment[];
     questionVersionIds: string[];
     startsAt: Date;
     dueAt: Date;
@@ -130,6 +131,7 @@ export async function createAssignment(
             audience: {
               ...resolved.selection,
               reviewerIds: a.kind === 'TEACHER' ? [a.id] : (reviewerIds ?? []),
+              reviewerAssignments: input.reviewerAssignments ?? [],
               rosterVersion: resolved.rosterVersion,
             },
           }

@@ -13,6 +13,10 @@ export async function GET() {
       orderBy: { version: 'desc' },
       take: 30,
     });
+    const secrets = await prisma.secretRecord.findMany({
+      where: { id: { in: rows.flatMap((r) => (r.secretId ? [r.secretId] : [])) } },
+      select: { id: true, suffix: true, revokedAt: true, createdAt: true },
+    });
     return Response.json(
       {
         data: rows.map((r) => ({
@@ -20,7 +24,8 @@ export async function GET() {
           version: r.version,
           config: r.config,
           enabled: r.enabled,
-          secretConfigured: !!r.secretId,
+          secretConfigured: !!secrets.find((s) => s.id === r.secretId && !s.revokedAt),
+          secretSuffix: secrets.find((s) => s.id === r.secretId)?.suffix ?? '',
           createdAt: r.createdAt,
         })),
       },
@@ -41,7 +46,7 @@ export async function POST(request: Request) {
         ? await saveSMTP(a, b.config, z.string().max(2000).optional().parse(b.password), proof)
         : await manageSMTP(
             a,
-            z.enum(['VERIFY', 'TEST', 'ENABLE', 'DISABLE']).parse(b.action),
+            z.enum(['VERIFY', 'TEST', 'ENABLE', 'DISABLE', 'REVOKE_KEY']).parse(b.action),
             z.string().parse(b.id),
             proof,
             b.recipient,

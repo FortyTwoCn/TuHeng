@@ -1,11 +1,12 @@
+import { prepareLogin } from './identity-login';
 import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
 const sample = path.resolve('tests/samples/projection.png');
 async function login(page: Page, who: string) {
-  await page.goto('/login');
-  await page.getByLabel('账号邮箱').fill(`${who}@tuheng.local`);
+  await prepareLogin(page, who);
+  await page.getByLabel('已绑定邮箱', { exact: true }).fill(`${who}@tuheng.local`);
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
-  await page.getByRole('button', { name: '进入图衡' }).click();
+  await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL(
     new RegExp(`/${who.startsWith('student') ? 'student' : who}/dashboard`),
   );
@@ -37,7 +38,7 @@ test('A/B/D: teacher publishes, student uploads, teacher reviews, student views 
   await expect(teacher).toHaveURL('/teacher/questions');
   await teacher.goto('/teacher/assignments/new');
   await teacher.getByLabel('作业标题').fill(title);
-  await teacher.getByLabel('教学班', { exact: true }).selectOption('class-demo');
+  await expect(teacher.getByText('已选 2 人', { exact: false })).toBeVisible();
   await teacher.getByLabel('开始时间（当前设备时区）').fill('2026-01-01T08:00');
   await teacher.getByLabel('截止时间（当前设备时区）').fill('2027-12-31T23:59');
   await teacher
@@ -48,8 +49,7 @@ test('A/B/D: teacher publishes, student uploads, teacher reviews, student views 
   await teacher.getByRole('button', { name: '保存作业草稿' }).click();
   await expect(teacher).toHaveURL(/\/teacher\/assignments\/[a-f0-9-]{36}$/);
   const assignmentPath = new URL(teacher.url()).pathname.replace('/teacher/', '/student/');
-  teacher.once('dialog', (d) => d.accept());
-  await teacher.getByRole('button', { name: '正式发布作业' }).click();
+  await teacher.getByRole('button', { name: '确认名单并正式发布' }).click();
   await expect(teacher.getByText('已发布', { exact: true })).toBeVisible();
   await login(student, 'student');
   await student.goto(assignmentPath);
@@ -90,22 +90,32 @@ test('A/B/D: teacher publishes, student uploads, teacher reviews, student views 
   await student.close();
   await other.close();
 });
-test('F: admin creates, searches and disables a real user', async ({ page }) => {
+test('F: admin creates, searches and disables a scoped teacher with generated credentials', async ({
+  page,
+}) => {
   await login(page, 'admin');
   await page.goto('/admin/users');
-  const email = `e2e-${Date.now()}@test.invalid`;
-  await page.getByLabel('姓名', { exact: true }).fill('[E2E测试]测试用户');
-  await page.getByLabel('邮箱', { exact: true }).fill(email);
-  await page.getByLabel('初始密码', { exact: true }).fill('E2E-User-Only-2026!');
-  await page.getByRole('button', { name: '创建账号' }).click();
-  await expect(page.getByText('用户已创建', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: '搜索用户' }).fill(email);
-  await page.getByRole('button', { name: '搜索', exact: true }).click();
-  const row = page.locator('.list-item').filter({ hasText: email });
+  await page.getByLabel('搜索学校', { exact: true }).fill('图衡自动化测试学校');
+  await expect(page.getByLabel('当前操作学校')).toContainText('图衡自动化测试学校');
+  await page.getByLabel('当前操作学校').selectOption('school-demo');
+  await page.getByText('新增教师', { exact: true }).click();
+  const name = '[E2E测试]教师-' + Date.now();
+  await page.getByLabel('教师姓名', { exact: true }).fill(name);
+  await page.getByRole('button', { name: '创建并生成初始凭据' }).click();
+  await page.getByLabel('搜索姓名 / 登录 ID / 学号').fill(name);
+  const row = page.locator('.identity-list article').filter({ hasText: name });
   await expect(row).toBeVisible();
-  page.once('dialog', (d) => d.accept());
+  await page.getByText('敏感操作验证（重置、停用、交接）', { exact: true }).click();
+  await page
+    .getByLabel('验证当前密码（敏感操作授权 10 分钟）')
+    .first()
+    .fill(process.env.SEED_PASSWORD!);
+  await page.getByRole('button', { name: '验证身份', exact: true }).first().click();
+  await expect(page.getByText('已验证', { exact: true }).first()).toBeVisible();
+  await row.locator('summary').click();
   await row.getByRole('button', { name: '停用', exact: true }).click();
-  await expect(row.getByText('已停用', { exact: true })).toBeVisible();
+  await expect(row).toContainText('停用');
+  await expect(row.getByRole('button', { name: '启用', exact: true })).toBeVisible();
 });
 test('E: private selftest folder and set are saved, practice has history and no fabricated AI grade', async ({
   page,

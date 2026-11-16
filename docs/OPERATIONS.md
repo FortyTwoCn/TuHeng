@@ -34,7 +34,7 @@ npm run test:e2e -- --reporter=list
 
 model:sync 已停用，运行时无 AI_* 环境回退。AI 中心修改生成新版本并立即生效。管理员模型测试会产生实际调用，必须确认可能计费。历史 run 的配置保持不变；任务页“安全重试原配置”不切换版本，“使用当前配置新建运行”保留题目/答案/评分依据并生成新的 run。已发布教师成绩始终保留。
 
-生产命令：`npm ci && npm run db:generate && npm run db:migrate && npm run build`，分别用进程管理器运行 `npm start` 和 `npm run worker`，健康检查 `/api/actions/health`（需管理员会话）。需要 TLS、请求体/上传频率限制、日志聚合与备份告警。默认保守并发：正式作业2，自测1；多 Worker 部署前配置全局预算，当前仅按进程控制并发。
+生产命令：`npm ci && npm run db:generate && npm run db:migrate && npm run build`，分别用进程管理器运行 `npm start` 和 `npm run worker`，健康检查 `/api/actions/health`（需管理员会话）。需要 TLS、请求体/上传频率限制、日志聚合与备份告警。默认每进程 Worker 并发：正式作业 4、自测 2；实际模型调用另外受 Redis 共享的供应商总并发及模块/学校/个人日预算限制，多 Worker 不会各自重复放大供应商配额。
 
 ## 备份与恢复
 
@@ -42,7 +42,7 @@ model:sync 已停用，运行时无 AI_* 环境回退。AI 中心修改生成新
 2. 恢复演练在空的隔离数据库用 `pg_restore`；恢复对象数据，验证 object key 引用后启动 web。
 3. 再启动 Redis/Worker。未投递 outbox 重发，过期租约恢复，已投递但队列缺失的排队任务由补偿扫描重新投递。runId 确定 jobId，结果唯一约束避免重复建议。
 4. 失败任务在管理员页核对错误码。不可读图片、无效输出进入人工复核；模型限流/超时有限退避重试3次。队列与 DB 都需要持久化；不要以清空数据库解决故障。
-5. 审计记录保留教师决策、发布和更正。原始模型响应保存在受限 DB；未来需增加机构数据保留/删除策略。
+5. 审计记录保留教师决策、发布和更正。归一化评分与必要模型证据保存在受限 DB；未来需增加机构数据保留/删除策略。
 
 ## 集中提交压测
 
@@ -56,3 +56,21 @@ LOAD_CONFIRM=local-test-only LOAD_USERS=20 LOAD_CONCURRENCY=5 npm run load
 会真实建立 `[压测]` 独立课程、账号、S3 文件、不可变作答及任务，输出成功数和事务 p50/p95；不会创建模拟分数。测试数据明确标记，不自动删除其他业务数据。停止压测后可在管理员页停用测试账号。
 
 Prisma JS adapter 的提交冲突释放行为由 `SafePrismaPg` 集中保护，`40001`/P2034 采用有限退避重试。此前压测发现 COMMIT 冲突后连接未释放，现有补丁保证仅释放一次；升级 ORM/驱动时应先跑提交压测与脚本退出检查，再评估移除补丁。尝试 Prisma 7.10.1 的 generate 仍需本环境被阻断的原生 schema-engine 下载，因此本轮固定使用已验证的 6.19.3，并在后续可联网环境重新评估升级。
+
+## 身份安装与密钥恢复
+
+- 新部署：`npm run identity:secrets -- --initialize` 在本机 git 忽略的 .env 初始化随机 32 字节主密钥；已有配置不替换。生产也可由 Secret/KMS 注入同名环境变量。
+- `npm run identity:bootstrap -- --output .runtime/admin-delivery.txt` 仅在没有根账号时创建 admin；重复执行拒绝并保持凭据不变。文件以当前 Windows 用户和 SYSTEM 的受限 ACL 创建，安全交付后删除。首次改密、SMTP、邮箱验证完成前不开放普通后台。
+- 根账号密码恢复：`npm run identity:bootstrap -- --reset-root --output .runtime/admin-recovery.txt`，生成新随机临时密码、撤销旧会话并审计；保留已验证邮箱。服务器恢复权限不可授予普通学校/教师。
+- 丢失根账号邮箱或需要重新进入受限 SMTP 安装：在服务器执行 `npm run identity:bootstrap -- --reset-root --recover-mailbox --output .runtime/admin-mailbox-recovery.txt`。这是独立审计的邮箱恢复动作，清除根账号邮箱绑定、撤销会话、重新要求改密和验证邮箱；不允许通过网页对其他账号调用，也不授予普通后台权限。
+- SMTP 修改、初始凭据导出、AI 密钥操作要求近期密码验证。验证码 5 分钟/最多 5 次失败/60 秒重发；密码登录和邮件发送同时限制身份目标、网络与平台预算。仅在反向代理覆盖 X-Real-IP 且禁用直接访问时设置 TUHENG_TRUST_PROXY_IP=1，否则使用保守的未知网络桶；不能信任客户端自报 IP。
+- `npm run identity:secrets -- --rotate` 先保留旧主密钥、追加新 keyId，再重包有效 SecretRecord。中途失败可重跑；旧 keyId 留作恢复历史备份。轮换后重启 Web/Worker 载入部署密钥；后台 AI/SMTP 配置本身无需重启。
+- 数据库备份与主密钥分开加密保管，恢复时必须同时具备匹配的 keyId。缺失/错误主密钥安全失败，不改成明文。对象存储恢复点也必须与数据库一致。
+
+## 旧账号和 AI 配置迁移
+
+先保存数据库与私有对象备份，运行 `tsx scripts/identity-audit.ts`，再执行增量迁移。明确准备 school/user/class 映射 JSON，使用 `npm run identity:migrate -- --mapping 文件` 预检，审核后加 `--apply`。工具保留历史 User.id、作答、几何题目和正式成绩；旧名单以切换时成员与已有提交者推断，记录 inferred，不宣称还原发布时原始名册。开发空库可显式用 `--development-template --output .runtime/mapping.json` 生成标记为开发数据的映射，生产拒绝此快捷方式。
+
+旧 AI 配置仅通过 `npm run ai:import-legacy -- --legacy-id 配置ID --protocol OPENAI_CHAT_COMPLETIONS --confirm-import` 显式迁移；图片能力需明确添加 `--images`。工具只读取该旧记录指定的 AI_* 密钥，统一加密、审计、阻止重复导入；导入后供应商、模型及新模块绑定保持停用，已有绑定不覆盖。请在 AI 中心审查参数后启用，未执行任何模型请求。旧队列任务明确阻塞，管理员可以保留旧快照重试或使用当前配置新建运行；不会静默替换评分依据。
+
+迁移文件通过 `.gitattributes` 固定 LF。迁移 runner 兼容旧 Windows 库按 CRLF 生成的校验值，只允许换行差异；SQL 内容、空白或注释变更仍拒绝，已执行记录的 checksum 不重写。

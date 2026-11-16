@@ -37,7 +37,11 @@ export function secretKeys() {
     throw new DomainError('SECRET_KEY_UNAVAILABLE', 503);
   }
 }
-export function encryptSecret(value: string, purpose: string, id = randomUUID()): EncryptedSecret {
+export function encryptSecret(
+  value: string,
+  purpose: string,
+  id: string = randomUUID(),
+): EncryptedSecret {
   const { keys, active } = secretKeys();
   const nonce = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', keys[active], nonce);

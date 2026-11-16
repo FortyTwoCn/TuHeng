@@ -4,7 +4,7 @@ import { OrganizationConsole } from '../../../components/identity/OrganizationCo
 import { AccountSetup } from '../../../components/identity/AccountSetup';
 import { SMTPSettings } from '../../../components/identity/SMTPSettings';
 import { Shell } from '../../../components/Shell';
-import { requireRole, DomainError } from '@tuheng/domain';
+import { requireRole, DomainError, type Actor } from '@tuheng/domain';
 import { Panel } from '@tuheng/ui';
 import { StudentDashboard, AssignmentList, SelfTests, ErrorBook } from '../../../views/student';
 import { AssignmentDetails } from '../../../views/assignment';
@@ -39,96 +39,7 @@ export default async function Workspace({
   const section = segments[0];
   let view: React.ReactNode;
   try {
-    if (section === 'security')
-      view = <AccountSetup realm={area === 'student' ? 'STUDENT' : 'STAFF'} security />;
-    else if (area === 'school') {
-      requireRole(a, 'SCHOOL_ADMIN');
-      if (section === 'assignments')
-        view =
-          segments[1] === 'new'
-            ? await NewAssignment({ a })
-            : segments[1]
-              ? await AssignmentDetails({ a, id: segments[1] })
-              : await AssignmentList({ a, area, search });
-      else if (section === 'questions') view = await QuestionsView({ a, segments });
-      else
-        view = (
-          <OrganizationConsole
-            identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
-            initial={
-              section === 'teachers'
-                ? 'teachers'
-                : section === 'classes'
-                  ? 'classes'
-                  : section === 'imports'
-                    ? 'imports'
-                    : section === 'delivery'
-                      ? 'delivery'
-                      : 'students'
-            }
-          />
-        );
-    } else if (area === 'student') {
-      requireRole(a, 'STUDENT');
-      if (section === 'dashboard') view = await StudentDashboard({ a });
-      else if (section === 'assignments')
-        view = segments[1]
-          ? await AssignmentDetails({ a, id: segments[1] })
-          : await AssignmentList({ a, area, search });
-      else if (section === 'results' && segments[1])
-        view = await ResultView({ a, id: segments[1] });
-      else if (section === 'selftests') view = await SelfTests({ a, segments });
-      else if (section === 'errors') view = await ErrorBook({ a, segments });
-      else notFound();
-    } else if (area === 'teacher') {
-      requireRole(a, 'TEACHER', 'TEACHING_ASSISTANT');
-      if (section === 'dashboard') view = await TeacherDashboard({ a });
-      else if (section === 'questions') view = await QuestionsView({ a, segments });
-      else if (section === 'assignments')
-        view =
-          segments[1] === 'new'
-            ? await NewAssignment({ a })
-            : segments[1]
-              ? await AssignmentDetails({ a, id: segments[1] })
-              : await AssignmentList({ a, area, search });
-      else if (section === 'reviews')
-        view = segments[1] ? await ResultView({ a, id: segments[1] }) : await ReviewsView({ a });
-      else if (['classes', 'students', 'imports', 'delivery'].includes(section))
-        view = (
-          <OrganizationConsole
-            identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
-            initial={section}
-          />
-        );
-      else if (section === 'analytics') view = await AnalyticsView({ a });
-      else notFound();
-    } else {
-      requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
-      if (section === 'dashboard') view = await AdminDashboard({ a });
-      else if (['users', 'organization', 'imports', 'delivery'].includes(section))
-        view = (
-          <OrganizationConsole
-            identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
-            initial={
-              section === 'organization' ? 'schools' : section === 'users' ? 'teachers' : section
-            }
-          />
-        );
-      else if (section === 'mail') view = <SMTPSettings />;
-      else if (section === 'assignments')
-        view =
-          segments[1] === 'new'
-            ? await NewAssignment({ a })
-            : segments[1]
-              ? await AssignmentDetails({ a, id: segments[1] })
-              : await AssignmentList({ a, area: 'admin', search });
-      else if (section === 'questions') view = await QuestionsView({ a, segments });
-      else if (section === 'models') view = await ModelsView({ a });
-      else if (section === 'jobs') view = await JobsView({ a, search });
-      else if (section === 'audit') view = await AuditView({ a });
-      else if (section === 'system') view = await SystemView({ a });
-      else notFound();
-    }
+    view = await workspaceView(a, area, segments, search);
   } catch (e) {
     if (e instanceof DomainError)
       view = (
@@ -156,4 +67,115 @@ export default async function Workspace({
       {view}
     </Shell>
   );
+}
+
+async function workspaceView(
+  a: Actor,
+  area: string,
+  segments: string[],
+  search: Record<string, string | undefined>,
+): Promise<React.ReactNode> {
+  requireRole(
+    a,
+    area === 'student'
+      ? 'STUDENT'
+      : area === 'teacher'
+        ? 'TEACHER'
+        : area === 'school'
+          ? 'SCHOOL_ADMIN'
+          : 'ADMIN',
+  );
+  const section = segments[0];
+  let view: React.ReactNode;
+  if (section === 'security')
+    view = <AccountSetup realm={area === 'student' ? 'STUDENT' : 'STAFF'} security />;
+  else if (area === 'school') {
+    requireRole(a, 'SCHOOL_ADMIN');
+    if (section === 'assignments')
+      view =
+        segments[1] === 'new'
+          ? await NewAssignment({ a })
+          : segments[1]
+            ? await AssignmentDetails({ a, id: segments[1] })
+            : await AssignmentList({ a, area, search });
+    else if (section === 'questions') view = await QuestionsView({ a, segments });
+    else
+      view = (
+        <OrganizationConsole
+          identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
+          initial={
+            section === 'teachers'
+              ? 'teachers'
+              : section === 'classes'
+                ? 'classes'
+                : section === 'imports'
+                  ? 'imports'
+                  : section === 'delivery'
+                    ? 'delivery'
+                    : 'students'
+          }
+        />
+      );
+  } else if (area === 'student') {
+    requireRole(a, 'STUDENT');
+    if (section === 'dashboard') view = await StudentDashboard({ a });
+    else if (section === 'assignments')
+      view = segments[1]
+        ? await AssignmentDetails({ a, id: segments[1] })
+        : await AssignmentList({ a, area, search });
+    else if (section === 'results' && segments[1]) view = await ResultView({ a, id: segments[1] });
+    else if (section === 'selftests') view = await SelfTests({ a, segments });
+    else if (section === 'errors') view = await ErrorBook({ a, segments });
+    else notFound();
+  } else if (area === 'teacher') {
+    requireRole(a, 'TEACHER', 'TEACHING_ASSISTANT');
+    if (section === 'dashboard') view = await TeacherDashboard({ a });
+    else if (section === 'questions') view = await QuestionsView({ a, segments });
+    else if (section === 'assignments')
+      view =
+        segments[1] === 'new'
+          ? await NewAssignment({ a })
+          : segments[1]
+            ? await AssignmentDetails({ a, id: segments[1] })
+            : await AssignmentList({ a, area, search });
+    else if (section === 'reviews')
+      view = segments[1] ? await ResultView({ a, id: segments[1] }) : await ReviewsView({ a });
+    else if (['classes', 'students', 'imports', 'delivery'].includes(section))
+      view = (
+        <OrganizationConsole
+          identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
+          initial={section}
+        />
+      );
+    else if (section === 'analytics') view = await AnalyticsView({ a });
+    else notFound();
+  } else {
+    requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
+    if (section === 'dashboard') view = await AdminDashboard({ a });
+    else if (['users', 'organization', 'imports', 'delivery'].includes(section))
+      view = (
+        <OrganizationConsole
+          identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
+          initial={
+            section === 'organization' ? 'schools' : section === 'users' ? 'teachers' : section
+          }
+        />
+      );
+    else if (section === 'mail') view = <SMTPSettings />;
+    else if (section === 'assignments')
+      view =
+        segments[1] === 'new'
+          ? await NewAssignment({ a })
+          : segments[1]
+            ? await AssignmentDetails({ a, id: segments[1] })
+            : await AssignmentList({ a, area: 'admin', search });
+    else if (section === 'questions') view = await QuestionsView({ a, segments });
+    else if (section === 'models') view = await ModelsView({ a });
+    else if (section === 'jobs') view = await JobsView({ a, search });
+    else if (section === 'audit') view = await AuditView({ a });
+    else if (section === 'system') view = await SystemView({ a });
+    else notFound();
+  }
+
+  return view;
 }

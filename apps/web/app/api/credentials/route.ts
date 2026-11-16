@@ -23,6 +23,11 @@ export async function POST(request: Request) {
         { headers: { 'Cache-Control': 'no-store' } },
       );
     }
+    if (b.format === 'card')
+      return Response.json(
+        { data: await downloadCredentials(a, z.string().max(100).parse(b.token), 'card') },
+        { headers: { 'Cache-Control': 'no-store, private' } },
+      );
     const file = await downloadCredentials(a, z.string().max(100).parse(b.token));
     return new Response(new Uint8Array(file.bytes), {
       headers: {

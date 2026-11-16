@@ -7,6 +7,7 @@ import { prisma } from '@tuheng/database';
 import { AuthRealm, type AuthRealm as Realm } from '@tuheng/contracts';
 import { DomainError, ensure, needsOnboarding, type Actor } from '@tuheng/domain';
 import { authenticate, loadIdentity } from '../../../packages/infrastructure/src/identity-auth';
+import { trustedClientNetworkKey } from './http';
 import { appAuthRedirect, allowedAppOrigins } from './app-origins';
 
 export function authOptionsFor(realm: Realm): NextAuthOptions {
@@ -35,9 +36,12 @@ export function authOptionsFor(realm: Realm): NextAuthOptions {
           code: { type: 'text' },
           challengeId: { type: 'text' },
         },
-        async authorize(credentials) {
+        async authorize(credentials, request) {
           try {
-            return await authenticate({ ...credentials, realm });
+            return await authenticate(
+              { ...credentials, code: credentials?.code || undefined, realm },
+              { ipKey: trustedClientNetworkKey(request.headers ?? {}) },
+            );
           } catch {
             return null;
           }

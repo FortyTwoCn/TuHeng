@@ -1,3 +1,4 @@
+import { prepareLogin } from './identity-login';
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { GeometryDocument, type Vec2 } from '@tuheng/contracts';
@@ -18,10 +19,10 @@ import { connectionSheet, standardSheet } from '../repair-fixtures';
 
 test.use({ viewport: { width: 1366, height: 768 } });
 async function load(page: Page, document = connectionSheet()) {
-  await page.goto('/login?callbackUrl=%2Fgeometry');
-  await page.getByLabel('账号邮箱').fill('student@tuheng.local');
+  await prepareLogin(page, 'student', '/geometry');
+  await page.getByLabel('已绑定邮箱', { exact: true }).fill('student@tuheng.local');
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
-  await page.getByRole('button', { name: '进入图衡' }).click();
+  await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page.locator('.geometry-editor')).toBeVisible();
   await page.getByLabel('加载几何 JSON').setInputFiles({
     name: 'ux.json',

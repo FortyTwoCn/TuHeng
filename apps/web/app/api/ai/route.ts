@@ -44,10 +44,12 @@ export async function POST(request: Request) {
   try {
     checkOrigin(request);
     return Response.json(
-      await saveAIConfiguration(
-        await actor('STAFF'),
-        AICommands.parse(JSON.parse((await limitedBody(request, 30000)).toString('utf8'))),
-      ),
+      {
+        data: await saveAIConfiguration(
+          await actor('STAFF'),
+          AICommands.parse(JSON.parse((await limitedBody(request, 30000)).toString('utf8'))),
+        ),
+      },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (e) {

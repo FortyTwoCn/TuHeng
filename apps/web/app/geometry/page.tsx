@@ -1,16 +1,44 @@
 import { actor } from '../../lib/auth';
 import { GeometryWorkspace } from '../../components/GeometryWorkspace';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { AuthRealm } from '@tuheng/contracts';
 import { DomainError } from '@tuheng/domain';
-export default async function GeometryPage() {
+export default async function GeometryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ realm?: string }>;
+}) {
+  const { realm } = await searchParams;
+  const explicit = AuthRealm.safeParse(realm?.toUpperCase());
+  let chooseRealm = false;
   try {
-    const a = await actor(undefined, true);
+    const a = await actor(explicit.success ? explicit.data : undefined, true);
     if (a.onboarding) redirect(`/onboarding/${a.realm?.toLowerCase()}`);
   } catch (error) {
-    if (error instanceof DomainError && error.status === 401)
-      redirect('/login?callbackUrl=%2Fgeometry');
-    throw error;
+    if (error instanceof DomainError && error.code === 'SELECT_AUTH_REALM') chooseRealm = true;
+    else if (error instanceof DomainError && error.status === 401)
+      redirect(
+        '/login?callbackUrl=' +
+          encodeURIComponent(explicit.success ? '/geometry?realm=' + explicit.data : '/geometry'),
+      );
+    else throw error;
   }
+  if (chooseRealm)
+    return (
+      <main className="identity-entry">
+        <h1>选择作图身份</h1>
+        <p>当前浏览器同时登录了两个身份，请选择本次使用的身份。</p>
+        <div className="identity-inline">
+          <Link className="button" href="/geometry?realm=STUDENT">
+            学生作图
+          </Link>
+          <Link className="button" href="/geometry?realm=STAFF">
+            教师与管理作图
+          </Link>
+        </div>
+      </main>
+    );
   return (
     <main style={{ maxWidth: 1200, margin: '0 auto', padding: 16 }}>
       <h1>几何作图</h1>

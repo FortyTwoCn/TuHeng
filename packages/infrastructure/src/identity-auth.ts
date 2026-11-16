@@ -10,12 +10,15 @@ import {
 import { accountRoles, ensure, needsOnboarding, type Actor } from '@tuheng/domain';
 import { consumeVerification } from './identity-challenges';
 import { invalidateCredentials } from './identity-security';
+import { sendSecurityNotice } from './email';
 import { rateLimit } from './security-throttle';
 
-export async function authenticate(input: unknown) {
+export async function authenticate(input: unknown, context?: { ipKey: string }) {
   const parsed = LoginInput.safeParse(input);
   if (!parsed.success) return null;
   const value = parsed.data;
+  await rateLimit(`login-network:${value.realm}:${context?.ipKey ?? 'unknown'}`, 600, 60000);
+  await rateLimit('login-platform', 3000, 60000);
   await rateLimit(
     `login:${value.realm}:${value.schoolId ?? ''}:${value.identifier.toLowerCase()}`,
     20,
@@ -114,11 +117,12 @@ export async function changeOwnPassword(actor: Actor, current: string, next: str
   NewPassword.parse(next);
   await rateLimit(`password:${actor.id}`, 8, 5 * 60000);
   const user = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
+  ensure(user.active && user.tokenVersion === actor.tokenVersion, 'SESSION_REVOKED', 401);
   ensure(await compare(current, user.passwordHash), 'CURRENT_PASSWORD_INVALID');
   ensure(!(await compare(next, user.passwordHash)), 'PASSWORD_MUST_CHANGE');
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: actor.id },
+    const changed = await tx.user.updateMany({
+      where: { id: actor.id, tokenVersion: user.tokenVersion, active: true },
       data: {
         passwordHash: await hash(next, 12),
         mustChangePassword: false,
@@ -127,17 +131,20 @@ export async function changeOwnPassword(actor: Actor, current: string, next: str
         credentialVersion: { increment: 1 },
       },
     });
+    ensure(changed.count === 1, 'SESSION_REVOKED', 401);
     await invalidateCredentials(tx, actor.id);
     await tx.auditLog.create({
       data: { actorId: actor.id, action: 'PASSWORD_CHANGED', resourceId: actor.id, details: {} },
     });
   });
+  await sendSecurityNotice(user.id, user.emailNormalized, 'PASSWORD_CHANGED');
 }
 export async function bindVerifiedEmail(
   actor: Actor,
   input: { challengeId: string; code: string; purpose: 'BIND_EMAIL' | 'CHANGE_EMAIL' },
 ) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
+  ensure(user.active && user.tokenVersion === actor.tokenVersion, 'SESSION_REVOKED', 401);
   ensure(!user.mustChangePassword, 'PASSWORD_CHANGE_REQUIRED');
   ensure(
     input.purpose === (user.emailVerifiedAt ? 'CHANGE_EMAIL' : 'BIND_EMAIL'),
@@ -149,8 +156,8 @@ export async function bindVerifiedEmail(
     accountId: user.id,
   });
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: user.id },
+    const changed = await tx.user.updateMany({
+      where: { id: user.id, tokenVersion: challenge.tokenVersion, active: true },
       data: {
         email: challenge.targetEmail,
         emailNormalized: challenge.targetEmail,
@@ -159,6 +166,7 @@ export async function bindVerifiedEmail(
         ...(user.kind === 'SITE_ADMIN' ? { installationComplete: true } : {}),
       },
     });
+    ensure(changed.count === 1, 'SESSION_REVOKED', 401);
     await invalidateCredentials(tx, user.id);
     await tx.auditLog.create({
       data: {
@@ -169,6 +177,8 @@ export async function bindVerifiedEmail(
       },
     });
   });
+  if (user.emailNormalized && user.emailNormalized !== challenge.targetEmail)
+    await sendSecurityNotice(user.id, user.emailNormalized, 'EMAIL_CHANGED');
 }
 export async function recoverPassword(input: {
   realm: 'STAFF' | 'STUDENT';
@@ -185,8 +195,8 @@ export async function recoverPassword(input: {
       'INVALID_OR_EXPIRED_CODE',
     );
     // Recovery never bypasses an unfinished first-password requirement.
-    await tx.user.update({
-      where: { id: user.id },
+    const changed = await tx.user.updateMany({
+      where: { id: user.id, tokenVersion: challenge.tokenVersion, active: true },
       data: {
         passwordHash: await hash(input.password, 12),
         passwordExpiresAt: null,
@@ -194,9 +204,11 @@ export async function recoverPassword(input: {
         credentialVersion: { increment: 1 },
       },
     });
+    ensure(changed.count === 1, 'SESSION_REVOKED', 401);
     await invalidateCredentials(tx, user.id);
     await tx.auditLog.create({
       data: { actorId: user.id, action: 'PASSWORD_RECOVERED', resourceId: user.id, details: {} },
     });
   });
+  await sendSecurityNotice(challenge.accountId, challenge.targetEmail, 'PASSWORD_RECOVERED');
 }
