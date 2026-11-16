@@ -37,6 +37,7 @@ export default function Login() {
         <h2>登录教学工作空间</h2>
         <p className="muted">使用学校或管理员分配的账号</p>
         <form
+          method="post"
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
@@ -51,7 +52,7 @@ export default function Login() {
                 email: f.get('email'),
                 password: f.get('password'),
                 redirect: false,
-                callbackUrl,
+                callbackUrl: new URL(callbackUrl, window.location.origin).href,
               });
               if (r?.ok) {
                 router.push(callbackUrl);

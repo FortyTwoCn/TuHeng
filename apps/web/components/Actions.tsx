@@ -135,7 +135,10 @@ export function TextAction({
 }
 export function Logout() {
   return (
-    <button className="logout" onClick={() => signOut({ callbackUrl: '/login' })}>
+    <button
+      className="logout"
+      onClick={() => signOut({ callbackUrl: new URL('/login', window.location.origin).href })}
+    >
       退出登录
     </button>
   );

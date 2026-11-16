@@ -5,6 +5,7 @@ import { prisma } from '@tuheng/database';
 import { Role } from '@tuheng/contracts';
 import { DomainError, type Actor } from '@tuheng/domain';
 import { createHash } from 'node:crypto';
+import { appAuthRedirect } from './app-origins';
 export const authOptions: NextAuthOptions = {
   secret: process.env.AUTH_SECRET,
   session: { strategy: 'jwt', maxAge: 8 * 60 * 60 },
@@ -47,6 +48,9 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      return appAuthRedirect(url, baseUrl);
+    },
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;

@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import {
   addDrawing,
@@ -15,7 +16,7 @@ export function rawStrokeDocument(
   viewId: string,
   samples: StrokeSample[],
   role: 'teacher' | 'student',
-  id = crypto.randomUUID(),
+  id = createId(),
   options: PenOptions = { cssPixelsPerMm: 4 },
 ) {
   return addRawPenStroke(base, viewId, samples, role, options, id);

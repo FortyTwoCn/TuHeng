@@ -1,3 +1,4 @@
+export { createId } from './id';
 import { z } from 'zod';
 export * from './geometry';
 import { GeometryDocument, GeometryEvidence, GeometryAnnotation } from './geometry';

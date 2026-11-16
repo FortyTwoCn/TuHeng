@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import type { GeometryDocument } from '@tuheng/contracts';
 import { transact } from './document';
 import { distance, point, sub, dot } from './math';
@@ -47,7 +48,7 @@ export function snapPenCurve(
       nearest.position = c.position;
       nearest.candidate = c;
     } else if (nodes.length < 128)
-      nodes.push({ id: crypto.randomUUID(), at: best.at, position: c.position, candidate: c });
+      nodes.push({ id: createId(), at: best.at, position: c.position, candidate: c });
   }
   if (!nodes.some((n) => n.candidate)) return raw;
   nodes.sort((a, b) => a.at - b.at);

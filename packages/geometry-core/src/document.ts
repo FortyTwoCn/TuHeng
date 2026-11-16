@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import { GeometryDocument, type GeometryEntity, type Vec2 } from '@tuheng/contracts';
 import { upgradeGeometryDocument } from './sheet';
 import { evaluateDependencies } from './dependencies';
@@ -206,7 +207,7 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
     )
   )
     throw Error('复制涉及外部绑定，请先解除绑定或同时选中参考对象');
-  const mapping = new Map(selected.map((e) => [e.id, crypto.randomUUID()]));
+  const mapping = new Map(selected.map((e) => [e.id, createId()]));
   const next = transact(
     doc,
     (d) => {
@@ -230,7 +231,7 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
       ))
         d.constraints.push({
           ...relation,
-          id: crypto.randomUUID(),
+          id: createId(),
           entityIds: relation.entityIds.map((id) => mapping.get(id)!),
         });
       for (const r of doc.referenceRelations ?? [])
@@ -238,7 +239,7 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
           d.referenceRelations ??= [];
           d.referenceRelations.push({
             ...r,
-            id: crypto.randomUUID(),
+            id: createId(),
             targetId: mapping.get(r.targetId)!,
             reference:
               r.reference.kind === 'entity'
@@ -254,7 +255,7 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
       ))
         d.projectionGroups.push({
           ...relation,
-          id: crypto.randomUUID(),
+          id: createId(),
           entityIds: relation.entityIds.map((id) => mapping.get(id)!),
         });
     },

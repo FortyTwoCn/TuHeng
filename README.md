@@ -39,6 +39,8 @@ npm run worker
 
 访问 http://localhost:3000 。测试账户 student@tuheng.local、teacher@tuheng.local、admin@tuheng.local 使用 SEED_PASSWORD。seed 仅本地显式执行，数据标记为演示。
 
+平板通过局域网访问时，在 `.env` 增加 `APP_ALLOWED_ORIGINS=http://本机局域网IP:3000`，重启 `npm run dev`，在平板打开该地址。`NEXTAUTH_URL=http://localhost:3000` 可保留供本机使用；多个受信任地址用逗号分隔，必须包含协议和端口，不使用通配符。IP 变化后需更新配置。开发资源、登录跳转和保存接口共用这些应用地址；操作与排查见 [局域网开发与平板访问](docs/OPERATIONS.md#局域网开发与平板访问)。
+
 未配置视觉 API 时仍能提交、人工复核与发布，任务明确显示配置阻塞；不会生成模拟分。配置 AI_API_KEY、AI_BASE_URL、AI_MODEL、AI_OUTPUT_MODE 后在任务页面重试。真实调用不会使用测试 Mock。
 
 ```sh

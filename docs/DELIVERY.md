@@ -199,3 +199,20 @@ GeometryDocument 2.1 增量引入类型化参考关系，兼容 v1/2.0 与旧评
 修正电子笔把正常 U 形和波浪笔迹判成不可拟合的问题：既有曲线分支改为屏幕尺度平滑、误差控制的稀疏插值及双向距离检查，原始采样和首末点保留；明显折线、急转乱线和闭合非圆继续回退。更新失败提示，仍在松手后自动应用，不增加确认流程。
 
 新增截图近似轨迹先失败后通过；175 单元、17 隔离集成、73 生产浏览器测试及类型、lint、build 通过。鼠标输入覆盖桌面/手机尺寸与不同缩放；真实手写笔硬件未验收。[根因、截图与 JSON](GEOMETRY_EDITOR_UX_V2.md#手绘曲线误拒绝修复2026-11-16)。无契约变更或历史回填。
+
+## 局域网登录与曲线分支同步（2026-11-16）
+
+本次 main 同步包含自动识别投影面、GeometryDocument 2.2 过点曲线、电子笔手绘曲线修复及以下局域网兼容修复。前述各节的“仅本地提交”描述的是当时交付状态，曲线实现和已有截图/JSON 记录继续适用。
+
+| 问题与根因                                                                              | 修改位置                                                                             | 回归证据                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 局域网可见登录 HTML，但 Next 16.4 开发资源/HMR 的来源校验阻止客户端启用                 | next.config.ts、.env.example、lib/app-origins.ts                                     | 实际 HTTP 局域网地址：修改前表单未 hydration，HMR 连接失败；明确配置地址并重启后，HMR 连接、登录、进入编辑器成功                                                                     |
+| 保存/上传只接受 NEXTAUTH_URL 的 localhost；退出采用相对回调，平板可能跳到自身 localhost | lib/http.ts、lib/auth.ts、login/page.tsx、components/Actions.tsx                     | 新增 app-origins 单元测试先复现 INVALID_ORIGIN；修复后验证明确允许地址、恶意源/错误端口/伪造 Host 拒绝、同源登录退出。保留 NextAuth CSRF、账号及资源权限                             |
+| HTTP 局域网缺少 crypto.randomUUID，绘制、拟合、复制和提交 ID 创建失败                   | contracts/src/id.ts；geometry-core / geometry-editor 及建题、提交、批注调用点        | 新增 browser-id 测试修改前报 randomUUID is not a function；修复后用 getRandomValues 生成合法 UUID v4。真实浏览器确认非安全上下文且原生 randomUUID 缺失，仍可自动拟合并导出合法 curve |
+| 测试地址写死 localhost，不能验证实际 IP 链路                                            | playwright.config.ts、tests/e2e/network-login.spec.ts、已有 workflow / geometry 用例 | TEST_APP_ORIGIN 配置实际访问地址；新增 1024×768、768×1024 登录/曲线 JSON/刷新/退出测试，完整业务套件也经相同 IP 请求                                                                 |
+
+本机忽略的 .env 已增加实际局域网地址；凭据不变、不提交 .env。配置方式见 [运行说明](OPERATIONS.md#局域网开发与平板访问)。本次不涉及数据库迁移或历史数据改写。
+
+最终验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；`npm test` **190 项**、隔离 `npm run test:integration` **17 项**通过。开发模式的新增网络登录测试 **2 项**通过；生产构建的完整浏览器套件 **75 项**通过（2.5 分钟），使用 Windows / Chrome 157 / Node 26.13，通过实际 HTTP 局域网 IP 访问，覆盖几何草稿/提交、图片上传、教师复核及权限拒绝。首轮完整套件的一项匿名请求测试误取 about:blank 的 origin，修正为测试 baseURL 后完整复跑通过，没有改变应用权限逻辑。
+
+测试数据库为 tuheng_test，桶为 tuheng-test-private，使用隔离队列；没有调用真实 AI 或改写历史正式作答。横竖屏与触摸是浏览器模拟，笔迹经真实鼠标 down/move/up 路径输入；未直接操作用户的实体平板、软键盘或手写笔。网络用例的截图和 curve JSON 附件生成在 test-results，已有曲线交付证据保留在 docs/images/curves 与 docs/geometry-examples/curves。

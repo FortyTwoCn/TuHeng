@@ -1,4 +1,5 @@
 'use client';
+import { createId } from '@tuheng/contracts';
 import { useState } from 'react';
 import type { ComponentProps } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
@@ -45,7 +46,7 @@ export function PlaneCreator({
                 doc,
                 (d) =>
                   d.entities.push({
-                    id: crypto.randomUUID(),
+                    id: createId(),
                     kind: 'plane',
                     viewId,
                     layerId: doc.layers.find(

@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import type {
   GeometryDocument,
   GeometryTargetRef,
@@ -57,7 +58,7 @@ export function writeReferenceRelation(
         (replacePosition || referenceKey(r.reference) === referenceKey(reference))
       ),
   );
-  doc.referenceRelations.push({ id: crypto.randomUUID(), targetId, reference, kind, mode, source });
+  doc.referenceRelations.push({ id: createId(), targetId, reference, kind, mode, source });
 }
 export function applyReferenceResult(
   doc: GeometryDocument,

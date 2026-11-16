@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import type { GeometryDocument, ProjectionAxis, Vec2 } from '@tuheng/contracts';
 import { add, sub, dot, scale, unit, lineGeometry } from './math';
 import { transact } from './document';
@@ -116,8 +117,8 @@ export function addProjectionAxis(
   return transact(
     doc,
     (d) => {
-      const id = crypto.randomUUID(),
-        newViewId = crypto.randomUUID();
+      const id = createId(),
+        newViewId = createId();
       d.auxiliarySystems!.push({
         id,
         version: 1,

@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import type { GeometryDocument } from '@tuheng/contracts';
 import { editable, pointReferences, transact } from './document';
 
@@ -84,7 +85,7 @@ export function disconnectEndpoint(
   return transact(
     doc,
     (d) => {
-      const id = crypto.randomUUID();
+      const id = createId();
       d.entities.push({
         ...p,
         id,

@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import type { GeometryDocument, GeometryEntity, Vec2 } from '@tuheng/contracts';
 import { transact } from './document';
 import { distance, minorArc, point, sub, unit, scale, add, lineGeometry } from './math';
@@ -47,7 +48,7 @@ export function addDrawing(
       function makePoint(p: Vec2, index: number) {
         const existing = existingIds?.[index];
         if (existing) return existing;
-        const id = crypto.randomUUID();
+        const id = createId();
         d.entities.push({
           ...base,
           id,
@@ -65,7 +66,7 @@ export function addDrawing(
         makePoint(a, 0);
         return;
       }
-      const id = crypto.randomUUID();
+      const id = createId();
       if (tool === 'curve') {
         d.schemaVersion = 'tuheng.geometry/2.2.0';
         d.entities.push({
@@ -110,7 +111,7 @@ export function addDrawing(
         });
       if (referenceId)
         d.constraints.push({
-          id: crypto.randomUUID(),
+          id: createId(),
           kind: tool.startsWith('perpendicular') ? 'PERPENDICULAR' : 'PARALLEL',
           entityIds: [referenceId, id],
           source: 'USER',
@@ -167,7 +168,7 @@ export function addRawPenStroke(
   samples: (Vec2 & { pressure: number })[],
   role: 'teacher' | 'student',
   options: PenOptions = { cssPixelsPerMm: 4 },
-  id = crypto.randomUUID(),
+  id = createId(),
 ) {
   return transact(
     doc,
@@ -252,7 +253,7 @@ export function linkProjection(doc: GeometryDocument, ids: string[]) {
     const merged = [...new Set([...ids, ...related.flatMap((group) => group.entityIds)])];
     d.projectionGroups = d.projectionGroups.filter((group) => !related.includes(group));
     d.projectionGroups.push({
-      id: crypto.randomUUID(),
+      id: createId(),
       kind: e.kind === 'point' ? 'POINT' : 'SEGMENT',
       entityIds: merged,
       source: 'USER',
@@ -322,8 +323,8 @@ export function setLineStyle(
           ...(entity.samples ? { samples: entity.samples } : {}),
         };
       } else if (entity.kind === 'line' && lineStyle.startsWith('ANSWER')) {
-        const startPoint = crypto.randomUUID(),
-          endPoint = crypto.randomUUID();
+        const startPoint = createId(),
+          endPoint = createId();
         for (const [pointId, position] of [
           [startPoint, entity.anchor],
           [endPoint, add(entity.anchor, scale(unit(entity.direction), 10))],

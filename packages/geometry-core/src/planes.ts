@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import type { GeometryDocument, GeometryEntity, Vec3 } from '@tuheng/contracts';
 import { transact } from './document';
 export function relatedPlane(
@@ -25,7 +26,7 @@ export function relatedPlane(
     orientation = n;
   }
   const entity: GeometryEntity = {
-    id: crypto.randomUUID(),
+    id: createId(),
     kind: 'plane',
     viewId: reference.viewId,
     layerId: doc.layers.find(

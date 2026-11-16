@@ -1,4 +1,5 @@
 'use client';
+import { createId } from '@tuheng/contracts';
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Uploader, type UploadedAsset } from './Uploader';
@@ -72,7 +73,7 @@ export function SubmissionEditor({
           onClick={async () => {
             if (!window.confirm('正式提交后将保存为独立作答版本，是否提交？')) return;
             setBusy(true);
-            if (!key.current) key.current = crypto.randomUUID();
+            if (!key.current) key.current = createId();
             try {
               const result = await action('submit', {
                 itemId,

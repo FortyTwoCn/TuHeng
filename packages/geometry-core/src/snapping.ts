@@ -1,3 +1,4 @@
+import { createId } from '@tuheng/contracts';
 import type { GeometryDocument, Vec2, GeometryTargetRef } from '@tuheng/contracts';
 import { add, distance, foot, intersect, lineGeometry, scale, sub, dot, unit } from './math';
 import { viewAxes } from './projections';
@@ -200,7 +201,7 @@ export function confirmSnap(
     if (!segment) return after;
     return transact(after, (d) =>
       d.constraints.push({
-        id: crypto.randomUUID(),
+        id: createId(),
         kind: candidate.kind as 'PARALLEL' | 'PERPENDICULAR',
         entityIds: [...candidate.entityIds, segment.id],
         source: 'SNAP_CONFIRMED',
@@ -220,7 +221,7 @@ export function confirmSnap(
     return mergePoints(after, created.id, candidate.entityIds[0], role);
   return transact(after, (d) =>
     d.constraints.push({
-      id: crypto.randomUUID(),
+      id: createId(),
       kind: candidate.kind as 'COINCIDENT' | 'MIDPOINT' | 'INTERSECTION' | 'POINT_ON_LINE',
       entityIds: [created.id, ...candidate.entityIds],
       source: 'SNAP_CONFIRMED',

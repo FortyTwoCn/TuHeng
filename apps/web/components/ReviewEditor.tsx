@@ -1,4 +1,5 @@
 'use client';
+import { createId } from '@tuheng/contracts';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { type Rubric, type Annotation, type GradingResult, formatPoints } from '@tuheng/contracts';
@@ -188,7 +189,7 @@ export function ReviewEditor({
           disabled={!point.text || !point.assetId}
           onClick={() => {
             const base = {
-              id: crypto.randomUUID(),
+              id: createId(),
               assetId: point.assetId,
               assetVersion: 'original',
               errorId: null,

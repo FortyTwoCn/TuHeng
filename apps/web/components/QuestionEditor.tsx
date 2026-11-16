@@ -1,4 +1,5 @@
 'use client';
+import { createId } from '@tuheng/contracts';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { QuestionInput, GeometryDocument, EditorType } from '@tuheng/contracts';
@@ -444,7 +445,7 @@ export function QuestionEditor({
             setCriteria([
               ...criteria,
               {
-                id: crypto.randomUUID(),
+                id: createId(),
                 name: '新增评分项',
                 maxPoints: 10,
                 score: '1',

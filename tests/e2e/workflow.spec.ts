@@ -129,13 +129,14 @@ test('E: private selftest folder and set are saved, practice has history and no 
 });
 test('security and mobile: unauthenticated and wrong-origin mutations are refused, layout remains usable', async ({
   browser,
+  baseURL,
 }) => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   expect(
     (
       await page.request.post('/api/actions/folder', {
         data: { title: 'unauthorized' },
-        headers: { Origin: 'http://localhost:3000' },
+        headers: { Origin: new URL(baseURL!).origin },
       })
     ).status(),
   ).toBe(401);

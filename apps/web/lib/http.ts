@@ -1,8 +1,9 @@
 import { ZodError } from 'zod';
 import { DomainError } from '@tuheng/domain';
+import { allowedAppOrigins } from './app-origins';
 export function checkOrigin(request: Request) {
   const origin = request.headers.get('origin');
-  if (!origin || origin !== new URL(process.env.NEXTAUTH_URL ?? request.url).origin)
+  if (!origin || !allowedAppOrigins().includes(origin))
     throw new DomainError('INVALID_ORIGIN', 403);
 }
 export async function limitedBody(request: Request, max: number) {

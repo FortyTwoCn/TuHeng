@@ -273,7 +273,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
     systemId: 'missing',
   };
   const badReference = await student.request.post('/api/actions/draft', {
-    headers: { Origin: 'http://localhost:3000' },
+    headers: { Origin: new URL(student.url()).origin },
     data: missingReference,
   });
   expect(badReference.status()).toBe(400);
@@ -284,7 +284,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   );
   stemPoint.position.x += 5;
   const denied = await student.request.post('/api/actions/draft', {
-    headers: { Origin: 'http://localhost:3000' },
+    headers: { Origin: new URL(student.url()).origin },
     data: forged,
   });
   expect(denied.status()).toBe(403);
@@ -292,7 +292,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   const axisForgery = structuredClone(draftRequest);
   axisForgery.geometry.views[0].transform.origin.x += 2;
   const deniedAxis = await student.request.post('/api/actions/draft', {
-    headers: { Origin: 'http://localhost:3000' },
+    headers: { Origin: new URL(student.url()).origin },
     data: axisForgery,
   });
   expect(deniedAxis.status()).toBe(403);

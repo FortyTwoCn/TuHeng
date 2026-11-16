@@ -4,6 +4,30 @@ Node 22+，PostgreSQL 17、Redis 7、私有 S3。`docker compose up -d` 仅启�
 
 Prisma 6.19.3 采用 JS/WASM query compiler + pg driver，避开受限网络中的原生引擎下载。当前迁移 CLI 的 JS adapter 在本环境 PostgreSQL `name` 类型反序列化失败；因此 `npm run db:migrate` 使用 pg 执行 Prisma 生成的 SQL。迁移 runner 通过 advisory lock、事务、名称和 SHA-256 校验防止并发和历史脚本改写；记录表 `_tuheng_migrations`，不与 `_prisma_migrations` 混用。后续迁移用 `prisma migrate diff` 生成新目录的 SQL，审查后运行，绝不 reset。
 
+## 局域网开发与平板访问
+
+`npm run dev` 已监听 `0.0.0.0:3000`。本机与平板连接同一局域网，在本机忽略的 `.env` 配置实际可访问的地址，例如：
+
+```dotenv
+NEXTAUTH_URL=http://localhost:3000
+APP_ALLOWED_ORIGINS=http://192.168.1.100:3000
+```
+
+重启开发服务器，平板打开 `http://192.168.1.100:3000/login`；这里的 IP 必须换成本机实际 IPv4。可用逗号添加多个明确的应用源，包含协议和端口；不接受通配符、账号信息或路径。不从 Host / X-Forwarded-Host 自动授予信任。IP 改变后更新配置并重启；不同地址的浏览器会话 Cookie 独立，需要分别登录。生产环境继续配置实际 HTTPS 主地址，保留原有安全 Cookie、CSRF 和账号/资源权限检查。
+
+“网页能显示但登录无反应”先检查开发终端和浏览器的 HMR / `_next` 连接。Next 16.4 的开发来源检查使用 hostname；`next.config.ts` 从应用地址配置提供 `allowedDevOrigins`。保存/上传 API 则由 `lib/app-origins.ts` 按完整 origin 检查，未列入的源、缺失 Origin、不同端口继续拒绝。登录与退出使用当前页面的地址，NextAuth 只允许明确配置的目标，避免把平板重定向到它自己的 localhost。
+
+普通 HTTP 局域网不是浏览器安全上下文，可能没有 `crypto.randomUUID`。公共 `createId` 使用 `crypto.getRandomValues` 生成 UUID v4，编辑器绘制/复制/拟合、建题、提交和教师批注复用该入口；不采用 Math.random，也不修改几何契约或历史对象 ID。登录表单明确使用 POST，防止脚本未启用时把密码写入 URL。
+
+局域网回归可以使用已有的 Playwright 测试入口（先配置受信任源并准备隔离测试库/桶/队列）。例如 PowerShell：
+
+```powershell
+$env:TEST_APP_ORIGIN = 'http://192.168.1.100:3000'
+npm run test:e2e -- --reporter=list
+```
+
+`TEST_APP_ORIGIN` 仅改变测试访问地址，不能替代服务器 `APP_ALLOWED_ORIGINS` 配置。网络登录用例覆盖横/竖屏登录、电子笔曲线 JSON、刷新会话、恶意来源拒绝、退出后仍停留在原 IP；完整套件还覆盖草稿、图片上传、正式提交和教师复核。真实平板网络、系统软键盘及手写笔硬件仍须在设备上验证。
+
 ## 配置与真实视觉模型
 
 在忽略的 `.env` 设置 AI_API_KEY、AI_BASE_URL、AI_MODEL、AI_OUTPUT_MODE。只选择已验证支持多图视觉的模型；不因为接口兼容就推断支持图像或 json_schema。模式 json_object/json_schema 由 adapter 显式切换。
