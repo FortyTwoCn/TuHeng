@@ -18,6 +18,7 @@ import {
   recoverExpiredRuns,
 } from '../../packages/infrastructure/src/grading-runner';
 import { MockVisionProvider } from '@tuheng/ai-providers';
+import { aiFixture } from '../ai-fixture';
 import { requestFixture, evaluationFixture } from '../fixtures';
 const tag = `IT-${Date.now()}`;
 process.env.QUEUE_NAMESPACE = tag;
@@ -44,6 +45,9 @@ async function makeActor(name: string, roles: Actor['roles']) {
 }
 beforeAll(async () => {
   await ensureBucket();
+  const ai = await aiFixture();
+  await ai.bind('grading.assignment');
+  await ai.bind('grading.selftest');
   teacher = await makeActor('teacher', ['TEACHER']);
   student = await makeActor('student', ['STUDENT']);
   other = await makeActor('other', ['STUDENT']);

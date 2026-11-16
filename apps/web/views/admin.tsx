@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { prisma, database } from '@tuheng/database';
 import { requireRole, type Actor } from '@tuheng/domain';
-import { modelStatus, storageHealth } from '@tuheng/infrastructure';
+import { storageHealth } from '@tuheng/infrastructure';
 import { Panel, PageTitle, Empty, Badge } from '@tuheng/ui';
-import { ActionButton, ModelTest } from '../components/Actions';
+import { ActionButton } from '../components/Actions';
 import { UserCreate, UserManage, OrganizationForm, ImportUsers } from '../components/AdminForms';
 import { Stat, Status, date } from './shared';
 export async function AdminDashboard({ a }: { a: Actor }) {
@@ -175,54 +175,10 @@ export async function OrganizationView({ a }: { a: Actor }) {
     </>
   );
 }
+import { AICenter } from '../components/identity/AICenter';
 export async function ModelsView({ a }: { a: Actor }) {
-  const c = await modelStatus(a);
-  return (
-    <>
-      <PageTitle
-        eyebrow="VISION MODEL CONFIGURATION"
-        title="AI 模型配置"
-        description="模型配置按版本固定在运行中。密钥只读取服务端环境变量。"
-      />
-      <div className="two-col">
-        <Panel title="当前配置">
-          <table className="score-table">
-            <tbody>
-              {[
-                ['Provider', c.provider],
-                ['API Base URL', c.baseUrl],
-                ['模型 ID', c.model || '尚未设置'],
-                ['结构化输出', c.outputMode],
-                ['超时', `${c.timeoutMs} ms`],
-                ['正式作业并发预算', String(c.concurrency)],
-                ['密钥状态', c.keyConfigured ? '已配置（不返回密钥）' : '尚未配置'],
-              ].map(([k, v]) => (
-                <tr key={k}>
-                  <td>{k}</td>
-                  <td>{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="alert">
-            未配置视觉模型时，不生成 AI 分数。当前环境的其他模型凭据不会被自动当作视觉凭据使用。
-          </div>
-          <ModelTest />
-        </Panel>
-        <Panel title="调用状态统计">
-          {c.usage.map((row) => (
-            <div className="list-item" key={row.status}>
-              <Status status={row.status} />
-              <strong>{row._count} 次</strong>
-            </div>
-          ))}
-          <p className="muted small">
-            模型配置从环境建立版本快照。切换配置请按运维文档执行配置同步命令。
-          </p>
-        </Panel>
-      </div>
-    </>
-  );
+  requireRole(a, 'ADMIN');
+  return <AICenter />;
 }
 export async function JobsView({
   a,

@@ -2,9 +2,10 @@ import { Prisma } from '@prisma/client';
 import { prisma, database } from '@tuheng/database';
 import { GradingRequest, type VisionProvider } from '@tuheng/contracts';
 import { GeometryGradingEngine, GradingError } from '@tuheng/grading-core';
-import { OpenAICompatibleVisionProvider, ProviderError } from '@tuheng/ai-providers';
+import { ProviderError } from '@tuheng/ai-providers';
 import { SharpImagePipeline } from '@tuheng/image-pipeline';
 import { putObject, getObject } from './storage';
+import { invocationProvider } from './ai-gateway';
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 export async function executeGradingRun(
   runId: string,
@@ -39,22 +40,28 @@ export async function executeGradingRun(
     data: { status: 'RUNNING', attempts: { increment: 1 }, errorCode: null },
   });
   try {
-    if (!run.config) throw new ProviderError('BLOCKED_CONFIG', false);
-    const apiKey = process.env[run.config.keyEnv] ?? '';
-    if (!options.provider && (!apiKey || !run.config.model))
-      throw new ProviderError('BLOCKED_CONFIG', false);
-    const provider =
-      options.provider ??
-      new OpenAICompatibleVisionProvider({
-        baseUrl: run.config.baseUrl,
-        model: run.config.model,
-        outputMode: run.config.outputMode === 'json_schema' ? 'json_schema' : 'json_object',
-        timeoutMs: run.config.timeoutMs,
-        apiKey,
-      });
+    const invocation = await prisma.aIInvocation.findUnique({ where: { runId } });
+    if (!options.provider && !invocation)
+      throw new ProviderError('AI_LEGACY_CONFIGURATION_REQUIRED', false);
+    const provider = options.provider ?? (await invocationProvider(invocation!.id));
+    const request = GradingRequest.parse(run.request);
+    const attempt = await prisma.submissionAttempt.findUniqueOrThrow({
+      where: { id: run.attemptId },
+    });
+    const question = await prisma.questionVersion.findUniqueOrThrow({
+      where: { id: attempt.questionVersionId },
+      include: { question: true },
+    });
+    const authorizedAssets = new Map([
+      ...request.question.assets.map((asset) => [asset.id, question.question.ownerId] as const),
+      ...request.reference.assets.map((asset) => [asset.id, question.question.ownerId] as const),
+      ...request.submissionAssets.map((asset) => [asset.id, attempt.ownerId] as const),
+    ]);
     const pipeline = new SharpImagePipeline(
       async (id) => {
         const asset = await prisma.storedAsset.findUniqueOrThrow({ where: { id } });
+        if (authorizedAssets.get(id) !== asset.ownerId)
+          throw new ProviderError('AI_ASSET_SCOPE_FORBIDDEN', false);
         return getObject(asset.objectKey);
       },
       async (parentId, buffer, record) => {
@@ -76,9 +83,7 @@ export async function executeGradingRun(
         return a.id;
       },
     );
-    const result = await new GeometryGradingEngine(provider, pipeline).grade(
-      GradingRequest.parse(run.request),
-    );
+    const result = await new GeometryGradingEngine(provider, pipeline).grade(request);
     await prisma.$transaction(async (tx) => {
       const owned = await tx.gradingRun.updateMany({
         where: { id: runId, status: 'RUNNING', leaseToken: token },
@@ -91,6 +96,11 @@ export async function executeGradingRun(
         },
       });
       if (!owned.count) return;
+      if (invocation)
+        await tx.aIInvocation.update({
+          where: { id: invocation.id },
+          data: { status: 'SUCCEEDED', errorCode: null, finishedAt: new Date() },
+        });
       await tx.gradingSuggestion.create({
         data: {
           runId,
@@ -127,7 +137,12 @@ export async function executeGradingRun(
           : 'GRADING_INVALID_OR_FAILED';
     const job = await prisma.backgroundJob.findUniqueOrThrow({ where: { runId } });
     const retryable = e instanceof ProviderError && e.retryable && job.attempts < 3;
-    const status = code === 'BLOCKED_CONFIG' ? 'BLOCKED_CONFIG' : retryable ? 'RETRYING' : 'FAILED';
+    const blocked =
+      code === 'BLOCKED_CONFIG' ||
+      /^AI_(?:BINDING|MODEL_DISABLED|PROVIDER_DISABLED|SCOPE_DISABLED|CAPABILITY|CREDENTIAL|SNAPSHOT|LEGACY|DAILY_BUDGET|CONCURRENCY|BUDGET_UNAVAILABLE)/.test(
+        code,
+      );
+    const status = blocked ? 'BLOCKED_CONFIG' : retryable ? 'RETRYING' : 'FAILED';
     await prisma.$transaction(async (tx) => {
       const owned = await tx.gradingRun.updateMany({
         where: { id: runId, leaseToken: token },
@@ -139,8 +154,13 @@ export async function executeGradingRun(
           finishedAt: retryable ? null : new Date(),
         },
       });
-      if (owned.count)
+      if (owned.count) {
         await tx.backgroundJob.update({ where: { runId }, data: { status, errorCode: code } });
+        await tx.aIInvocation.updateMany({
+          where: { runId },
+          data: { status, errorCode: code, finishedAt: retryable ? null : new Date() },
+        });
+      }
     });
     if (retryable) throw e;
   }

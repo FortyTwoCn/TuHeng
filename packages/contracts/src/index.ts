@@ -119,7 +119,7 @@ export const GradingRequest = z
       'geometry-review/1.3.0',
       'geometry-review/1.4.0',
     ]),
-    modelConfigId: z.string(),
+    modelConfigId: z.string().nullable(),
     teacherRequirements: z.string().max(4000).optional(),
   })
   .refine(
@@ -247,7 +247,7 @@ export const GradingResult = z.object({
   guidance: z.string(),
   versions: z.object({
     model: z.string(),
-    config: z.string(),
+    config: z.string().nullable(),
     prompt: z.string(),
     preprocessing: z.string(),
     strategy: z.string(),
@@ -292,3 +292,5 @@ export const ScoreDecisionInput = z.object({
 });
 export const formatPoints = (p: number | null | undefined) =>
   p == null ? '待判断' : (p / 10).toFixed(1);
+
+export * from './ai';

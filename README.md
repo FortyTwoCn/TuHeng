@@ -41,7 +41,7 @@ npm run worker
 
 平板通过局域网访问时，在 `.env` 增加 `APP_ALLOWED_ORIGINS=http://本机局域网IP:3000`，重启 `npm run dev`，在平板打开该地址。`NEXTAUTH_URL=http://localhost:3000` 可保留供本机使用；多个受信任地址用逗号分隔，必须包含协议和端口，不使用通配符。IP 变化后需更新配置。开发资源、登录跳转和保存接口共用这些应用地址；操作与排查见 [局域网开发与平板访问](docs/OPERATIONS.md#局域网开发与平板访问)。
 
-未配置视觉 API 时仍能提交、人工复核与发布，任务明确显示配置阻塞；不会生成模拟分。配置 AI_API_KEY、AI_BASE_URL、AI_MODEL、AI_OUTPUT_MODE 后在任务页面重试。真实调用不会使用测试 Mock。
+未配置视觉 API 时仍能提交、人工复核与发布，任务明确显示配置阻塞；不会生成模拟分。管理员在 AI 中心配置供应商、模型和模块规则后，在任务页面受控重试。真实调用不会使用测试 Mock。
 
 ```sh
 npm run typecheck
@@ -54,7 +54,7 @@ npm run test:e2e
 
 架构与权限见 docs/。实际完成/限制、精确测试结果与下一步见 docs/DELIVERY.md。
 
-配置真实视觉服务后执行 `npm run model:sync`，再重启 Web/Worker。旧任务沿用旧配置，可在管理页选择“使用当前配置新建运行”。详见 [运行与恢复](docs/OPERATIONS.md)。
+在管理员 AI 中心维护版本化配置，无需改 .env 或重启 Web/Worker。旧任务沿用旧配置，可在管理页选择“使用当前配置新建运行”。详见 [运行与恢复](docs/OPERATIONS.md)。
 
 Playwright 首次使用先 `npx playwright install chromium`；已有系统 Chromium 时可用 `PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e`。集成测试应在隔离测试数据库运行；本地验收时先停止普通 Worker，避免它抢占测试任务。
 

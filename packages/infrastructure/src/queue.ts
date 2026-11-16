@@ -24,6 +24,11 @@ export async function dispatchOutbox(runIds?: string[]) {
     take: 100,
   });
   for (const event of events) {
+    const run = await prisma.gradingRun.findUnique({ where: { id: event.runId }, select: { status: true } });
+    if (!run || !['QUEUED', 'RETRYING'].includes(run.status)) {
+      await prisma.outboxEvent.update({ where: { id: event.id }, data: { deliveredAt: new Date() } });
+      continue;
+    }
     const queue = queueFor(event.lane);
     try {
       await queue.add(

@@ -1,3 +1,4 @@
+import { planAIInvocation } from './ai-routing';
 import { GradingRequest } from '@tuheng/contracts';
 import { exportGeometryBundle } from '@tuheng/geometry-core';
 import { validateAnswerGeometry } from './geometry';
@@ -11,14 +12,6 @@ export async function scheduleRun(
 ) {
   const question = await tx.get('questionVersion', attempt.questionVersionId);
   ensure(question, 'QUESTION_NOT_FOUND');
-  const config = (
-    await tx.list(
-      'modelConfigurationVersion',
-      { active: true },
-      { orderBy: 'createdAt', desc: true, take: 1 },
-    )
-  )[0];
-  ensure(config, 'MODEL_CONFIG_MISSING');
   const ref = async (id: string) => {
     const a = await tx.get('storedAsset', id);
     ensure(a, 'ASSET_NOT_FOUND');
@@ -67,19 +60,35 @@ export async function scheduleRun(
             ? 'geometry-review/1.2.0'
             : 'geometry-review/1.1.0'
       : 'geometry-review/1.0.0',
-    modelConfigId: config.id,
+    modelConfigId: null,
   });
+  const taskKey = attempt.source === 'ASSIGNMENT' ? 'grading.assignment' : 'grading.selftest';
+  const plan = await planAIInvocation(tx, taskKey, request);
+  request.modelConfigId = plan.snapshot?.bindingId ?? null;
+  const owner = await tx.get('user', attempt.ownerId);
+  const status = plan.snapshot ? 'QUEUED' : 'BLOCKED_CONFIG';
   const run = await tx.create('gradingRun', {
     id,
     attemptId: attempt.id,
-    configId: config.id,
-    status: 'QUEUED',
+    configId: null,
+    status,
+    errorCode: plan.errorCode,
     strategyVersion: request.strategyVersion,
     promptVersion: request.promptVersion,
     request,
   });
   const lane = attempt.source === 'ASSIGNMENT' ? 'formal' : 'selftest';
-  await tx.create('backgroundJob', { runId: id, lane, status: 'QUEUED' });
+  await tx.create('aIInvocation', {
+    runId: id,
+    taskKey,
+    actorId: attempt.ownerId,
+    schoolId: owner?.schoolId ?? null,
+    resourceId: attempt.id,
+    ...(plan.snapshot ? { snapshot: plan.snapshot } : {}),
+    status,
+    errorCode: plan.errorCode,
+  });
+  await tx.create('backgroundJob', { runId: id, lane, status, errorCode: plan.errorCode });
   await tx.create('outboxEvent', { runId: id, lane });
   return run;
 }

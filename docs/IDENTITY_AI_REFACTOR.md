@@ -79,3 +79,14 @@
 实际作业列表、详情、题干/参考资产、草稿、提交、复核、成绩导出改用接收人/复核分工；管理身份可以发布自己题库中的任务，但不能据此查看私有作答或发布正式成绩。统计按接收人快照班级计数；历史无快照路径仅供迁移兼容。
 
 验证：4 项真实数据库集成通过，包括跨班去重/排除、旧班级入口不能授权、后加入班级不能自动获得已发布作业、草稿权限、复核人隔离、过期预览拒绝及显式修订。类型检查通过；浏览器可用性及旧数据名单回填在 F 阶段继续验收。
+
+## 阶段 E 进行记录
+
+- 新提交只按 grading.assignment / grading.selftest 解析数据库中的模块规则，不读取 AI_* 环境变量；无配置也保存作答、提交时间、GradingRun 和 BLOCKED_CONFIG 原因。不创建假模型外键。
+- AIProvider → AIModel → AITaskBindingVersion，编辑/启停/归档、受限协议和端点覆盖、能力声明、测试状态、版本恢复、密钥留空保持/显式撤销已接入 AI 中心。版本恢复创建新版本，旧快照不重写。模型价格按管理员维护的版本估算，未知 usage/cost 保留 null。
+- Gateway 在调用前检查账号/学校启用状态、供应商/模型紧急停用、SecretStore 凭据撤销，解析全部题干/参考/答案图片能力。跨 Worker Redis 原子预约总并发及供应商/模块/学校/个人日预算；逐次请求和计费未知状态单独记录。
+- 普通重试沿用快照；首次无配置的受控重试才选择配置。“使用当前配置重新运行”新建调用与 run；教师正式成绩不改写。
+- 两个适配器分别实现认证、system、图片块、输出模式、usage、拒绝/截断/非 JSON/HTTP 错误；未接入第二套评分，grading-core 继续验证/归一化所有结果。
+- 已验证：协议/评分单元 35 项；数据库/Redis/本地 HTTP 协议替身及原工作流集成 21 项通过。测试捕获到原 429 错误码已改为统一 MODEL_RATE_LIMIT，更新契约断言后通过。类型检查通过。
+- 本地 HTTP 替身只证明请求协议和安全流程，没有调用真实 OpenAI/Anthropic，没有宣称真实模型评分或外部服务已通过。管理测试按钮会明确要求确认费用。
+- 协议参考：[OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)、[Anthropic Messages](https://platform.claude.com/docs/en/api/http/messages/create)、[Vision](https://platform.claude.com/docs/en/build-with-claude/vision)、[Structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)。Anthropic 传统 2023-06-01/x-api-key 与 2026-10-21/Bearer 可明确选择，不靠品牌猜测协议。

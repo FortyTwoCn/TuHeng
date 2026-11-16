@@ -120,6 +120,50 @@ export interface Entities {
     transform: unknown | null;
     createdAt: Date;
   };
+  aIProvider: Row & {
+    name: string;
+    brand: string;
+    enabled: boolean;
+    archived: boolean;
+    currentVersion: number;
+  };
+  aIProviderVersion: Row & {
+    providerId: string;
+    version: number;
+    config: unknown;
+    secretId: string | null;
+  };
+  aIModel: Row & {
+    providerId: string;
+    name: string;
+    enabled: boolean;
+    archived: boolean;
+    currentVersion: number;
+  };
+  aIModelVersion: Row & { modelId: string; version: number; config: unknown; testStatus: unknown };
+  aITaskBindingVersion: Row & {
+    taskKey: string;
+    version: number;
+    modelId: string;
+    parameters: unknown;
+    enabled: boolean;
+  };
+  aIInvocation: Row & {
+    runId: string | null;
+    taskKey: string;
+    schoolId: string | null;
+    actorId: string;
+    resourceId: string;
+    snapshot: unknown;
+    status: string;
+    errorCode: string | null;
+    attempts: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    durationMs: number | null;
+    billingUncertain: boolean;
+    createdAt: Date;
+  };
   modelConfigurationVersion: Row & {
     provider: string;
     baseUrl: string;
@@ -133,7 +177,7 @@ export interface Entities {
   };
   gradingRun: Row & {
     attemptId: string;
-    configId: string;
+    configId: string | null;
     status: string;
     strategyVersion: string;
     promptVersion: string;

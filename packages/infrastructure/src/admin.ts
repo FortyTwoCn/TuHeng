@@ -1,9 +1,9 @@
 import { hash } from 'bcryptjs';
 import { database, prisma } from '@tuheng/database';
-import { Role } from '@tuheng/contracts';
-import { ensure, requireRole, audit, type Actor } from '@tuheng/domain';
+import { GradingRequest, Role } from '@tuheng/contracts';
+import { ensure, requireRole, audit, planAIInvocation, type Actor } from '@tuheng/domain';
 import { dispatchOutbox } from './queue';
-import { OpenAICompatibleVisionProvider } from '@tuheng/ai-providers';
+import { aiCenter, requireAIAdmin } from './ai-admin';
 export async function createUser(
   a: Actor,
   input: { email: string; name: string; password: string; roles: string[] },
@@ -53,11 +53,29 @@ export async function updateUser(
   });
 }
 export async function retryRun(a: Actor, id: string) {
-  requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
+  requireAIAdmin(a);
   await database.transaction(async (tx) => {
     const run = await tx.get('gradingRun', id);
     ensure(run && ['FAILED', 'BLOCKED_CONFIG'].includes(run.status), 'RUN_NOT_RETRYABLE');
     const job = (await tx.list('backgroundJob', { runId: id }))[0];
+    const invocation = (await tx.list('aIInvocation', { runId: id }))[0];
+    ensure(invocation, 'LEGACY_RUN_REQUIRES_NEW_CONFIGURATION');
+    if (!invocation.snapshot) {
+      const request = GradingRequest.parse(run.request);
+      const plan = await planAIInvocation(
+        tx,
+        invocation.taskKey === 'grading.assignment' ? 'grading.assignment' : 'grading.selftest',
+        request,
+      );
+      ensure(plan.snapshot, plan.errorCode ?? 'AI_CONFIGURATION_REQUIRED');
+      request.modelConfigId = plan.snapshot.bindingId;
+      await tx.update('aIInvocation', invocation.id, {
+        snapshot: plan.snapshot,
+        status: 'QUEUED',
+        errorCode: null,
+      });
+      await tx.update('gradingRun', id, { request });
+    } else await tx.update('aIInvocation', invocation.id, { status: 'QUEUED', errorCode: null });
     await tx.update('gradingRun', id, { status: 'QUEUED', errorCode: null });
     await tx.update('backgroundJob', job.id, { status: 'QUEUED', attempts: 0, errorCode: null });
     const event = (await tx.list('outboxEvent', { runId: id }))[0];
@@ -78,89 +96,66 @@ export async function retryRun(a: Actor, id: string) {
   return { id };
 }
 export async function modelStatus(a: Actor) {
-  requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
-  const config = await prisma.modelConfigurationVersion.findFirstOrThrow({
-    where: { active: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  const { keyEnv, ...safe } = config;
-  return {
-    ...safe,
-    keyConfigured: !!process.env[keyEnv],
-    usage: await prisma.gradingRun.groupBy({ by: ['status'], _count: true }),
-  };
+  return aiCenter(a);
 }
 export async function testModel(a: Actor) {
-  requireRole(a, 'ADMIN');
-  const c = await prisma.modelConfigurationVersion.findFirstOrThrow({
-    where: { active: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  const provider = new OpenAICompatibleVisionProvider({
-    baseUrl: c.baseUrl,
-    model: c.model,
-    outputMode: c.outputMode === 'json_schema' ? 'json_schema' : 'json_object',
-    timeoutMs: c.timeoutMs,
-    apiKey: process.env[c.keyEnv] ?? '',
-  });
-  const image =
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jhFUAAAAASUVORK5CYII=';
-  await provider.evaluate({
-    system: 'Return JSON only.',
-    user: 'This is a connectivity test. Return {"ok":true}.',
-    images: [
-      {
-        role: 'QUESTION',
-        assetId: 'connection-test',
-        version: 'original',
-        dataUrl: `data:image/png;base64,${image}`,
-      },
-    ],
-    schema: {
-      type: 'object',
-      properties: { ok: { type: 'boolean' } },
-      required: ['ok'],
-      additionalProperties: false,
-    },
-  });
-  await audit(database, a, 'MODEL_CONNECTION_TEST', c.id);
-  return { ok: true };
+  requireAIAdmin(a);
+  ensure(false, 'USE_AI_CENTER_EXPLICIT_TEST', 410);
 }
 export async function rerunCurrentConfig(a: Actor, id: string) {
-  requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
+  requireAIAdmin(a);
   return database.transaction(async (tx) => {
     const prior = await tx.get('gradingRun', id);
     ensure(
       prior && ['FAILED', 'BLOCKED_CONFIG', 'SUCCEEDED'].includes(prior.status),
       'RUN_NOT_TERMINAL',
     );
-    const config = (
-      await tx.list(
-        'modelConfigurationVersion',
-        { active: true },
-        { orderBy: 'createdAt', desc: true, take: 1 },
-      )
-    )[0];
-    ensure(config, 'MODEL_CONFIG_MISSING');
-    const nextId = crypto.randomUUID();
-    const request = {
-      ...(prior.request as Record<string, unknown>),
-      runId: nextId,
-      modelConfigId: config.id,
-    };
+    const attempt = await tx.get('submissionAttempt', prior.attemptId);
+    ensure(attempt, 'ATTEMPT_NOT_FOUND');
+    const owner = await tx.get('user', attempt.ownerId);
+    ensure(owner?.active, 'ACCOUNT_DISABLED');
+    const taskKey = attempt.source === 'ASSIGNMENT' ? 'grading.assignment' : 'grading.selftest';
+    const nextId = crypto.randomUUID(),
+      request = GradingRequest.parse({
+        ...GradingRequest.parse(prior.request),
+        runId: nextId,
+        modelConfigId: null,
+      });
+    const plan = await planAIInvocation(tx, taskKey, request);
+    request.modelConfigId = plan.snapshot?.bindingId ?? null;
+    const status = plan.snapshot ? 'QUEUED' : 'BLOCKED_CONFIG';
     const run = await tx.create('gradingRun', {
       id: nextId,
       attemptId: prior.attemptId,
-      configId: config.id,
-      status: 'QUEUED',
+      configId: null,
+      status,
       strategyVersion: prior.strategyVersion,
       promptVersion: prior.promptVersion,
       request,
+      errorCode: plan.errorCode,
+    });
+    await tx.create('aIInvocation', {
+      runId: nextId,
+      taskKey,
+      actorId: owner.id,
+      schoolId: owner.schoolId ?? null,
+      resourceId: attempt.id,
+      ...(plan.snapshot ? { snapshot: plan.snapshot } : {}),
+      status,
+      errorCode: plan.errorCode,
     });
     const job = (await tx.list('backgroundJob', { runId: id }))[0];
-    await tx.create('backgroundJob', { runId: nextId, lane: job.lane });
+    await tx.create('backgroundJob', {
+      runId: nextId,
+      lane: job.lane,
+      status,
+      errorCode: plan.errorCode,
+    });
     await tx.create('outboxEvent', { runId: nextId, lane: job.lane });
-    await audit(tx, a, 'RUN_NEW_CONFIGURATION', nextId, { previousRunId: id, configId: config.id });
+    await audit(tx, a, 'RUN_NEW_CONFIGURATION', nextId, {
+      previousRunId: id,
+      bindingId: plan.snapshot?.bindingId ?? null,
+    });
     return run;
   });
 }

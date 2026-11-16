@@ -674,9 +674,32 @@ model AIInvocation {
   durationMs       Int?
   errorCode        String?
   billingUncertain Boolean   @default(false)
+  estimatedCost    Float?
+  costCurrency     String?
+  callAttempts     AIInvocationAttempt[]
   startedAt        DateTime?
   finishedAt       DateTime?
   createdAt        DateTime  @default(now())
 
   @@index([taskKey, schoolId, status])
+}
+
+model AIInvocationAttempt {
+  id String @id @default(uuid())
+  invocationId String
+  ordinal Int
+  providerId String
+  modelId String
+  status String
+  inputTokens Int?
+  outputTokens Int?
+  durationMs Int?
+  estimatedCost Float?
+  costCurrency String?
+  billingUncertain Boolean @default(false)
+  errorCode String?
+  createdAt DateTime @default(now())
+  invocation AIInvocation @relation(fields: [invocationId], references: [id])
+  @@unique([invocationId, ordinal])
+  @@index([providerId, createdAt])
 }

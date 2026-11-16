@@ -302,6 +302,6 @@ describe('visual provider boundary', () => {
         cfg,
         async () => new Response('', { status: 429 }),
       ).evaluate(input),
-    ).rejects.toMatchObject({ code: 'PROVIDER_HTTP_429', retryable: true });
+    ).rejects.toMatchObject({ code: 'MODEL_RATE_LIMIT', retryable: true });
   });
 });

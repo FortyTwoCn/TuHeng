@@ -19,8 +19,8 @@ const workers = ['formal', 'selftest'].map(
         connection: redisOptions(),
         concurrency:
           lane === 'formal'
-            ? Number(process.env.AI_CONCURRENCY ?? 2)
-            : Number(process.env.SELFTEST_CONCURRENCY ?? 1),
+            ? Number(process.env.WORKER_FORMAL_CONCURRENCY ?? 4)
+            : Number(process.env.WORKER_SELFTEST_CONCURRENCY ?? 2),
       },
     ),
 );

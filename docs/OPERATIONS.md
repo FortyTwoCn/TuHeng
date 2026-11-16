@@ -30,9 +30,9 @@ npm run test:e2e -- --reporter=list
 
 ## 配置与真实视觉模型
 
-在忽略的 `.env` 设置 AI_API_KEY、AI_BASE_URL、AI_MODEL、AI_OUTPUT_MODE。只选择已验证支持多图视觉的模型；不因为接口兼容就推断支持图像或 json_schema。模式 json_object/json_schema 由 adapter 显式切换。
+在管理员 AI 中心维护供应商、加密凭据、模型能力和 grading.assignment / grading.selftest 模块绑定。只选择已验证支持所需证据的模型；不因为接口兼容就推断支持图像或 JSON Schema。密钥主密钥由 TUHENG_SECRET_KEYS / TUHENG_SECRET_ACTIVE_KEY 独立部署，不能放进数据库。
 
-执行 `npm run model:sync` 创建新配置版本；重启 web 与 worker 载入环境。管理员“测试视觉连接”会产生一次实际调用。历史 run 的配置保持不变；任务页“安全重试原配置”不切换版本，“使用当前配置新建运行”保留题目/答案/评分依据并生成新的 run。已发布教师成绩始终保留。
+model:sync 已停用，运行时无 AI_* 环境回退。AI 中心修改生成新版本并立即生效。管理员模型测试会产生实际调用，必须确认可能计费。历史 run 的配置保持不变；任务页“安全重试原配置”不切换版本，“使用当前配置新建运行”保留题目/答案/评分依据并生成新的 run。已发布教师成绩始终保留。
 
 生产命令：`npm ci && npm run db:generate && npm run db:migrate && npm run build`，分别用进程管理器运行 `npm start` 和 `npm run worker`，健康检查 `/api/actions/health`（需管理员会话）。需要 TLS、请求体/上传频率限制、日志聚合与备份告警。默认保守并发：正式作业2，自测1；多 Worker 部署前配置全局预算，当前仅按进程控制并发。
 
