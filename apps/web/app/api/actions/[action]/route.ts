@@ -13,6 +13,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     checkOrigin(request);
     const a = await actor();
     const { action } = await params;
+    domain.ensure(
+      ![
+        'user-create',
+        'user-update',
+        'organization',
+        'model-test',
+        'roster',
+        'roster-import',
+      ].includes(action),
+      'LEGACY_ADMIN_ENDPOINT_RETIRED',
+      410,
+    );
     const body = JSON.parse(
       (
         await limitedBody(

@@ -1622,3 +1622,23 @@ footer {
     flex: 1;
   }
 }
+
+.identity-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.identity-table-scroll table {
+  min-width: 640px;
+}
+.identity-panel input[type='checkbox'] {
+  width: 22px;
+  min-height: 22px;
+}
+.organization-console {
+  min-width: 0;
+}
+.organization-console details > summary {
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+}

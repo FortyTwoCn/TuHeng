@@ -61,3 +61,11 @@
 - 尚未完成浏览器双会话、旧入口关闭的完整回归、组织/导入/受众/AI 阶段和真实外部 SMTP/模型验收。上述记录不是整轮交付结论。
 
 实现参考：[Next.js 随包认证文档](../node_modules/next/dist/docs/01-app/02-guides/authentication.md)、[Nodemailer SMTP](https://nodemailer.com/smtp)、[OWASP SSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)。SMTP 连接成功与实际接收测试分别记录。
+
+## 阶段 C 进行记录
+
+学校、教师、课程/学期、班级、学生及多班成员用例与响应式管理页面已接入。旧账号角色编辑/明文设置密码/邮箱名单导入入口返回 410，不能绕过新规则。导入四列/三列实际 XLSX，限制 5 MB、25 MB 解压、单工作表、5000 行；拒绝公式身份单元格、数值学号、宏和外链。教师分组/同名班级必须预检确认，支持按行拆分教师组。
+
+导入共用 BullMQ Worker，按批次 ID 排队；每行实体/成员/凭据/进度同事务，重试不会重置已存在用户的密码。凭据分开导出真正 XLSX，短期加密，24 小时交付窗/7 天临时密码；下载需近期再认证、120 秒一次性票据、重新检查权限与版本、no-store。已改密用户的密文清除。
+
+验证：真实 PostgreSQL/Redis/XLSX 的 5 项集成测试通过，覆盖无副作用预检、同名确认、并发确认幂等、重复执行、文本学号、教师/学生文件区分、票据重放、改密撤销、跨校拒绝。测试发现种子账号的 T000001 与新序列冲突，已改为考虑已有登录 ID 的原子序列分配；未删除种子账号规避。浏览器端和大样本性能将在 F 阶段继续验证。

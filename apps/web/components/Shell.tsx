@@ -30,6 +30,14 @@ const menus = {
     ['reviews', '批改复核', ScanLine],
     ['analytics', '基础学情', Activity],
   ],
+  school: [
+    ['dashboard', '学校概览', LayoutDashboard],
+    ['teachers', '教师', Users],
+    ['classes', '班级与学生', Layers],
+    ['assignments', '校级作业', ClipboardList],
+    ['imports', '导入与交付', BookOpen],
+    ['security', '账号安全', ShieldCheck],
+  ],
   admin: [
     ['dashboard', '管理概览', LayoutDashboard],
     ['users', '用户管理', Users],
@@ -37,6 +45,7 @@ const menus = {
     ['models', 'AI 模型配置', Settings2],
     ['jobs', 'AI 任务管理', Activity],
     ['audit', '操作审计', ShieldCheck],
+    ['mail', '邮件服务', Settings2],
     ['system', '系统状态', Settings2],
   ],
 } as const;
@@ -47,7 +56,7 @@ export function Shell({
   children,
 }: {
   a: Actor;
-  area: 'student' | 'teacher' | 'admin';
+  area: 'student' | 'teacher' | 'admin' | 'school';
   current: string;
   children: React.ReactNode;
 }) {
@@ -66,7 +75,9 @@ export function Shell({
             ? '学习工作空间'
             : area === 'teacher'
               ? '教师工作空间'
-              : '平台管理空间'}
+              : area === 'school'
+                ? '学校管理空间'
+                : '平台管理空间'}
         </p>
         <nav aria-label="主导航">
           {menu.map(([path, label, Icon]) => (
@@ -88,7 +99,13 @@ export function Shell({
             <span>
               <b>{a.name}</b>
               <small>
-                {area === 'student' ? '学生' : area === 'teacher' ? '教师' : '系统管理员'}
+                {area === 'student'
+                  ? '学生'
+                  : area === 'teacher'
+                    ? '教师'
+                    : area === 'school'
+                      ? '学校管理员'
+                      : '系统管理员'}
               </small>
             </span>
             <Logout realm={a.realm ?? (area === 'student' ? 'STUDENT' : 'STAFF')} />
@@ -104,7 +121,7 @@ export function Shell({
           </div>
           <div className="topbar-right">
             <span className="term">工程图学 · 教学空间</span>
-            <Link href={`/onboarding/${area === 'student' ? 'student' : 'staff'}`}>账号安全</Link>
+            <Link href={`/${area}/security`}>账号安全</Link>
             <Link href="/login">其他身份登录</Link>
             <span className="avatar small-avatar">{a.name.slice(0, 1)}</span>
           </div>

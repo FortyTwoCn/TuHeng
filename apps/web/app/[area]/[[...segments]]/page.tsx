@@ -1,5 +1,8 @@
 import { redirect, notFound } from 'next/navigation';
 import { actor } from '../../../lib/auth';
+import { OrganizationConsole } from '../../../components/identity/OrganizationConsole';
+import { AccountSetup } from '../../../components/identity/AccountSetup';
+import { SMTPSettings } from '../../../components/identity/SMTPSettings';
 import { Shell } from '../../../components/Shell';
 import { requireRole, DomainError } from '@tuheng/domain';
 import { Panel } from '@tuheng/ui';
@@ -11,18 +14,9 @@ import {
   QuestionsView,
   NewAssignment,
   ReviewsView,
-  ClassesView,
   AnalyticsView,
 } from '../../../views/teacher';
-import {
-  AdminDashboard,
-  UsersView,
-  OrganizationView,
-  ModelsView,
-  JobsView,
-  AuditView,
-  SystemView,
-} from '../../../views/admin';
+import { AdminDashboard, ModelsView, JobsView, AuditView, SystemView } from '../../../views/admin';
 export const dynamic = 'force-dynamic';
 export default async function Workspace({
   params,
@@ -33,7 +27,7 @@ export default async function Workspace({
 }) {
   const { area, segments = ['dashboard'] } = await params;
   const search = await searchParams;
-  if (!['student', 'teacher', 'admin'].includes(area)) notFound();
+  if (!['student', 'teacher', 'admin', 'school'].includes(area)) notFound();
   let a;
   try {
     a = await actor(area === 'student' ? 'STUDENT' : 'STAFF', true);
@@ -45,7 +39,27 @@ export default async function Workspace({
   const section = segments[0];
   let view: React.ReactNode;
   try {
-    if (area === 'student') {
+    if (section === 'security')
+      view = <AccountSetup realm={area === 'student' ? 'STUDENT' : 'STAFF'} security />;
+    else if (area === 'school') {
+      requireRole(a, 'SCHOOL_ADMIN');
+      view = (
+        <OrganizationConsole
+          identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
+          initial={
+            section === 'teachers'
+              ? 'teachers'
+              : section === 'classes'
+                ? 'classes'
+                : section === 'imports'
+                  ? 'imports'
+                  : section === 'delivery'
+                    ? 'delivery'
+                    : 'students'
+          }
+        />
+      );
+    } else if (area === 'student') {
       requireRole(a, 'STUDENT');
       if (section === 'dashboard') view = await StudentDashboard({ a });
       else if (section === 'assignments')
@@ -70,14 +84,28 @@ export default async function Workspace({
               : await AssignmentList({ a, area, search });
       else if (section === 'reviews')
         view = segments[1] ? await ResultView({ a, id: segments[1] }) : await ReviewsView({ a });
-      else if (section === 'classes') view = await ClassesView({ a, segments });
+      else if (['classes', 'students', 'imports', 'delivery'].includes(section))
+        view = (
+          <OrganizationConsole
+            identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
+            initial={section}
+          />
+        );
       else if (section === 'analytics') view = await AnalyticsView({ a });
       else notFound();
     } else {
       requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
       if (section === 'dashboard') view = await AdminDashboard({ a });
-      else if (section === 'users') view = await UsersView({ a, search });
-      else if (section === 'organization') view = await OrganizationView({ a });
+      else if (['users', 'organization', 'imports', 'delivery'].includes(section))
+        view = (
+          <OrganizationConsole
+            identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
+            initial={
+              section === 'organization' ? 'schools' : section === 'users' ? 'teachers' : section
+            }
+          />
+        );
+      else if (section === 'mail') view = <SMTPSettings />;
       else if (section === 'models') view = await ModelsView({ a });
       else if (section === 'jobs') view = await JobsView({ a, search });
       else if (section === 'audit') view = await AuditView({ a });
@@ -105,7 +133,7 @@ export default async function Workspace({
   return (
     <Shell
       a={a}
-      area={area as 'student' | 'teacher' | 'admin'}
+      area={area as 'student' | 'teacher' | 'admin' | 'school'}
       current={section === 'results' ? 'assignments' : section}
     >
       {view}

@@ -1,4 +1,9 @@
 import { Worker } from 'bullmq';
+import {
+  dispatchRosterImports,
+  executeRosterImport,
+} from '../../../packages/infrastructure/src/roster-import';
+import { purgeExpiredSecrets } from '../../../packages/infrastructure/src/secret-store';
 import { prisma } from '@tuheng/database';
 import { dispatchOutbox, redisOptions, reconcileQueuedRuns } from '@tuheng/infrastructure';
 import {
@@ -7,13 +12,24 @@ import {
 } from '../../../packages/infrastructure/src/grading-runner';
 const workers = ['formal', 'selftest'].map(
   (lane) =>
-    new Worker(`tuheng-${lane}`, async (job) => executeGradingRun(job.data.runId), {
-      connection: redisOptions(),
-      concurrency:
-        lane === 'formal'
-          ? Number(process.env.AI_CONCURRENCY ?? 2)
-          : Number(process.env.SELFTEST_CONCURRENCY ?? 1),
-    }),
+    new Worker(
+      `${process.env.QUEUE_NAMESPACE ?? 'tuheng'}-${lane}`,
+      async (job) => executeGradingRun(job.data.runId),
+      {
+        connection: redisOptions(),
+        concurrency:
+          lane === 'formal'
+            ? Number(process.env.AI_CONCURRENCY ?? 2)
+            : Number(process.env.SELFTEST_CONCURRENCY ?? 1),
+      },
+    ),
+);
+workers.push(
+  new Worker(
+    `${process.env.QUEUE_NAMESPACE ?? 'tuheng'}-roster`,
+    async (job) => executeRosterImport(job.data.batchId),
+    { connection: redisOptions(), concurrency: 1 },
+  ),
 );
 for (const w of workers)
   w.on('error', () => console.error(JSON.stringify({ event: 'worker-error', queue: w.name }))).on(
@@ -29,6 +45,8 @@ async function tick() {
     await recoverExpiredRuns();
     await reconcileQueuedRuns();
     await dispatchOutbox();
+    await dispatchRosterImports();
+    await purgeExpiredSecrets();
   } catch {
     console.error(JSON.stringify({ event: 'outbox-dispatch-failed', recoverable: true }));
   } finally {
