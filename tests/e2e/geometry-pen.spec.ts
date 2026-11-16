@@ -1,14 +1,14 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { GeometryDocument, type Vec2 } from '@tuheng/contracts';
-import { createDocument } from '@tuheng/geometry-core';
+import { createDocument, lineGeometry, unit } from '@tuheng/geometry-core';
 import {
   penSample,
   wavyLineSample,
   borderlineCircleSample,
   driftingLineSample,
 } from '../repair-fixtures';
-import { choose, closePanels } from './editor-controls';
+import { choose, closePanels, settings } from './editor-controls';
 
 const evidence = 'test-results/pen-repair';
 async function load(page: Page, doc = createDocument('OBLIQUE_DIMETRIC')) {
@@ -85,6 +85,112 @@ test('new oblique axes point left/down and sparse real mouse stroke fits automat
   expect(segment.samples?.length).toBeLessThan(6);
   writeFileSync(`${evidence}/oblique.json`, JSON.stringify(drawn, null, 2));
   await page.locator('.geometry-editor').screenshot({ path: `${evidence}/oblique.png` });
+});
+
+function tiltedStroke(degrees: number, length = 160) {
+  const angle = (degrees * Math.PI) / 180;
+  return Array.from({ length: 81 }, (_, i) => ({
+    x: ((i * length) / 80) * Math.cos(angle) - Math.sin(i * 0.8) * 0.2 * Math.sin(angle),
+    y: ((i * length) / 80) * Math.sin(angle) + Math.sin(i * 0.8) * 0.2 * Math.cos(angle),
+  }));
+}
+for (const width of [1024, 390])
+  test(`near-horizontal and near-vertical pen auxiliary lines correct direction and preserve recovery at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 768 });
+    for (const degrees of [4, 86]) {
+      const base = createDocument('VHW_PROJECTION');
+      await load(page, base);
+      await style(page, '辅助线');
+      await stroke(page, tiltedStroke(degrees));
+      const doc = await json(page);
+      const line = doc.entities.at(-1)!;
+      expect(line.kind).toBe('line');
+      if (line.kind !== 'line') throw Error('Expected fitted auxiliary line');
+      expect(Math.abs(degrees === 4 ? line.direction.y : line.direction.x)).toBeLessThan(1e-10);
+      await expect(page.locator('.geo-status')).toContainText(degrees === 4 ? '水平' : '垂直');
+      const visual = (await page.locator('[data-kind=line] line').boundingBox())!;
+      expect(degrees === 4 ? visual.width : visual.height).toBeGreaterThan(250);
+      await page
+        .locator('.geometry-editor')
+        .screenshot({ path: `${evidence}/direction-${width}-${degrees}.png` });
+      writeFileSync(`${evidence}/direction-${width}-${degrees}.json`, JSON.stringify(doc, null, 2));
+      await choose(page, '撤销');
+      expect(await json(page)).toEqual(base);
+      await choose(page, '恢复');
+      expect(await json(page)).toEqual(doc);
+      // Camera operations do not consume the recovery for this drawing transaction.
+      await choose(page, '放大');
+      await closePanels(page);
+      await choose(page, '取消本次吸附');
+      const unsnapped = await json(page),
+        original = unsnapped.entities.at(-1)!;
+      if (original.kind !== 'line') throw Error();
+      expect(Math.abs(degrees === 4 ? original.direction.y : original.direction.x)).toBeGreaterThan(
+        0.04,
+      );
+      expect(original.samples).toEqual(line.samples);
+      await choose(page, '撤销');
+      expect(await json(page)).toEqual(base);
+      await choose(page, '恢复');
+      expect(await json(page)).toEqual(unsnapped);
+      await choose(page, '恢复原始笔迹');
+      expect((await json(page)).entities.at(-1)).toMatchObject({
+        kind: 'polyline',
+        samples: line.samples,
+      });
+    }
+  });
+
+test('pen direction snapping respects finite styles, scale, switches, pause and deliberate diagonals', async ({
+  page,
+}) => {
+  for (const name of ['实线', '虚线']) {
+    for (const degrees of [4, 86]) {
+      await load(page, createDocument('VHW_PROJECTION'));
+      await style(page, name);
+      await stroke(page, tiltedStroke(degrees));
+      const doc = await json(page),
+        line = doc.entities.at(-1)!;
+      expect(line.kind).toBe('segment');
+      expect(line.lineStyle).toBe(name === '实线' ? 'ANSWER_VISIBLE' : 'ANSWER_HIDDEN');
+      const d = unit(lineGeometry(doc, line).d);
+      expect(Math.abs(degrees === 4 ? d.y : d.x)).toBeLessThan(1e-10);
+      await choose(page, '放大');
+      await closePanels(page);
+    }
+  }
+  for (const mode of ['disabled', 'axes', 'paused', 'diagonal']) {
+    await load(page, createDocument('VHW_PROJECTION'));
+    await style(page, '辅助线');
+    if (mode === 'disabled') await choose(page, '吸附开关');
+    if (mode === 'axes' || mode === 'paused') {
+      await settings(page);
+      if (mode === 'axes') await page.getByLabel('参考轴吸附', { exact: true }).uncheck();
+      else await page.getByRole('button', { name: '下一次不吸附', exact: true }).click();
+      await closePanels(page);
+    }
+    await stroke(page, tiltedStroke(mode === 'diagonal' ? 20 : 4));
+    const doc = await json(page),
+      line = doc.entities.at(-1)!;
+    if (line.kind !== 'line') throw Error();
+    expect(Math.abs(line.direction.y)).toBeGreaterThan(0.04);
+    await expect(page.locator('.geo-status')).not.toContainText('校正为水平');
+    if (mode === 'disabled') await choose(page, '吸附开关');
+    if (mode === 'axes') {
+      await settings(page);
+      await page.getByLabel('参考轴吸附', { exact: true }).check();
+      await closePanels(page);
+    }
+  }
+  // A paused operation consumes only the one-shot opt-out; later drawing still corrects.
+  await load(page, createDocument('VHW_PROJECTION'));
+  await stroke(page, tiltedStroke(4));
+  const corrected = await json(page);
+  const line = corrected.entities.at(-1)!;
+  if (line.kind !== 'line') throw Error();
+  expect(Math.abs(line.direction.y)).toBeLessThan(1e-10);
 });
 
 for (const width of [1366, 390])

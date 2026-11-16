@@ -16,6 +16,7 @@ import {
   sub,
   curvePath,
   snapPenCurve,
+  penLinePreview,
   intersectionCandidates,
   appendStrokeSample,
   distance,
@@ -622,7 +623,8 @@ export function Viewport(
     }
     if (readOnly) return;
     const at = (p: Vec2) => sheetToLocal(g.base, g.viewId, p);
-    const samples = rulerSamples(g.samples, props.ruler, g.scale).map((p) => ({
+    const guidedSamples = rulerSamples(g.samples, props.ruler, g.scale);
+    const samples = guidedSamples.map((p) => ({
       ...at(p),
       pressure: p.pressure,
     }));
@@ -649,6 +651,38 @@ export function Viewport(
       return;
     }
     const raw = result.document;
+    if (g.tool === 'pen' && ['segment', 'line'].includes(raw.entities.at(-1)?.kind ?? '')) {
+      let next = raw;
+      let directionLabel: string | undefined;
+      let message = result.message ?? '已自动拟合为直线';
+      if (props.snapping && !props.skipSnap && !g.pausedSnap) {
+        try {
+          const preview = penLinePreview(g.base, raw, g.scale, {
+            axes: props.axes && props.axesSnap,
+            // A stroke guided by the ruler already has an explicit direction.
+            direction: guidedSamples === g.samples,
+            hiddenLayers: props.hiddenLayers,
+            grid: props.gridSnap,
+            projection: props.projectionSnap,
+            threshold: g.snapPixels,
+          });
+          if (preview) {
+            next = acceptPrimitive(g.base, raw, preview, role);
+            directionLabel = preview.directionLabel;
+          }
+        } catch {
+          message = '本次吸附会产生非法几何，保留原始拟合直线';
+        }
+      }
+      accept(next, raw);
+      if (result.rawStroke) setLastPen({ raw: result.rawStroke, next });
+      props.report(
+        directionLabel
+          ? `已自动拟合并校正为${directionLabel}${raw.entities.at(-1)?.kind === 'line' ? '辅助线' : '直线'}，可取消本次吸附或恢复原始笔迹`
+          : message,
+      );
+      return;
+    }
     if (g.tool === 'pen' && raw.entities.at(-1)?.kind === 'curve') {
       const next =
         props.snapping && !props.skipSnap && !g.pausedSnap

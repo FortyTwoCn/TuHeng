@@ -21,3 +21,4 @@ export * from './reference-relations';
 
 export * from './curves';
 export * from './curve-snapping';
+export * from './pen-snapping';

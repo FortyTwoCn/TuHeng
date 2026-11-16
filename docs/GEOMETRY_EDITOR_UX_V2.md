@@ -276,3 +276,17 @@ GeometryTargetRef 区分 entity/baseAxis/projectionAxis/origin。会话选择 ke
 证据：[桌面起伏曲线](images/curves/hand-peaked.png)、[手机波浪曲线](images/curves/hand-wave-mobile.png)；完整导出：[U 形](geometry-examples/curves/hand-bowl.json)、[起伏曲线](geometry-examples/curves/hand-peaked.json)、[手机波浪](geometry-examples/curves/hand-wave-mobile.json)。JSON 保留原始 samples，可用于后续回归。
 
 真实手写笔硬件仍未实测；本轮是合成笔迹经真实浏览器鼠标路径验证。改变的是新笔迹的拟合，2.2 契约和既有保存曲线的插值语义不变，不重写已保存笔迹、历史作答或教师题干，无数据库迁移或新识别服务。
+
+## 电子笔水平/垂直方向校正（2026-11-16）
+
+用户的平板截图中，几条希望水平/垂直的辅助线已经成功拟合为无限直线，但保留了约几度的偏斜。根因是 Viewport 的电子笔无限线分支只吸附 anchor，没有处理 direction；有限笔画则逐点按固定 CSS 距离选择候选，长线容易超出方向候选距离，独立端点定位还可能再次改变方向。
+
+在既有 fitStroke 分类之后，geometry-core/src/pen-snapping.ts 复用 referenceGeometry、坐标变换和 snapCandidates 计算方向与端点预览；Viewport.tsx 通过既有 acceptPrimitive/confirmSnap 提交，复用原来的历史、取消吸附和原笔迹恢复。没有新增拟合算法、Schema 字段、数据库变更或后台识别服务。阈值和目标冲突规则见 [电子笔交互](GEOMETRY_EDITOR_INTERACTION.md#电子笔与导出)。
+
+先用真实浏览器鼠标路径重现约 4° 辅助线：修改前导出 direction.y 为 0.06964，精确水平断言失败；修改后水平/垂直分量精确为零。单元测试 tests/unit/geometry-pen-snapping.test.ts 覆盖三种线型、2/4/8 CSS px/mm、20/180/600 CSS px 笔画、正反向与多个象限；另测超过阈值的斜线、虚拟尺方向、题干锚点合并、冲突双端点、旋转平移框架、轴测与新增投影轴、隐藏/跨投影点以及圆/弧/曲线/乱线不受影响。
+
+浏览器新增 3 项用例位于 tests/e2e/geometry-pen.spec.ts：1024 和 390 CSS px 下检查精确方向、无限显示、JSON、缩放后取消吸附、撤销/恢复及原笔迹恢复；实/虚线分别验证水平/垂直、不同镜头缩放、全局/参考轴开关、一次暂停及正常斜线。所有绘制使用 Playwright mouse down/move/up；既有合成 pen/touch 回归继续保留，未在用户实体 iPad/Safari/Pencil 上直接验收。
+
+最终命令结果：`npm run typecheck`、`npm run lint`、`npm run build` 通过；`npm test` 200 项、隔离集成 17 项、生产浏览器 78 项通过（2.6 分钟）。环境为 Windows / Chrome 157 / Node 26.13，浏览器通过实际局域网 IP 运行；保留局域网登录、图片作答、几何保存提交、教师复核及服务端题干权限回归。实际 iPad/Safari/Pencil 未直接验证。未改写已有几何数据。
+
+截图：[平板尺寸水平辅助线](images/pen-direction/horizontal-tablet.png)、[手机尺寸垂直辅助线](images/pen-direction/vertical-mobile.png)；完整 JSON：[水平](geometry-examples/pen-direction/horizontal.json)、[垂直](geometry-examples/pen-direction/vertical.json)。两份均保留 81 个原始采样，direction 的垂直/水平分量分别为精确的 0，实体仍为无限 line，不需要新契约版本。
