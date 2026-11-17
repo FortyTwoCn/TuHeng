@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { prisma, database as db } from '@tuheng/database';
-import { GradingRequest, AISnapshot } from '@tuheng/contracts';
+import { GradingRequest, AISnapshot, AIModelConfig, AITaskParameters } from '@tuheng/contracts';
 import {
   createQuestion,
   createAssignment,
@@ -21,6 +21,8 @@ import { reauthenticate } from '../../packages/infrastructure/src/identity-secur
 import { loadIdentity } from '../../packages/infrastructure/src/identity-auth';
 import { retryRun, rerunCurrentConfig } from '../../packages/infrastructure/src/admin';
 import { executeGradingRun } from '../../packages/infrastructure/src/grading-runner';
+import { listGradingJobs } from '../../packages/infrastructure/src/job-records';
+import { listAIInvocations } from '../../packages/infrastructure/src/ai-records';
 const tag = crypto.randomUUID();
 let server: Server,
   fixture: Awaited<ReturnType<typeof aiFixture>>,
@@ -44,12 +46,12 @@ beforeAll(async () => {
     req.on('end', () => {
       const input = JSON.parse(body);
       expect(req.url).toBe('/v1/chat/completions');
-      expect(input.model).toBe('test-model');
+      expect(['test-model', 'different-selftest-model']).toContain(input.model);
       received++;
       res.setHeader('content-type', 'application/json');
       res.end(
         JSON.stringify({
-          model: 'test-model',
+          model: input.model,
           choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }],
           usage: { prompt_tokens: 7, completion_tokens: 3 },
         }),
@@ -163,9 +165,15 @@ describe.sequential(
       expect(a.submittedAt).toBeTruthy();
       expect(received).toBe(0);
     });
-    it('AI02/03: controlled retry selects one immutable snapshot; raw credentials never appear in it or safe admin data', async () => {
+    it('AI02/03/T02: missing snapshots require a new run; explicit retry keeps an immutable snapshot and credentials stay private', async () => {
       await fixture.bind('grading.assignment');
-      await retryRun(root, runId);
+      const blockedId = runId;
+      await expect(retryRun(root, blockedId)).rejects.toThrow('AI_SNAPSHOT_REQUIRED');
+      const fresh = await rerunCurrentConfig(root, blockedId);
+      runId = fresh.id;
+      expect((await prisma.gradingRun.findUniqueOrThrow({ where: { id: blockedId } })).status).toBe(
+        'BLOCKED_CONFIG',
+      );
       const inv = await prisma.aIInvocation.findUniqueOrThrow({ where: { runId } });
       snapshot = AISnapshot.parse(inv.snapshot);
       expect(snapshot.model.model).toBe('test-model');
@@ -197,7 +205,43 @@ describe.sequential(
         await reserveAIBudget(snapshot, student.id, student.schoolId!)
       )();
     });
-    it('AI05: changes create versions; old snapshot stays fixed; new configuration rerun creates new record', async () => {
+    it('AI05/T02: changes create versions; old snapshot stays fixed; new configuration rerun creates new record', async () => {
+      const priorRun = await prisma.gradingRun.findUniqueOrThrow({ where: { id: runId } });
+      const official = await prisma.gradeDecision.create({
+        data: {
+          attemptId: priorRun.attemptId,
+          teacherId: teacher.id,
+          revision: 1,
+          points: 35,
+          items: [],
+          feedback: 'Published teacher fixture',
+          annotations: [],
+          publishedAt: new Date(),
+        },
+      });
+      await prisma.submissionAttempt.update({
+        where: { id: priorRun.attemptId },
+        data: { publishedDecisionId: official.id },
+      });
+      await prisma.gradingRun.update({ where: { id: runId }, data: { status: 'FAILED' } });
+      await prisma.backgroundJob.update({ where: { runId }, data: { status: 'FAILED' } });
+      const retryId = crypto.randomUUID();
+      await Promise.all([retryRun(root, runId, retryId), retryRun(root, runId, retryId)]);
+      expect(await prisma.auditLog.count({ where: { id: retryId } })).toBe(1);
+      expect((await prisma.aIInvocation.findUniqueOrThrow({ where: { runId } })).snapshot).toEqual(
+        snapshot,
+      );
+      await prisma.gradingRun.update({ where: { id: runId }, data: { status: 'FAILED' } });
+      await retryRun(root, runId, retryId);
+      expect((await prisma.gradingRun.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+        'FAILED',
+      );
+      await expect(retryRun(root, runId, crypto.randomUUID())).rejects.toThrow(
+        'RUN_QUEUE_NOT_TERMINAL',
+      );
+      expect((await prisma.gradingRun.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+        'FAILED',
+      );
       await saveAIConfiguration(root, {
         operation: 'model',
         id: fixture.model.id,
@@ -215,13 +259,94 @@ describe.sequential(
         ).model.model,
       ).toBe('test-model');
       await prisma.gradingRun.update({ where: { id: runId }, data: { status: 'FAILED' } });
-      const next = await rerunCurrentConfig(root, runId);
+      const requestId = crypto.randomUUID();
+      const [next, duplicate] = await Promise.all([
+        rerunCurrentConfig(root, runId, requestId),
+        rerunCurrentConfig(root, runId, requestId),
+      ]);
+      expect(next.id).toBe(duplicate.id);
+      expect(await prisma.backgroundJob.count({ where: { runId: next.id } })).toBe(1);
+      expect(
+        await prisma.auditLog.count({
+          where: { action: 'RUN_NEW_CONFIGURATION', resourceId: next.id },
+        }),
+      ).toBe(1);
+      expect(
+        (await prisma.submissionAttempt.findUniqueOrThrow({ where: { id: priorRun.attemptId } }))
+          .publishedDecisionId,
+      ).toBe(official.id);
+      expect(await prisma.gradeDecision.findUnique({ where: { id: official.id } })).toEqual(
+        official,
+      );
+      expect((await prisma.gradingRun.findUniqueOrThrow({ where: { id: runId } })).request).toEqual(
+        priorRun.request,
+      );
       expect(next.id).not.toBe(runId);
       expect(
         AISnapshot.parse(
           (await prisma.aIInvocation.findUniqueOrThrow({ where: { runId: next.id } })).snapshot,
         ).model.model,
       ).toBe('changed-model');
+    });
+    it('T01: task pagination and scoped counts use all matching rows and expose only safe metadata', async () => {
+      const original = await prisma.gradingRun.findUniqueOrThrow({ where: { id: runId } });
+      for (let i = 0; i < 33; i++) {
+        const id = crypto.randomUUID();
+        await prisma.gradingRun.create({
+          data: {
+            id,
+            attemptId: original.attemptId,
+            status: i === 32 ? 'RUNNING' : 'FAILED',
+            strategyVersion: original.strategyVersion,
+            promptVersion: original.promptVersion,
+            request: { ...GradingRequest.parse(original.request), runId: id },
+            createdAt: new Date('2026-01-02T12:00:00Z'),
+            job: {
+              create: {
+                lane: 'formal',
+                status: i === 32 ? 'RUNNING' : 'FAILED',
+                errorCode: 'unsafe legacy diagnostic must stay private',
+              },
+            },
+          },
+        });
+      }
+      const filters = {
+        page: 0,
+        schoolId: student.schoolId!,
+        status: 'FAILED' as const,
+        from: '2026-01-02T00:00:00Z',
+        to: '2026-01-03T00:00:00Z',
+      };
+      const first = await listGradingJobs(root, filters),
+        last = await listGradingJobs(root, { ...filters, page: 1 });
+      expect(first.total).toBe(32);
+      expect(first.counts).toEqual([{ status: 'FAILED', count: 32 }]);
+      expect(first.items).toHaveLength(30);
+      expect(last.items).toHaveLength(2);
+      expect(new Set([...first.items, ...last.items].map((j) => j.id)).size).toBe(32);
+      expect(first.items[0].actions.retryOriginal).toEqual({
+        allowed: false,
+        reason: 'AI_SNAPSHOT_REQUIRED',
+      });
+      expect(first.items[0].actions.newCurrent.allowed).toBe(true);
+      expect(first.items[0].officialGradePublished).toBe(true);
+      expect(first.items[0].errorCode).toBe('DIAGNOSTIC_UNAVAILABLE');
+      expect(JSON.stringify(first)).not.toMatch(
+        /secretId|ciphertext|rawResponse|geometryAnswer|unsafe legacy|test-credential/,
+      );
+      expect((await listGradingJobs(root, { page: 0, q: last.items[0].runId })).total).toBe(1);
+      const operator = await listGradingJobs(
+        { ...root, kind: 'TEACHER', roles: ['PLATFORM_OPERATOR'] },
+        filters,
+      );
+      expect(operator.total).toBe(32);
+      expect(operator.items[0].actions.retryOriginal).toEqual({
+        allowed: false,
+        reason: 'FORBIDDEN',
+      });
+      expect(operator.items[0].actions.newCurrent.allowed).toBe(false);
+      await expect(listGradingJobs(student, { page: 0 })).rejects.toMatchObject({ status: 403 });
     });
     it('AI06: revoked old key and disabled provider block historical retry without request; teacher cannot edit AI config', async () => {
       await saveAIConfiguration(root, {
@@ -231,6 +356,9 @@ describe.sequential(
         proof,
       });
       const inv = await prisma.aIInvocation.findUniqueOrThrow({ where: { runId } });
+      await expect(retryRun(root, runId, crypto.randomUUID())).rejects.toThrow(
+        'AI_CREDENTIAL_UNAVAILABLE',
+      );
       await expect(
         (await invocationProvider(inv.id)).evaluate({
           system: 's',
@@ -312,6 +440,111 @@ describe.sequential(
       ).toBe(1);
       expect(received).toBe(1);
     });
+    it('A06: invocation filters page the same scope and only expose safe diagnostic fields', async () => {
+      const actorId = 'invocation-filter-' + tag;
+      await prisma.aIInvocation.createMany({
+        data: Array.from({ length: 33 }, (_, i) => ({
+          actorId,
+          resourceId: tag,
+          taskKey: 'admin.model-test',
+          status: i === 32 ? 'SUCCEEDED' : 'FAILED',
+          snapshot: JSON.parse(JSON.stringify(snapshot)),
+          createdAt: new Date('2026-02-01T12:00:00Z'),
+        })),
+      });
+      const filters = {
+        page: 0,
+        actorId,
+        providerId: snapshot.providerId,
+        status: 'FAILED',
+        from: '2026-02-01T00:00:00Z',
+        to: '2026-02-02T00:00:00Z',
+      };
+      const first = await listAIInvocations(root, filters),
+        second = await listAIInvocations(root, { ...filters, page: 1 });
+      expect(first.total).toBe(32);
+      expect(first.items).toHaveLength(30);
+      expect(second.items).toHaveLength(2);
+      expect(new Set([...first.items, ...second.items].map((i) => i.id)).size).toBe(32);
+      expect(first.items[0]).toMatchObject({
+        inputTokens: null,
+        outputTokens: null,
+        estimatedCost: null,
+      });
+      expect(JSON.stringify(first.items)).not.toMatch(
+        /secretId|ciphertext|test-credential|baseUrl/,
+      );
+      expect(
+        (await listAIInvocations(root, { ...filters, from: '2026-02-02T00:00:00Z' })).total,
+      ).toBe(0);
+      await expect(listAIInvocations(student, filters)).rejects.toMatchObject({ status: 403 });
+      expect(received).toBe(1);
+    });
+    it('A04: assignment and selftest bindings issue real local protocol requests to distinct configured models', async () => {
+      const port = (server.address() as { port: number }).port;
+      const independent = await aiFixture('http://127.0.0.1:' + port + '/v1');
+      await independent.bind('grading.assignment');
+      const secondModel = await prisma.aIModel.create({
+        data: {
+          providerId: independent.provider.id,
+          name: '[TEST] independent selftest model',
+          enabled: true,
+          versions: {
+            create: {
+              version: 1,
+              config: AIModelConfig.parse({
+                model: 'different-selftest-model',
+                images: true,
+                outputModes: ['prompt_json'],
+              }),
+              testStatus: {},
+            },
+          },
+        },
+      });
+      const previous = await prisma.aITaskBindingVersion.findFirst({
+        where: { taskKey: 'grading.selftest' },
+        orderBy: { version: 'desc' },
+      });
+      await prisma.aITaskBindingVersion.create({
+        data: {
+          taskKey: 'grading.selftest',
+          version: (previous?.version ?? 0) + 1,
+          modelId: secondModel.id,
+          enabled: true,
+          parameters: AITaskParameters.parse({ outputMode: 'prompt_json' }),
+        },
+      });
+      const before = received,
+        models: string[] = [];
+      for (const key of ['grading.assignment', 'grading.selftest'] as const) {
+        const plan = await planAIInvocation(db, key, requestFixture());
+        expect(plan.errorCode).toBeNull();
+        models.push(plan.snapshot!.model.model);
+        const invocation = await prisma.aIInvocation.create({
+          data: {
+            taskKey: key,
+            actorId: student.id,
+            schoolId: student.schoolId,
+            resourceId: tag,
+            snapshot: JSON.parse(JSON.stringify(plan.snapshot)),
+            status: 'QUEUED',
+          },
+        });
+        const result = await (
+          await invocationProvider(invocation.id)
+        ).evaluate({ system: 's', user: 'u', images: [], schema: { type: 'object' } });
+        expect(result.data).toEqual({ ok: true });
+      }
+      expect(models).toEqual(['test-model', 'different-selftest-model']);
+      expect(received - before).toBe(2);
+      // Restore blocked routing used by legacy compatibility checks; no worker uses this fixture.
+      await independent.bind('grading.assignment', false);
+      await prisma.aIProvider.update({
+        where: { id: independent.provider.id },
+        data: { enabled: false },
+      });
+    });
     it('AI07: old serialized request remains readable; legacy run never falls back to environment key', async () => {
       const prior = await prisma.gradingRun.findUniqueOrThrow({ where: { id: runId } });
       expect(GradingRequest.safeParse(prior.request).success).toBe(true);
@@ -330,7 +563,7 @@ describe.sequential(
       expect(
         (await prisma.gradingRun.findUniqueOrThrow({ where: { id: legacy.id } })).errorCode,
       ).toBe('AI_LEGACY_CONFIGURATION_REQUIRED');
-      expect(received).toBe(1);
+      expect(received).toBe(3);
     });
   },
 );

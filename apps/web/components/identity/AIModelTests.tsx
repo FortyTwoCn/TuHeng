@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { type Center } from './AIFields';
 export function ModelTests({
   model,
+  providerVersion,
   command,
   disabled,
 }: {
   model: Center['models'][number];
   command: (body: Record<string, unknown>) => Promise<unknown>;
   disabled: boolean;
+  providerVersion: number;
 }) {
   const [cost, setCost] = useState(false),
     [mode, setMode] = useState('prompt_json');
@@ -17,8 +19,11 @@ export function ModelTests({
     { status: string; at: string; errorCode?: string; providerVersion: number; outputMode: string }
   >;
   return (
-    <section>
+    <section className="configuration-tests">
       <h3>协议测试</h3>
+      <p className="configuration-version">
+        测试目标：{model.name} · 模型 v{model.currentVersion} · 供应商 v{providerVersion}
+      </p>
       <p>发送无个人信息的最小样本，可能产生费用。测试通过仅证明此项协议行为，不能证明评分正确。</p>
       <label>
         <input type="checkbox" checked={cost} onChange={(e) => setCost(e.target.checked)} />
@@ -42,7 +47,7 @@ export function ModelTests({
           <span>
             {label}：
             {tests[kind]
-              ? `${tests[kind].status} · ${tests[kind].at} · ${tests[kind].errorCode ?? ''}`
+              ? `${tests[kind].status} · ${tests[kind].at} · 供应商 v${tests[kind].providerVersion} · ${tests[kind].outputMode} · ${tests[kind].providerVersion !== providerVersion ? '历史证据，供应商配置已变化，需重新测试' : '对应当前版本'} · ${tests[kind].errorCode ?? ''}`
               : '未测试'}
           </span>
           <button

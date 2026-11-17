@@ -144,7 +144,12 @@ export function AssignmentEditor({
         </div>
       </section>
       {audience.schoolId && (
-        <AudiencePicker value={audience} onChange={setAudience} onPreview={setPreview} />
+        <AudiencePicker
+          key={audience.schoolId}
+          value={audience}
+          onChange={setAudience}
+          onPreview={setPreview}
+        />
       )}
       {identity.kind !== 'TEACHER' && audience.schoolId && (
         <section className="panel">

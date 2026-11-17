@@ -40,10 +40,26 @@ export function Check({ name, value, title }: { name: string; value: boolean; ti
     </label>
   );
 }
-export function Protocol({ value, inherit = false }: { value: string; inherit?: boolean }) {
+export function Protocol({
+  value,
+  inherit = false,
+  onChange,
+}: {
+  value: string;
+  inherit?: boolean;
+  onChange?: (value: string) => void;
+}) {
   return (
     <Field title="API 协议">
-      <select name="protocol" defaultValue={value}>
+      <select
+        name="protocol"
+        {...(onChange
+          ? {
+              value,
+              onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value),
+            }
+          : { defaultValue: value })}
+      >
         {inherit && <option value="">继承供应商</option>}
         <option value="OPENAI_CHAT_COMPLETIONS">OpenAI Chat Completions</option>
         <option value="ANTHROPIC_MESSAGES">Anthropic Messages</option>

@@ -87,6 +87,48 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 describe.sequential('real database + local SMTP identity flows', () => {
+  it('S02: editing an older SMTP version keeps its own credential and rejects stale saves atomically', async () => {
+    const { proof } = await reauthenticate(root, process.env.SEED_PASSWORD!);
+    const active = await prisma.sMTPConfigurationVersion.findFirstOrThrow({
+      where: { enabled: true },
+    });
+    const first = await saveSMTP(root, active.config, 'smtp-test-secret-a', proof);
+    const second = await saveSMTP(root, active.config, 'smtp-test-secret-b', proof);
+    const copy = await saveSMTP(root, active.config, '', proof, {
+      sourceId: first.id,
+      expectedVersion: second.version,
+    });
+    const originals = await prisma.sMTPConfigurationVersion.findMany({
+      where: { id: { in: [first.id, second.id, copy.id] } },
+    });
+    expect(originals.find((v) => v.id === copy.id)?.secretId).toBe(
+      originals.find((v) => v.id === first.id)?.secretId,
+    );
+    expect(originals.find((v) => v.id === copy.id)?.secretId).not.toBe(
+      originals.find((v) => v.id === second.id)?.secretId,
+    );
+    expect(copy.enabled).toBe(false);
+    await manageSMTP(root, 'ENABLE', first.id, proof, undefined, active.id);
+    await expect(
+      manageSMTP(root, 'ENABLE', second.id, proof, undefined, active.id),
+    ).rejects.toThrow('CONFIGURATION_CHANGED');
+    expect(
+      (await prisma.sMTPConfigurationVersion.findFirstOrThrow({ where: { enabled: true } })).id,
+    ).toBe(first.id);
+    await manageSMTP(root, 'ENABLE', active.id, proof, undefined, first.id);
+    const secretCount = await prisma.secretRecord.count();
+    await expect(
+      saveSMTP(root, active.config, 'do-not-store-a-conflicted-secret', proof, {
+        sourceId: first.id,
+        expectedVersion: second.version,
+      }),
+    ).rejects.toThrow('CONFIGURATION_CHANGED');
+    expect(await prisma.secretRecord.count()).toBe(secretCount);
+    expect(
+      (await prisma.sMTPConfigurationVersion.findUniqueOrThrow({ where: { id: active.id } }))
+        .enabled,
+    ).toBe(true);
+  });
   it('ID01/03/06: leading-zero school number and staff ID are realm isolated, first login restricted', async () => {
     const login = await authenticate({
       realm: 'STUDENT',
@@ -340,7 +382,7 @@ describe.sequential('real database + local SMTP identity flows', () => {
         proof,
       );
       await expect(manageSMTP(root, 'VERIFY', config.id, proof)).rejects.toThrow(
-        /certificate|self.signed|cert|expired/i,
+        'SMTP_CERTIFICATE_INVALID',
       );
       expect(
         (await prisma.sMTPConfigurationVersion.findUniqueOrThrow({ where: { id: config.id } }))
@@ -404,6 +446,9 @@ describe.sequential('real database + local SMTP identity flows', () => {
         proof,
       );
       await manageSMTP(root, 'ENABLE', config.id, proof);
+      await expect(
+        manageSMTP(root, 'TEST', config.id, proof, 'rejected@test.invalid'),
+      ).rejects.toThrow('SMTP_SERVER_REJECTED');
       const u = await prisma.user.findUniqueOrThrow({ where: { id: studentId } });
       const email = 'failure-' + tag + '@test.invalid';
       await expect(
@@ -426,6 +471,66 @@ describe.sequential('real database + local SMTP identity flows', () => {
       process.env.TUHENG_OUTBOUND_ALLOWLIST = previous;
       await manageSMTP(root, 'ENABLE', original.id, proof);
       await new Promise<void>((resolve) => failing.close(resolve));
+    }
+  });
+  it('S03: authentication failures and ambiguous send timeouts stay distinct and never activate a draft', async () => {
+    const { proof } = await reauthenticate(root, process.env.SEED_PASSWORD!);
+    const active = await prisma.sMTPConfigurationVersion.findFirstOrThrow({
+      where: { enabled: true },
+    });
+    const previous = process.env.TUHENG_OUTBOUND_ALLOWLIST;
+    for (const mode of ['AUTH', 'UNKNOWN'] as const) {
+      const receiver = new SMTPServer({
+        disabledCommands: mode === 'AUTH' ? ['STARTTLS'] : ['STARTTLS', 'AUTH'],
+        allowInsecureAuth: true,
+        authOptional: mode !== 'AUTH',
+        onAuth(_auth, _session, callback) {
+          callback(new Error('fixture authentication rejected'));
+        },
+        onData(stream) {
+          stream.on('data', () => {});
+          stream.on('end', () => {});
+        },
+      });
+      await new Promise<void>((resolve) => receiver.listen(0, '127.0.0.1', resolve));
+      const port = (receiver.server.address() as { port: number }).port;
+      try {
+        process.env.TUHENG_OUTBOUND_ALLOWLIST = '127.0.0.1:' + port;
+        const config = await saveSMTP(
+          root,
+          {
+            name: 'SMTP failure fixture',
+            host: '127.0.0.1',
+            port,
+            tls: 'LOCAL_TEST',
+            username: mode === 'AUTH' ? 'fixture' : '',
+            fromName: 'Test',
+            fromEmail: 'test@test.invalid',
+            timeoutMs: 1000,
+          },
+          'test-only-smtp-secret',
+          proof,
+        );
+        await expect(
+          manageSMTP(
+            root,
+            mode === 'AUTH' ? 'VERIFY' : 'TEST',
+            config.id,
+            proof,
+            'timeout@test.invalid',
+          ),
+        ).rejects.toThrow(mode === 'AUTH' ? 'SMTP_AUTH_FAILED' : 'SMTP_SEND_STATUS_UNKNOWN');
+        expect(
+          (await prisma.sMTPConfigurationVersion.findUniqueOrThrow({ where: { id: config.id } }))
+            .enabled,
+        ).toBe(false);
+        expect(
+          (await prisma.sMTPConfigurationVersion.findFirstOrThrow({ where: { enabled: true } })).id,
+        ).toBe(active.id);
+      } finally {
+        process.env.TUHENG_OUTBOUND_ALLOWLIST = previous;
+        await new Promise<void>((resolve) => receiver.close(resolve));
+      }
     }
   });
   it('ID09: disabled school revokes existing sessions and login', async () => {

@@ -1,7 +1,18 @@
 import { prepareLogin, verifyIdentity } from './identity-login';
 import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
+import { prisma } from '@tuheng/database';
 const sample = path.resolve('tests/samples/projection.png');
+let audienceFixtures: string[] = [];
+test.afterEach(async () => {
+  if (!audienceFixtures.length) return;
+  await prisma.enrollment.deleteMany({ where: { userId: { in: audienceFixtures } } });
+  await prisma.user.updateMany({
+    where: { id: { in: audienceFixtures } },
+    data: { active: false },
+  });
+  audienceFixtures = [];
+});
 async function login(page: Page, who: string) {
   await prepareLogin(page, who);
   await page.getByLabel('已绑定邮箱', { exact: true }).fill(`${who}@tuheng.local`);
@@ -36,9 +47,54 @@ test('A/B/D: teacher publishes, student uploads, teacher reviews, student views 
   await teacher.getByLabel('我已确认题意、参考答案和评分细则（保存为新版本）').check();
   await teacher.getByRole('button', { name: '保存并确认题目版本' }).click();
   await expect(teacher).toHaveURL('/teacher/questions');
+  // Isolated fixture members exercise ALL beyond a rendered 30-person page.
+  const cls = await prisma.teachingClass.findFirstOrThrow({
+    where: { archived: false, grants: { some: { userId: 'teacher' } } },
+  });
+  const fixtureTag = crypto.randomUUID();
+  audienceFixtures = Array.from({ length: 31 }, () => crypto.randomUUID());
+  await prisma.user.createMany({
+    data: audienceFixtures.map((id, i) => ({
+      id,
+      name: '[E2E分页]学生' + i,
+      email: '',
+      roles: ['STUDENT'],
+      kind: 'STUDENT',
+      realm: 'STUDENT',
+      schoolId: cls.schoolId,
+      studentNumber: fixtureTag + '-' + i,
+      passwordHash: 'test-only-not-for-login',
+    })),
+  });
+  await prisma.enrollment.createMany({
+    data: audienceFixtures.map((userId) => ({ userId, classId: cls.id })),
+  });
   await teacher.goto('/teacher/assignments/new');
   await teacher.getByLabel('作业标题').fill(title);
-  await expect(teacher.getByText('已选 2 人', { exact: false })).toBeVisible();
+  await expect(teacher.getByText('已选 33 人', { exact: false })).toBeVisible();
+  const audience = teacher.locator('.audience-picker');
+  await audience.getByRole('button', { name: '清空选择', exact: true }).click();
+  await expect(audience.getByText('已选 0 人 · 显式排除 0 人', { exact: true })).toBeVisible();
+  await audience.getByRole('checkbox', { name: /全部授权对象/ }).click();
+  await expect(audience.getByText('已选 33 人 · 显式排除 0 人', { exact: true })).toBeVisible();
+  await audience.getByRole('button', { name: '下一页学生', exact: true }).click();
+  await expect(audience.getByText(/33 个匹配学生 · 第 2 页/)).toBeVisible();
+  const excluded = await prisma.user.findUniqueOrThrow({ where: { id: 'student2' } });
+  await audience
+    .getByLabel('搜索姓名 / 学号 / 班级', { exact: true })
+    .fill(excluded.studentNumber!);
+  await audience
+    .locator('.audience-choice')
+    .filter({ hasText: excluded.studentNumber! })
+    .getByRole('checkbox')
+    .click();
+  await expect(audience.getByText('已选 32 人 · 显式排除 1 人', { exact: true })).toBeVisible();
+  expect(
+    await audience
+      .getByRole('checkbox', { name: /全部授权对象/ })
+      .evaluate((e: HTMLInputElement) => e.indeterminate),
+  ).toBe(true);
+  await audience.getByLabel('搜索姓名 / 学号 / 班级', { exact: true }).clear();
   await teacher.getByLabel('开始时间（当前设备时区）').fill('2026-01-01T08:00');
   await teacher.getByLabel('截止时间（当前设备时区）').fill('2027-12-31T23:59');
   await teacher
@@ -63,6 +119,30 @@ test('A/B/D: teacher publishes, student uploads, teacher reviews, student views 
   const attemptId = new URL(student.url()).pathname.split('/').pop()!;
   await expect(student.getByText('作答图纸', { exact: true })).toBeVisible();
   await login(other, 'student2');
+  await other.goto(assignmentPath);
+  await expect(other.getByText('你没有此资源的操作权限。')).toBeVisible();
+  const assignedId = assignmentPath.split('/').at(-1)!;
+  const item = await prisma.assignmentItem.findFirstOrThrow({
+    where: { assignmentId: assignedId },
+  });
+  const excludedAsset = await prisma.storedAsset.create({
+    data: {
+      ownerId: 'student2',
+      name: 'permission-fixture.png',
+      mime: 'image/png',
+      bytes: 1,
+      purpose: 'SUBMISSION',
+      objectKey: 'never-read-excluded/' + crypto.randomUUID(),
+    },
+  });
+  for (const command of ['draft', 'submit']) {
+    const refused = await other.request.post('/api/actions/' + command, {
+      headers: { Origin: 'http://localhost:3000' },
+      data: { itemId: item.id, assetIds: [excludedAsset.id], idempotencyKey: crypto.randomUUID() },
+    });
+    expect(refused.status()).toBe(403);
+    expect((await refused.json()).error).toBe('ASSIGNMENT_RECIPIENT_REQUIRED');
+  }
   await other.goto(`/student/results/${attemptId}`);
   await expect(other.getByText('你没有此资源的操作权限。')).toBeVisible();
   const assetSrc = await student.locator('.drawing-surface img').getAttribute('src');

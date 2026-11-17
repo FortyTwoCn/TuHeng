@@ -3,6 +3,7 @@ import { GeometryDocument, AudienceSelection, ReviewerAssignment } from '@tuheng
 import { database, prisma } from '@tuheng/database';
 import * as domain from '@tuheng/domain';
 import * as infra from '@tuheng/infrastructure';
+import { requireRecentAuthentication } from '../../../../../../packages/infrastructure/src/identity-security';
 import { actor } from '../../../../lib/auth';
 import { checkOrigin, errorResponse, limitedBody } from '../../../../lib/http';
 const id = z.string().min(1).max(200),
@@ -196,12 +197,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
         result = await infra.updateUser(a, p.id, p);
         break;
       }
-      case 'run-retry':
-        result = await infra.retryRun(a, z.object({ id }).parse(body).id);
+      case 'run-retry': {
+        const p = z.object({ id, requestId: z.uuid() }).parse(body);
+        await requireRecentAuthentication(a, z.string().parse(body.proof));
+        result = await infra.retryRun(a, p.id, p.requestId);
         break;
-      case 'run-current-config':
-        result = await infra.rerunCurrentConfig(a, z.object({ id }).parse(body).id);
+      }
+      case 'run-current-config': {
+        const p = z.object({ id, requestId: z.uuid() }).parse(body);
+        await requireRecentAuthentication(a, z.string().parse(body.proof));
+        result = await infra.rerunCurrentConfig(a, p.id, p.requestId);
         break;
+      }
       case 'model-test':
         result = await infra.testModel(a);
         break;

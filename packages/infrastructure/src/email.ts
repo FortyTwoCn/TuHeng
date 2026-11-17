@@ -2,9 +2,9 @@ import nodemailer from 'tuheng-smtp-client';
 import { isIP } from 'node:net';
 import { prisma } from '@tuheng/database';
 import { SMTPConfig, EmailAddress, type VerificationPurpose } from '@tuheng/contracts';
-import { ensure, requireSMTPManager, type Actor } from '@tuheng/domain';
+import { DomainError, ensure, requireSMTPManager, type Actor } from '@tuheng/domain';
 import { explicitlyAllowed, resolveOutbound } from './outbound';
-import { readSecret, storeSecret, revokeSecret } from './secret-store';
+import { readSecret, encryptSecret, revokeSecret } from './secret-store';
 import { rateLimit } from './security-throttle';
 import { requireRecentAuthentication } from './identity-security';
 
@@ -12,7 +12,13 @@ export async function smtpManager(actor: Actor, proof?: string) {
   requireSMTPManager(actor);
   await requireRecentAuthentication(actor, proof);
 }
-export async function saveSMTP(actor: Actor, input: unknown, password?: string, proof?: string) {
+export async function saveSMTP(
+  actor: Actor,
+  input: unknown,
+  password?: string,
+  proof?: string,
+  revision?: { expectedVersion: number; sourceId: string | null },
+) {
   await smtpManager(actor, proof);
   const config = SMTPConfig.parse(input);
   await resolveOutbound(config.host, config.port, 'SMTP');
@@ -22,15 +28,25 @@ export async function saveSMTP(actor: Actor, input: unknown, password?: string, 
     'SMTP_TLS_REQUIRED',
   );
   ensure(!/[\r\n]/.test(config.fromName + config.username + config.name), 'INVALID_MAIL_HEADER');
-  const secret = password ? await storeSecret(password, 'SMTP') : null;
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(72651320)`;
     const prior = await tx.sMTPConfigurationVersion.findFirst({ orderBy: { version: 'desc' } });
+    if (revision)
+      ensure((prior?.version ?? 0) === revision.expectedVersion, 'CONFIGURATION_CHANGED', 409);
+    const source = revision
+      ? revision.sourceId
+        ? await tx.sMTPConfigurationVersion.findUnique({ where: { id: revision.sourceId } })
+        : null
+      : prior;
+    ensure(!revision?.sourceId || source, 'SMTP_VERSION_NOT_FOUND', 404);
+    const secret = password
+      ? await tx.secretRecord.create({ data: encryptSecret(password, 'SMTP') })
+      : null;
     const row = await tx.sMTPConfigurationVersion.create({
       data: {
         version: (prior?.version ?? 0) + 1,
         config,
-        secretId: secret?.id ?? prior?.secretId,
+        secretId: secret?.id ?? source?.secretId,
         enabled: false,
       },
     });
@@ -39,7 +55,7 @@ export async function saveSMTP(actor: Actor, input: unknown, password?: string, 
         actorId: actor.id,
         action: 'SMTP_VERSION_CREATED',
         resourceId: row.id,
-        details: { version: row.version },
+        details: { version: row.version, sourceVersion: source?.version ?? null },
       },
     });
     return { id: row.id, version: row.version, enabled: false };
@@ -86,12 +102,19 @@ export async function manageSMTP(
   id: string,
   proof?: string,
   recipient?: string,
+  expectedActiveId?: string | null,
 ) {
   await smtpManager(actor, proof);
   if (action === 'REVOKE_KEY' || action === 'DISABLE') {
     const row = await prisma.sMTPConfigurationVersion.findUniqueOrThrow({ where: { id } });
     if (action === 'REVOKE_KEY' && row.secretId) await revokeSecret(row.secretId);
-    await prisma.sMTPConfigurationVersion.update({ where: { id }, data: { enabled: false } });
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(72651320)`;
+      const current = await tx.sMTPConfigurationVersion.findFirst({ where: { enabled: true } });
+      if (action === 'DISABLE' && expectedActiveId !== undefined)
+        ensure((current?.id ?? null) === expectedActiveId, 'CONFIGURATION_CHANGED', 409);
+      await tx.sMTPConfigurationVersion.update({ where: { id }, data: { enabled: false } });
+    });
     await prisma.auditLog.create({
       data: { actorId: actor.id, action: 'SMTP_' + action, resourceId: id, details: {} },
     });
@@ -112,6 +135,10 @@ export async function manageSMTP(
     }
     if (action === 'ENABLE')
       await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(72651320)`;
+        const current = await tx.sMTPConfigurationVersion.findFirst({ where: { enabled: true } });
+        if (expectedActiveId !== undefined)
+          ensure((current?.id ?? null) === expectedActiveId, 'CONFIGURATION_CHANGED', 409);
         await tx.sMTPConfigurationVersion.updateMany({ data: { enabled: false } });
         if (action === 'ENABLE')
           await tx.sMTPConfigurationVersion.update({ where: { id }, data: { enabled: true } });
@@ -127,6 +154,34 @@ export async function manageSMTP(
             ? 'CONNECTION_VERIFIED'
             : action,
     };
+  } catch (error) {
+    if (error instanceof DomainError) throw error;
+    const failure = error as {
+      code?: string;
+      responseCode?: number;
+      message?: string;
+      command?: string;
+    };
+    const certificate = /certificate|self.signed|cert.*expired/i.test(failure.message ?? '');
+    const code =
+      failure.code === 'EAUTH'
+        ? 'SMTP_AUTH_FAILED'
+        : certificate
+          ? 'SMTP_CERTIFICATE_INVALID'
+          : failure.code === 'ESOCKET'
+            ? 'SMTP_TLS_OR_CONNECTION_FAILED'
+            : failure.code === 'ETIMEDOUT'
+              ? action === 'TEST'
+                ? 'SMTP_SEND_STATUS_UNKNOWN'
+                : 'SMTP_TIMEOUT'
+              : ['ECONNECTION', 'ECONNREFUSED', 'EDNS'].includes(failure.code ?? '')
+                ? 'SMTP_CONNECTION_FAILED'
+                : failure.responseCode
+                  ? 'SMTP_SERVER_REJECTED'
+                  : action === 'TEST'
+                    ? 'SMTP_SEND_STATUS_UNKNOWN'
+                    : 'SMTP_CONNECTION_FAILED';
+    throw new DomainError(code, 502);
   } finally {
     transport.close();
   }

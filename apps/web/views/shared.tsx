@@ -19,7 +19,7 @@ export function Status({ status }: { status: string }) {
     RUNNING: ['分析中', 'blue'],
     SUCCEEDED: ['建议已生成', 'green'],
     FAILED: ['处理失败', 'red'],
-    BLOCKED_CONFIG: ['待配置视觉模型', 'amber'],
+    BLOCKED_CONFIG: ['等待配置或能力匹配', 'amber'],
     RETRYING: ['等待重试', 'amber'],
     OPEN: ['待处理', 'amber'],
     RESOLVED: ['已处理', 'green'],

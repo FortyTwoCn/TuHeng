@@ -1,0 +1,107 @@
+.job-filters {
+  background: white;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.job-filter-more {
+  flex-basis: 100%;
+}
+.job-filter-more summary {
+  padding: 8px 0;
+  cursor: pointer;
+}
+.job-counts {
+  display: flex;
+  gap: 10px 18px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 16px 0;
+  font-size: 13px;
+}
+.job-list {
+  display: grid;
+  gap: 8px;
+}
+.job-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.1fr) minmax(130px, 0.8fr) minmax(170px, 1fr) minmax(
+      130px,
+      0.8fr
+    );
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+}
+.identity-console .job-select {
+  display: grid;
+  text-align: left;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+}
+.job-select span,
+.job-select small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.job-row p {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.job-row > *,
+.job-detail {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.job-actions {
+  margin: 0;
+}
+.job-row .job-actions > * {
+  width: 100%;
+  justify-content: center;
+  font-size: 13px;
+}
+.job-error {
+  color: #8a4e19;
+}
+.job-detail dl {
+  display: grid;
+  grid-template-columns: 135px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 13px;
+}
+.job-detail dt {
+  color: var(--muted);
+}
+.job-detail dd {
+  margin: 0;
+}
+.jobs-console {
+  container-type: inline-size;
+}
+@container (max-width: 860px) {
+  .job-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@container (max-width: 500px) {
+  .job-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+@media (max-width: 600px) {
+  .job-detail dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .job-detail dd {
+    margin-bottom: 8px;
+  }
+}

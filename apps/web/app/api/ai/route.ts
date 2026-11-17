@@ -6,30 +6,25 @@ import {
   requireAIAdmin,
   saveAIConfiguration,
 } from '../../../../../packages/infrastructure/src/ai-admin';
-import { prisma } from '@tuheng/database';
+import {
+  InvocationFilters,
+  listAIInvocations,
+} from '../../../../../packages/infrastructure/src/ai-records';
 export async function GET(request: Request) {
   try {
     const a = await actor('STAFF');
     requireAIAdmin(a);
     const params = new URL(request.url).searchParams;
     if (params.get('view') === 'invocations') {
-      const page = Math.max(0, Number(params.get('page')) || 0);
-      const where = {
-        ...(params.get('schoolId') ? { schoolId: params.get('schoolId')! } : {}),
-        ...(params.get('actorId') ? { actorId: params.get('actorId')! } : {}),
-        ...(params.get('taskKey') ? { taskKey: params.get('taskKey')! } : {}),
-      };
       return Response.json(
-        {
-          items: await prisma.aIInvocation.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-            skip: page * 30,
-            take: 30,
-            include: { callAttempts: true },
-          }),
-          total: await prisma.aIInvocation.count({ where }),
-        },
+        await listAIInvocations(
+          a,
+          InvocationFilters.parse(
+            Object.fromEntries(
+              [...params.entries()].filter(([key, value]) => key !== 'view' && value !== ''),
+            ),
+          ),
+        ),
         { headers: { 'Cache-Control': 'no-store' } },
       );
     }

@@ -40,11 +40,11 @@ npm run dev
 npm run worker
 ```
 
-访问 http://localhost:3000/login/staff，使用固定 ID `admin` 和本地受限交付文件中的临时密码。管理员首次改密后直接进入后台，无需配置 SMTP 或绑定邮箱。邮件服务在后台“邮件服务”中配置，管理员可在“账号安全”自愿绑定邮箱；学校和教师仍须首次改密并验证邮箱，启用这些账号前应配置邮件服务。不存在公开注册或固定初始密码。已有数据库先执行[迁移说明](docs/IDENTITY_AI_REFACTOR.md)，不要重复 bootstrap 或重建库。
+访问 http://localhost:3000/login/staff，使用固定 ID `admin` 和本地受限交付文件中的临时密码。管理员首次改密后直接进入后台，无需配置 SMTP 或绑定邮箱。邮件服务在后台“系统设置 → 邮件服务”中配置，管理员可在“账号安全”自愿绑定邮箱；学校和教师仍须首次改密并验证邮箱，启用这些账号前应配置邮件服务。不存在公开注册或固定初始密码。已有数据库先执行[迁移说明](docs/IDENTITY_AI_REFACTOR.md)，不要重复 bootstrap 或重建库。
 
 平板通过局域网访问时，在 `.env` 增加 `APP_ALLOWED_ORIGINS=http://本机局域网IP:3000`，重启 `npm run dev`，在平板打开该地址。`NEXTAUTH_URL=http://localhost:3000` 可保留供本机使用；多个受信任地址用逗号分隔，必须包含协议和端口，不使用通配符。IP 变化后需更新配置。开发资源、登录跳转和保存接口共用这些应用地址；操作与排查见 [局域网开发与平板访问](docs/OPERATIONS.md#局域网开发与平板访问)。
 
-未配置视觉 API 时仍能提交、人工复核与发布，任务明确显示配置阻塞；不会生成模拟分。管理员在 AI 中心配置供应商、模型和模块规则后，在任务页面受控重试。真实调用不会使用测试 Mock。
+未配置视觉 API 时仍能提交、人工复核与发布，任务明确显示配置阻塞；不会生成模拟分。管理员在 AI 中心配置供应商、模型和模块规则后，在任务页面明确选择原快照重试或当前配置新建运行；没有原快照的任务只能新建运行。真实调用不会使用测试 Mock。
 
 ```sh
 npm run typecheck
@@ -60,3 +60,4 @@ npm run test:e2e
 在管理员 AI 中心维护版本化配置，无需改 .env 或重启 Web/Worker。旧任务沿用旧配置，可在管理页选择“使用当前配置新建运行”。详见 [运行与恢复](docs/OPERATIONS.md)。
 
 Playwright 首次使用先 `npx playwright install chromium`；已有系统 Chromium 时可用 `PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e`。集成测试使用隔离数据库、私有测试桶与独立队列。仅自动化测试库可显式设置 `SEED_TEST_ACCOUNTS=1` 和自定义 `SEED_PASSWORD` 后执行 `npm run db:seed`，生成的四个测试账号不可用于部署。身份浏览器用例还需将本地 SMTP `127.0.0.1:1026` 加入测试服务的出口白名单，并运行同一测试库/队列的真实 Worker；详见[测试记录](docs/IDENTITY_AI_ACCEPTANCE.md)。
+前端布局和真实交互验收见 [界面设计决策](docs/UI_REDESIGN_DECISIONS.md) 与 [界面验收记录](docs/UI_REDESIGN_ACCEPTANCE.md)。统一登录页、人员详情抽屉、编辑器工具组、AI 中心列表、任务诊断和邮件版本管理共用现有业务用例。

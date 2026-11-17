@@ -127,18 +127,62 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
   await root.goto('/admin/mail');
   await verifyIdentity(root, process.env.SEED_PASSWORD!);
   await expect(root.getByText(/敏感操作已验证至/)).toBeVisible();
+  const enabledBefore = await prisma.sMTPConfigurationVersion.findMany({
+    where: { enabled: true },
+    select: { id: true },
+  });
+  const mailBeforeSave = mail.length;
   await root.getByLabel('配置名称').fill('Browser local SMTP ' + Date.now());
   await root.getByLabel('SMTP 主机').fill('127.0.0.1');
   await root.getByLabel('端口', { exact: true }).fill('1026');
   await root.getByLabel('传输安全').selectOption('LOCAL_TEST');
   await root.getByLabel('发件邮箱').fill('browser@tuheng.invalid');
   await root.getByRole('button', { name: '保存为新版本', exact: true }).click();
-  const v = root.locator('.identity-list article').first();
-  await expect(v).toContainText('Browser local SMTP');
+  const v = root.getByRole('region', { name: '已保存版本测试与启用' });
+  await expect(v.getByRole('combobox')).toContainText('Browser local SMTP');
+  await expect(root.getByText('已保存新版本，尚未启用。', { exact: true })).toBeVisible();
+  expect(
+    await prisma.sMTPConfigurationVersion.findMany({
+      where: { enabled: true },
+      select: { id: true },
+    }),
+  ).toEqual(enabledBefore);
+  expect(mail.length).toBe(mailBeforeSave);
+  await expect(root.getByRole('button', { name: '保存为新版本', exact: true })).toBeEnabled();
+  const savedId = await v.getByRole('combobox').inputValue();
+  expect(await root.getByRole('combobox', { name: '正在编辑版本', exact: true }).inputValue()).toBe(
+    savedId,
+  );
   await v.getByRole('button', { name: '测试连接', exact: true }).click();
-  await expect(root.getByText('连接与认证通过，尚未证明邮件已送达。')).toBeVisible();
-  await v.getByRole('button', { name: '启用', exact: true }).click();
-  await expect(v.getByRole('button', { name: '停用', exact: true })).toBeVisible();
+  await expect(
+    root.getByText('连接与认证通过，尚未证明邮件已送达。', { exact: true }),
+  ).toBeVisible();
+  await v.getByLabel('测试收件邮箱').fill('explicit-test@browser.invalid');
+  await v.getByRole('button', { name: '发送测试邮件', exact: true }).click();
+  await expect(root.getByText('已提交 SMTP，请实际检查收件箱。', { exact: true })).toBeVisible();
+  await expect.poll(() => mail.length).toBe(mailBeforeSave + 1);
+  await root.getByLabel('配置名称').fill('未保存邮件草稿');
+  await expect(v.getByText(/下面的操作仅针对明确选择的已保存版本/)).toBeVisible();
+  await root.getByRole('button', { name: '新建邮件配置', exact: true }).click();
+  const leaveMail = root.getByRole('dialog', { name: '未保存的配置', exact: true });
+  await leaveMail.getByRole('button', { name: '继续编辑', exact: true }).click();
+  await root.getByRole('button', { name: '刷新邮件配置', exact: true }).click();
+  await leaveMail.getByRole('button', { name: '丢弃修改并切换', exact: true }).click();
+  await expect(root.getByLabel('配置名称')).not.toHaveValue('未保存邮件草稿');
+  for (const width of [1366, 390]) {
+    await root.setViewportSize({ width, height: width === 390 ? 844 : 768 });
+    await root.screenshot({
+      path: '.runtime/ui-redesign/evidence/mail-' + width + '.png',
+      fullPage: true,
+    });
+    expect(await root.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+  }
+  await root.setViewportSize({ width: 1366, height: 768 });
+  root.once('dialog', (d) => d.accept());
+  await v.getByRole('button', { name: '启用此版本', exact: true }).click();
+  await expect(v.getByRole('button', { name: '停用此版本', exact: true })).toBeVisible();
   const { proof } = await api(root, '/api/identity/reauthenticate', {
     realm: 'STAFF',
     password: process.env.SEED_PASSWORD,
@@ -293,9 +337,13 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
     // Changing the source scope must invalidate the old preflight without creating accounts.
     await manager.getByRole('combobox', { name: '课程 / 学期', exact: true }).selectOption('');
     await expect(manager.getByRole('button', { name: '确认执行导入', exact: true })).toHaveCount(0);
-    await manager.getByRole('combobox', { name: '课程 / 学期', exact: true }).selectOption(offering.id);
+    await manager
+      .getByRole('combobox', { name: '课程 / 学期', exact: true })
+      .selectOption(offering.id);
     await manager.getByLabel('上传 XLSX（最多 5 MB、5000 行）', { exact: true }).setInputFiles({
-      name: 'browser-' + kind + '.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: bytes,
+      name: 'browser-' + kind + '.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: bytes,
     });
     await expect(manager.getByText('预计新增教师', { exact: false })).toBeVisible();
     if (kind === 'SCHOOL') {
@@ -352,27 +400,32 @@ test('AI: browser provider versions mask keys, model and module forms; responsiv
   await verifyIdentity(page, process.env.SEED_PASSWORD!);
   await expect(page.getByText(/敏感操作已验证至/)).toBeVisible();
   const name = 'Browser provider ' + Date.now();
+  await page.getByRole('button', { name: '新增供应商', exact: true }).click();
   await page.getByLabel('显示名称', { exact: true }).fill(name);
   await page
     .getByLabel('API Key（留空保持原值）', { exact: true })
     .fill('test-protocol-placeholder-no-network-secret');
   await page.getByRole('button', { name: '保存供应商版本', exact: true }).click();
   await expect(page.getByText('已保存，新版本立即生效。已有调用保留原快照。')).toBeVisible();
-  await expect(page.getByLabel('API Key（留空保持原值）')).toHaveValue('');
+  await expect(page.getByLabel('API Key（留空保持原值）', { exact: true })).toHaveValue('');
   const r = await page.request.get('/api/ai');
   const json = await r.text();
   expect(json).not.toContain('test-protocol-placeholder-no-network-secret');
   expect(json).not.toContain('ciphertext');
   await page.getByRole('button', { name: '模型目录', exact: true }).click();
+  await page.getByRole('button', { name: '手动添加模型', exact: true }).click();
   await expect(page.getByRole('button', { name: '保存模型版本', exact: true })).toBeVisible();
 
   await page.getByRole('combobox', { name: '供应商', exact: true }).selectOption({ label: name });
   await page.getByLabel('模型显示名', { exact: true }).fill(name + ' model');
   await page.getByLabel('供应商实际 model ID', { exact: true }).fill('browser-test-model');
   await page.getByRole('button', { name: '保存模型版本', exact: true }).click();
-  await expect(page.getByRole('combobox', { name: '编辑模型', exact: true })).toHaveValue(/.+/);
+  await expect(page.getByRole('heading', { name: name + ' model', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '模块规则', exact: true }).click();
-  await expect(page.getByText('grading.assignment', { exact: false }).first()).toBeVisible();
+  await page.locator('.configuration-list [data-record-id="grading.assignment"]').click();
+  await expect(
+    page.locator('.configuration-detail').getByText('grading.assignment', { exact: false }),
+  ).toBeVisible();
   const rule = page.locator('form').filter({ hasText: 'grading.assignment' });
   await rule
     .getByRole('combobox', { name: '调用模型', exact: true })
@@ -393,6 +446,7 @@ test('AI: browser provider versions mask keys, model and module forms; responsiv
     .toBe(true);
   await page.reload();
   await page.getByRole('button', { name: '模块规则', exact: true }).click();
+  await page.locator('.configuration-list [data-record-id="grading.assignment"]').click();
   await expect(rule.getByRole('combobox', { name: '调用模型', exact: true })).toHaveValue(/.+/);
   for (const [width, height] of [
     [360, 800],
@@ -507,10 +561,11 @@ test('first admin: password change opens the dashboard without SMTP or email bin
     await mailPanel.getByLabel('传输安全').selectOption('LOCAL_TEST');
     await mailPanel.getByLabel('发件邮箱').fill('install@tuheng.invalid');
     await mailPanel.getByRole('button', { name: '保存为新版本', exact: true }).click();
-    const newest = mailPanel.locator('.identity-list article').first();
-    await expect(newest).toContainText('Optional backend SMTP');
-    await newest.getByRole('button', { name: '启用', exact: true }).click();
-    await expect(newest.getByRole('button', { name: '停用', exact: true })).toBeVisible();
+    const newest = mailPanel.getByRole('region', { name: '已保存版本测试与启用' });
+    await expect(newest.getByRole('combobox')).toContainText('Optional backend SMTP');
+    page.once('dialog', (d) => d.accept());
+    await newest.getByRole('button', { name: '启用此版本', exact: true }).click();
+    await expect(newest.getByRole('button', { name: '停用此版本', exact: true })).toBeVisible();
     await page.goto('/admin/security');
     await expect(page.getByText('邮箱绑定为可选项，可用于邮箱登录和找回密码。')).toBeVisible();
     await page.getByRole('button', { name: '退出当前身份', exact: true }).click();
@@ -559,8 +614,11 @@ test('email methods: same verified address stays isolated across domains, codes 
       password: process.env.SEED_PASSWORD,
     })
   ).proof;
+  const mailVersions = (await (await root.request.get('/api/settings/mail')).json()).data;
   const smtpConfig = await api(root, '/api/settings/mail', {
     action: 'SAVE',
+    sourceId: null,
+    expectedVersion: mailVersions[0]?.version ?? 0,
     proof,
     password: '',
     config: {
@@ -573,7 +631,12 @@ test('email methods: same verified address stays isolated across domains, codes 
       fromEmail: 'email-methods@test.invalid',
     },
   });
-  await api(root, '/api/settings/mail', { action: 'ENABLE', id: smtpConfig.id, proof });
+  await api(root, '/api/settings/mail', {
+    action: 'ENABLE',
+    id: smtpConfig.id,
+    proof,
+    expectedActiveId: mailVersions.find((v: { enabled: boolean }) => v.enabled)?.id ?? null,
+  });
   const tag = Date.now(),
     email = 'shared-' + tag + '@browser.invalid';
   const school = await prisma.school.create({

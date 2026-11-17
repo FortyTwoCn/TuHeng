@@ -2,10 +2,10 @@ import Link from 'next/link';
 import { prisma, database } from '@tuheng/database';
 import { requireRole, type Actor } from '@tuheng/domain';
 import { storageHealth } from '@tuheng/infrastructure';
-import { Panel, PageTitle, Empty, Badge } from '@tuheng/ui';
+import { Panel, PageTitle, Badge } from '@tuheng/ui';
 import { ActionButton } from '../components/Actions';
 import { UserCreate, UserManage, OrganizationForm, ImportUsers } from '../components/AdminForms';
-import { Stat, Status, date } from './shared';
+import { Stat, date } from './shared';
 export async function AdminDashboard({ a }: { a: Actor }) {
   requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
   const [users, jobs, failed, classes] = await Promise.all([
@@ -175,10 +175,28 @@ export async function OrganizationView({ a }: { a: Actor }) {
     </>
   );
 }
+import { JobsConsole } from '../components/identity/JobsConsole';
 import { AICenter } from '../components/identity/AICenter';
-export async function ModelsView({ a }: { a: Actor }) {
+export async function ModelsView({
+  a,
+  search = {},
+}: {
+  a: Actor;
+  search?: Record<string, string | undefined>;
+}) {
   requireRole(a, 'ADMIN');
-  return <AICenter />;
+  const returnTo =
+    search.returnTo?.startsWith('/admin/jobs') && !search.returnTo.includes('\\\\')
+      ? search.returnTo
+      : undefined;
+  return (
+    <AICenter
+      initialTab={search.tab}
+      initialRunId={search.runId}
+      initialTaskKey={search.taskKey}
+      returnTo={returnTo}
+    />
+  );
 }
 export async function JobsView({
   a,
@@ -188,94 +206,7 @@ export async function JobsView({
   search: Record<string, string | undefined>;
 }) {
   requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
-  const jobs = await prisma.backgroundJob.findMany({
-    where: {
-      ...(search.status ? { status: search.status } : {}),
-      ...(search.q ? { OR: [{ runId: search.q }, { run: { attemptId: search.q } }] } : {}),
-    },
-    include: {
-      run: {
-        select: {
-          attemptId: true,
-          startedAt: true,
-          finishedAt: true,
-          configId: true,
-          promptVersion: true,
-          strategyVersion: true,
-        },
-      },
-    },
-    orderBy: { updatedAt: 'desc' },
-    take: 100,
-  });
-  return (
-    <>
-      <PageTitle
-        eyebrow="QUEUE & RECOVERY"
-        title="AI 任务管理"
-        description="依据运行编号或作答编号定位。重试沿用原始题目与模型配置版本。"
-      />
-      <form className="filterbar">
-        <input name="q" placeholder="精确运行编号或作答编号" defaultValue={search.q} />
-        <select name="status" defaultValue={search.status}>
-          <option value="">全部状态</option>
-          {['QUEUED', 'RUNNING', 'SUCCEEDED', 'BLOCKED_CONFIG', 'FAILED', 'RETRYING'].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        <button className="button secondary">筛选</button>
-      </form>
-      <Panel title="后台任务（最近100条）">
-        {jobs.length ? (
-          jobs.map((job) => (
-            <details className="details-card" key={job.id}>
-              <summary>
-                <Status status={job.status} /> {job.lane === 'formal' ? '正式作业' : '个人自测'} ·
-                运行 {job.runId.slice(0, 8)}
-              </summary>
-              <div>
-                <p className="code-ref">
-                  运行 {job.runId}
-                  <br />
-                  作答 {job.run.attemptId}
-                </p>
-                <p>
-                  执行 {job.attempts} 次 · 错误 {job.errorCode ?? '无'} · 最近更新{' '}
-                  {date(job.updatedAt)}
-                </p>
-                <p className="code-ref">
-                  {job.run.promptVersion} · {job.run.strategyVersion}
-                  <br />
-                  配置 {job.run.configId}
-                </p>
-                {job.run.startedAt && job.run.finishedAt && (
-                  <p>
-                    最近运行耗时 {job.run.finishedAt.getTime() - job.run.startedAt.getTime()} ms
-                  </p>
-                )}
-                {['FAILED', 'BLOCKED_CONFIG'].includes(job.status) && (
-                  <ActionButton name="run-retry" data={{ id: job.runId }}>
-                    安全重试原配置
-                  </ActionButton>
-                )}
-                {['FAILED', 'BLOCKED_CONFIG', 'SUCCEEDED'].includes(job.status) && (
-                  <ActionButton
-                    name="run-current-config"
-                    data={{ id: job.runId }}
-                    confirm="将使用当前模型配置创建新运行；历史建议与正式成绩保留。"
-                  >
-                    使用当前配置新建运行
-                  </ActionButton>
-                )}
-              </div>
-            </details>
-          ))
-        ) : (
-          <Empty title="没有匹配的任务" description="学生正式提交后，后台任务会显示在这里。" />
-        )}
-      </Panel>
-    </>
-  );
+  return <JobsConsole key={JSON.stringify(search)} initialSearch={search} />;
 }
 export async function AuditView({ a }: { a: Actor }) {
   requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');

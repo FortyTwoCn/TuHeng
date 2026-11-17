@@ -2,6 +2,17 @@
 import type { AuthRealm } from '@tuheng/contracts';
 const messages: Record<string, string> = {
   SMTP_NOT_CONFIGURED: '邮件服务尚未配置，请联系管理员。',
+  SMTP_AUTH_FAILED: 'SMTP 认证失败，请核对所选版本的用户名和授权码。',
+  SMTP_CERTIFICATE_INVALID: 'SMTP 证书验证失败，请检查有效期和证书链；系统未关闭校验。',
+  SMTP_TLS_OR_CONNECTION_FAILED: 'SMTP 安全连接失败，请核对端口和 TLS 模式。',
+  SMTP_CONNECTION_FAILED: '无法连接邮件服务器，请核对主机、端口与网络。',
+  SMTP_TIMEOUT: '邮件服务器连接或响应超时，请核对网络后再试。',
+  SMTP_SERVER_REJECTED: '邮件服务器拒绝了本次请求，请检查发信权限与收件地址。',
+  SMTP_SEND_STATUS_UNKNOWN:
+    '无法确认邮件是否已被接收，请先核查收件箱或服务器记录，再决定是否重发。',
+  SECRET_REVOKED_OR_EXPIRED: '此版本凭据已撤销或过期，请显式配置新凭据。',
+  SMTP_TLS_REQUIRED: '当前部署要求 TLS 或 STARTTLS，请核对连接模式。',
+  SMTP_VERSION_NOT_FOUND: '所选邮件版本不存在，请刷新配置。',
   SMTP_SEND_FAILED: '验证码发送失败，请稍后重试。',
   INVALID_OR_EXPIRED_CODE: '验证码不正确、已失效或已使用，请重新获取。',
   RATE_LIMITED: '操作过于频繁，请稍后再试。',
@@ -16,7 +27,19 @@ const messages: Record<string, string> = {
   SECRET_KEY_UNAVAILABLE: '服务器加密主密钥尚未配置，请联系部署管理员。',
   OUTBOUND_ADDRESS_FORBIDDEN: '目标地址不在允许的网络范围内。',
   OUTBOUND_PORT_FORBIDDEN: '目标端口未获部署配置授权。',
+  CONFIGURATION_CHANGED: '此配置已被其他操作更新，请重新读取后核对草稿。',
+  AI_BINDING_NOT_CONFIGURED: '模块尚未启用有效规则。',
+  AI_MODEL_DISABLED: '所选模型已停用、归档或不存在。',
+  AI_PROVIDER_DISABLED: '供应商已停用、归档或不存在。',
+  AI_CREDENTIAL_NOT_CONFIGURED: '供应商未配置有效密钥。',
+  AI_CONFIGURATION_INVALID: '配置格式或参数无效，请核对版本。',
+  MODEL_OR_PROVIDER_DISABLED: '模型或供应商不可用，不能启用此规则。',
+  AI_CAPABILITY_MISMATCH: '声明能力不满足本次输入要求，请核对文本和图像能力。',
+  AI_OUTPUT_MODE_UNSUPPORTED: '模型未声明支持所选输出模式。',
+  AI_PARAMETER_UNSUPPORTED: '输出 Token 或温度超出模型声明的参数边界。',
+  AI_PROTOCOL_OUTPUT_UNSUPPORTED: '所选协议不支持此输出模式。',
 };
+export const identityMessage = (code: string) => messages[code] ?? code;
 export class IdentityRequestError extends Error {
   constructor(
     public readonly code: string,

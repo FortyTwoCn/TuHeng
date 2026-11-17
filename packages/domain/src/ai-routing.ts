@@ -32,6 +32,25 @@ export function requiredGradingCapabilities(input: GradingRequest) {
       0,
   };
 }
+/** Read-only diagnosis shared by configuration management and invocation planning. */
+export function aiRouteDiagnostic(
+  provider:
+    | { enabled: boolean; archived: boolean; credentialConfigured: boolean; config: unknown }
+    | undefined,
+  model: { enabled: boolean; archived: boolean; config: unknown } | undefined,
+  binding: { enabled: boolean; parameters: unknown } | undefined,
+  requiresImages = false,
+): string | null {
+  if (!binding?.enabled) return 'AI_BINDING_NOT_CONFIGURED';
+  if (!model?.enabled || model.archived) return 'AI_MODEL_DISABLED';
+  if (!provider?.enabled || provider.archived) return 'AI_PROVIDER_DISABLED';
+  if (!provider.credentialConfigured) return 'AI_CREDENTIAL_NOT_CONFIGURED';
+  const pc = AIProviderConfig.safeParse(provider.config),
+    mc = AIModelConfig.safeParse(model.config),
+    parameters = AITaskParameters.safeParse(binding.parameters);
+  if (!pc.success || !mc.success || !parameters.success) return 'AI_CONFIGURATION_INVALID';
+  return aiConfigurationError(pc.data, mc.data, parameters.data, requiresImages);
+}
 export async function planAIInvocation(
   tx: DataPort,
   taskKey: AITaskKey,
@@ -63,10 +82,10 @@ export async function planAIInvocation(
   if (!provider.success || !model.success || !parameters.success)
     return { snapshot: null, errorCode: 'AI_CONFIGURATION_INVALID' };
   const required = requiredGradingCapabilities(request);
-  const errorCode = aiConfigurationError(
-    provider.data,
-    model.data,
-    parameters.data,
+  const errorCode = aiRouteDiagnostic(
+    { ...providerRow, credentialConfigured: !!pv.secretId, config: provider.data },
+    { ...modelRow, config: model.data },
+    { ...binding, parameters: parameters.data },
     required.images,
   );
   if (errorCode) return { snapshot: null, errorCode };

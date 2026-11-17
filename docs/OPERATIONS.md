@@ -60,7 +60,7 @@ Prisma JS adapter 的提交冲突释放行为由 `SafePrismaPg` 集中保护，`
 ## 身份安装与密钥恢复
 
 - 新部署：`npm run identity:secrets -- --initialize` 在本机 git 忽略的 .env 初始化随机 32 字节主密钥；已有配置不替换。生产也可由 Secret/KMS 注入同名环境变量。
-- `npm run identity:bootstrap -- --output .runtime/admin-delivery.txt` 仅在没有根账号时创建 admin；重复执行拒绝并保持凭据不变。文件以当前 Windows 用户和 SYSTEM 的受限 ACL 创建，安全交付后删除。管理员完成首次改密后直接进入后台，不强制绑定邮箱；SMTP 通过后台“邮件服务”配置，个人邮箱可在“账号安全”自愿绑定。学校和教师仍须验证邮箱。
+- `npm run identity:bootstrap -- --output .runtime/admin-delivery.txt` 仅在没有根账号时创建 admin；重复执行拒绝并保持凭据不变。文件以当前 Windows 用户和 SYSTEM 的受限 ACL 创建，安全交付后删除。管理员完成首次改密后直接进入后台，不强制绑定邮箱；SMTP 通过后台“系统设置 → 邮件服务”配置，个人邮箱可在“账号安全”自愿绑定。学校和教师仍须验证邮箱。
 - 根账号密码恢复：`npm run identity:bootstrap -- --reset-root --output .runtime/admin-recovery.txt`，生成新随机临时密码、撤销旧会话并审计；保留已验证邮箱。服务器恢复权限不可授予普通学校/教师。
 - 丢失根账号邮箱：在服务器执行 `npm run identity:bootstrap -- --reset-root --recover-mailbox --output .runtime/admin-mailbox-recovery.txt`。这是独立审计的邮箱恢复动作，清除根账号邮箱绑定、撤销会话、重新要求改密；完成改密后可进入后台，是否重新绑定邮箱由管理员决定。不允许通过网页对其他账号调用。
 - SMTP 修改、初始凭据导出、AI 密钥操作要求近期密码验证。验证码 5 分钟/最多 5 次失败/60 秒重发；密码登录和邮件发送同时限制身份目标、网络与平台预算。仅在反向代理覆盖 X-Real-IP 且禁用直接访问时设置 TUHENG_TRUST_PROXY_IP=1，否则使用保守的未知网络桶；不能信任客户端自报 IP。
@@ -71,6 +71,15 @@ Prisma JS adapter 的提交冲突释放行为由 `SafePrismaPg` 集中保护，`
 
 先保存数据库与私有对象备份，运行 `tsx scripts/identity-audit.ts`，再执行增量迁移。明确准备 school/user/class 映射 JSON，使用 `npm run identity:migrate -- --mapping 文件` 预检，审核后加 `--apply`。工具保留历史 User.id、作答、几何题目和正式成绩；旧名单以切换时成员与已有提交者推断，记录 inferred，不宣称还原发布时原始名册。开发空库可显式用 `--development-template --output .runtime/mapping.json` 生成标记为开发数据的映射，生产拒绝此快捷方式。
 
-旧 AI 配置仅通过 `npm run ai:import-legacy -- --legacy-id 配置ID --protocol OPENAI_CHAT_COMPLETIONS --confirm-import` 显式迁移；图片能力需明确添加 `--images`。工具只读取该旧记录指定的 AI_* 密钥，统一加密、审计、阻止重复导入；导入后供应商、模型及新模块绑定保持停用，已有绑定不覆盖。请在 AI 中心审查参数后启用，未执行任何模型请求。旧队列任务明确阻塞，管理员可以保留旧快照重试或使用当前配置新建运行；不会静默替换评分依据。
+旧 AI 配置仅通过 `npm run ai:import-legacy -- --legacy-id 配置ID --protocol OPENAI_CHAT_COMPLETIONS --confirm-import` 显式迁移；图片能力需明确添加 `--images`。工具只读取该旧记录指定的 AI_* 密钥，统一加密、审计、阻止重复导入；导入后供应商、模型及新模块绑定保持停用，已有绑定不覆盖。请在 AI 中心审查参数后启用，未执行任何模型请求。旧队列任务明确阻塞，有合法原快照的任务可以按原配置重试；没有快照的旧任务必须使用当前配置新建运行；不会静默替换评分依据。
 
 迁移文件通过 `.gitattributes` 固定 LF。迁移 runner 兼容旧 Windows 库按 CRLF 生成的校验值，只允许换行差异；SQL 内容、空白或注释变更仍拒绝，已执行记录的 checksum 不重写。
+
+## 后台配置与任务操作（2026-11-17）
+
+- AI 中心的供应商、模型、模块规则保存都创建版本；切换有未保存草稿的列表或标签时可保存、丢弃或继续编辑。保存已成功但重新读取失败时冻结编辑，先刷新核对，避免重复版本。
+- 任务页按当前筛选全量计数、每页 30 项；可见页约每 10 秒轮询，失败退避至 60 秒。详情在状态移出筛选后按运行编号单独读取；页面缓存错误明确标出。普通响应只返回元信息，不包含请求原文、作答、密钥或完整模型响应。
+- 按原配置重试严格要求已有合法快照和未撤销凭据，不再为无快照旧运行补写当前配置。当前配置新建运行会再次校验能力、来源账号与凭据，使用新 ID 并保留父运行审计；不会覆盖原建议和教师正式成绩。
+- 网页两种任务命令均要求近期再认证和 UUID 操作编号。重复发送同一编号返回同一结果；结果未知时先刷新核对，不自动重放。既有队列、租约、outbox 和 Worker 执行方式不变。
+- 邮件保存需要明确的 sourceId（新建为 null）和 expectedVersion；密码留空继承所选来源版本，不误取最新版本凭据。启停需 expectedActiveId，其他管理员已切换生效版本时拒绝覆盖。原内部调用保持兼容，HTTP 调用方需传递上述字段。
+- 保存、连接测试、测试邮件和启用是四个独立操作。测试绑定已保存版本，SMTP 接受不等于送达；认证、连接/超时、证书和发送状态未知分别显示安全说明，未关闭证书验证。没有新增数据库迁移，也不改写历史作答或评分记录。

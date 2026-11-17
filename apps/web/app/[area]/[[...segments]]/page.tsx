@@ -182,7 +182,7 @@ async function workspaceView(
             ? await AssignmentDetails({ a, id: segments[1] })
             : await AssignmentList({ a, area: 'admin', search });
     else if (section === 'questions') view = await QuestionsView({ a, segments });
-    else if (section === 'models') view = await ModelsView({ a });
+    else if (section === 'models') view = await ModelsView({ a, search });
     else if (section === 'jobs') view = await JobsView({ a, search });
     else if (section === 'audit') view = await AuditView({ a });
     else if (section === 'system') view = await SystemView({ a });

@@ -9,7 +9,7 @@ import {
   AISnapshot,
   aiConfigurationError,
 } from '@tuheng/contracts';
-import { AITaskRegistry, audit, ensure, type Actor } from '@tuheng/domain';
+import { AITaskRegistry, aiRouteDiagnostic, audit, ensure, type Actor } from '@tuheng/domain';
 import { requireRecentAuthentication } from './identity-security';
 import { encryptSecret } from './secret-store';
 import { resolveOutbound } from './outbound';
@@ -67,12 +67,11 @@ export const AICommands = z.discriminatedUnion('operation', [
     outputMode: z.enum(['json_schema', 'json_object', 'prompt_json']),
   }),
 ]);
+export function canManageAI(actor: Actor) {
+  return actor.kind === 'SITE_ADMIN' && actor.realm === 'STAFF' && !actor.onboarding;
+}
 export function requireAIAdmin(actor: Actor) {
-  ensure(
-    actor.kind === 'SITE_ADMIN' && actor.realm === 'STAFF' && !actor.onboarding,
-    'FORBIDDEN',
-    403,
-  );
+  ensure(canManageAI(actor), 'FORBIDDEN', 403);
 }
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 async function validateURL(value: string) {
@@ -323,7 +322,27 @@ export async function aiCenter(actor: Actor, query = '') {
       ),
     })),
   );
-  return { providers: safeProviders, models, bindings, tasks: AITaskRegistry, usage };
+  const diagnostics = Object.fromEntries(
+    Object.keys(AITaskRegistry).map((taskKey) => {
+      const binding = bindings.find((b) => b.taskKey === taskKey),
+        model = models.find((m) => m.id === binding?.modelId),
+        provider = safeProviders.find((p) => p.id === model?.providerId);
+      const providerInput = provider && {
+        ...provider,
+        config: provider.versions[0]?.config,
+        credentialConfigured: !!provider.versions[0]?.key?.configured,
+      };
+      const modelInput = model && { ...model, config: model.versions[0]?.config };
+      return [
+        taskKey,
+        {
+          errorCode: aiRouteDiagnostic(providerInput, modelInput, binding),
+          imageErrorCode: aiRouteDiagnostic(providerInput, modelInput, binding, true),
+        },
+      ];
+    }),
+  );
+  return { providers: safeProviders, models, bindings, tasks: AITaskRegistry, usage, diagnostics };
 }
 async function testAIModel(
   actor: Actor,

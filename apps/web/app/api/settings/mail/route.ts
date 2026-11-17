@@ -12,6 +12,8 @@ export async function GET() {
       orderBy: { version: 'desc' },
       take: 30,
     });
+    const active = await prisma.sMTPConfigurationVersion.findFirst({ where: { enabled: true } });
+    if (active && !rows.some((row) => row.id === active.id)) rows.push(active);
     const secrets = await prisma.secretRecord.findMany({
       where: { id: { in: rows.flatMap((r) => (r.secretId ? [r.secretId] : [])) } },
       select: { id: true, suffix: true, revokedAt: true, createdAt: true },
@@ -25,6 +27,7 @@ export async function GET() {
           enabled: r.enabled,
           secretConfigured: !!secrets.find((s) => s.id === r.secretId && !s.revokedAt),
           secretSuffix: secrets.find((s) => s.id === r.secretId)?.suffix ?? '',
+          secretUpdatedAt: secrets.find((s) => s.id === r.secretId)?.createdAt ?? null,
           createdAt: r.createdAt,
         })),
       },
@@ -42,13 +45,27 @@ export async function POST(request: Request) {
     const proof = z.string().parse(b.proof);
     const data =
       b.action === 'SAVE'
-        ? await saveSMTP(a, b.config, z.string().max(2000).optional().parse(b.password), proof)
+        ? await saveSMTP(
+            a,
+            b.config,
+            z.string().max(2000).optional().parse(b.password),
+            proof,
+            z
+              .object({
+                expectedVersion: z.number().int().nonnegative(),
+                sourceId: z.string().min(1).nullable(),
+              })
+              .parse(b),
+          )
         : await manageSMTP(
             a,
             z.enum(['VERIFY', 'TEST', 'ENABLE', 'DISABLE', 'REVOKE_KEY']).parse(b.action),
             z.string().parse(b.id),
             proof,
             b.recipient,
+            ['ENABLE', 'DISABLE'].includes(b.action)
+              ? z.string().nullable().parse(b.expectedActiveId)
+              : undefined,
           );
     return Response.json({ data }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
