@@ -14,11 +14,26 @@ export function CredentialDelivery({
 }) {
   const auth = useRef<ReauthenticationHandle>(null);
   const [batches, setBatches] = useState<
-      { id: string; expiresAt: string; createdAt: string; _count: { items: number } }[]
+      {
+        id: string;
+        expiresAt: string;
+        createdAt: string;
+        expired: boolean;
+        kinds: {
+          kind: 'TEACHER' | 'STUDENT' | 'SCHOOL_ADMIN';
+          total: number;
+          available: number;
+          unavailable: number;
+        }[];
+      }[]
     >([]),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false);
   const [card, setCard] = useState<SchoolCredentialCard>();
+  const [page, setPage] = useState(0),
+    [total, setTotal] = useState(0),
+    [loading, setLoading] = useState(true),
+    [revision, setRevision] = useState(0);
   useEffect(() => {
     if (!card) return;
     const timer = setTimeout(() => setCard(undefined), 120000);
@@ -32,11 +47,27 @@ export function CredentialDelivery({
     };
   }, [card]);
   useEffect(() => {
-    if (schoolId)
-      identityRequest('/api/organization/deliveries?schoolId=' + encodeURIComponent(schoolId))
-        .then(setBatches)
-        .catch((e) => setMessage(e.message));
-  }, [schoolId, batchId]);
+    const controller = new AbortController();
+    identityRequest(
+      '/api/organization/deliveries?' + new URLSearchParams({ schoolId, page: String(page) }),
+      undefined,
+      'STAFF',
+      controller.signal,
+    )
+      .then((r) => {
+        if (!controller.signal.aborted) {
+          setBatches(r.items);
+          setTotal(r.total);
+        }
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setMessage(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [schoolId, batchId, page, revision]);
   async function download(id: string, kind: 'TEACHER' | 'STUDENT' | 'SCHOOL_ADMIN') {
     if (busy) return;
     setBusy(true);
@@ -87,14 +118,17 @@ export function CredentialDelivery({
       setMessage((e as Error).message);
     } finally {
       setBusy(false);
+      setLoading(true);
+      setRevision((v) => v + 1);
     }
   }
   return (
     <section className="identity-panel">
       <h2>初始凭据交付</h2>
+      <button type="button" disabled={loading || busy} onClick={() => { setLoading(true); setRevision(v => v + 1); }}>刷新交付状态</button>
       <p>
         导出窗口 24 小时；临时密码 7
-        天有效。用户改密或再次重置后，旧凭据立即失效。普通名单不包含密码。
+        天有效。用户改密或再次重置后，旧凭据立即失效。数量为最近查询结果，下载时会再次校验。
       </p>
       <Reauthentication ref={auth} />
       <p role="status">{message}</p>
@@ -117,34 +151,55 @@ export function CredentialDelivery({
           <button onClick={() => setCard(undefined)}>关闭并清除卡片</button>
         </section>
       )}
-      {!batches.length && <p>暂无凭据交付批次。</p>}
+      {loading && <p role="status">正在读取交付状态…</p>}
+      {!loading && !batches.length && <p>暂无凭据交付批次。</p>}
       {batches.map((b) => (
         <article key={b.id} className="identity-panel">
           <p>
-            {new Date(b.createdAt).toLocaleString()} · {b._count.items} 个账号
+            {new Date(b.createdAt).toLocaleString()} · {b.expired ? '交付已过期' : '交付窗口开放'}
           </p>
           <p>导出截止：{new Date(b.expiresAt).toLocaleString()}</p>
-          <div className="identity-inline">
-            <button
-              disabled={busy || new Date(b.expiresAt) <= new Date()}
-              onClick={() => download(b.id, 'TEACHER')}
-            >
-              下载教师初始凭据
-            </button>
-            <button
-              disabled={busy || new Date(b.expiresAt) <= new Date()}
-              onClick={() => download(b.id, 'STUDENT')}
-            >
-              下载学生初始凭据
-            </button>
-            {siteAdmin && (
-              <button disabled={busy} onClick={() => download(b.id, 'SCHOOL_ADMIN')}>
-                学校管理账号交付
-              </button>
-            )}
+          <div className="credential-kinds">
+            {b.kinds
+              .filter((k) => k.total > 0 && (k.kind !== 'SCHOOL_ADMIN' || siteAdmin))
+              .map((k) => (
+                <div key={k.kind} className="credential-kind">
+                  <p>
+                    <strong>
+                      {k.kind === 'TEACHER' ? '教师' : k.kind === 'STUDENT' ? '学生' : '学校管理员'}
+                    </strong>
+                    {' · '}可交付 {k.available} · 失效 {k.unavailable}
+                  </p>
+                  <button
+                    disabled={busy || !k.available || b.expired}
+                    onClick={() => download(b.id, k.kind)}
+                  >
+                    {k.kind === 'TEACHER'
+                      ? '下载教师初始凭据'
+                      : k.kind === 'STUDENT'
+                        ? '下载学生初始凭据'
+                        : '学校管理账号交付'}
+                  </button>
+                </div>
+              ))}
+            {!b.kinds.some((k) => k.total > 0) && <p>此批次没有当前权限内可交付的账号。</p>}
           </div>
         </article>
       ))}
+      <div className="choice-pagination">
+        <button disabled={loading || !page} onClick={() => { setLoading(true); setPage((v) => v - 1); }}>
+          上一页批次
+        </button>
+        <span>
+          第 {page + 1} 页 · 共 {total} 批
+        </span>
+        <button
+          disabled={loading || (page + 1) * 10 >= total}
+          onClick={() => { setLoading(true); setPage((v) => v + 1); }}
+        >
+          下一页批次
+        </button>
+      </div>
     </section>
   );
 }

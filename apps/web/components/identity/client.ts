@@ -26,8 +26,14 @@ export class IdentityRequestError extends Error {
     this.name = 'IdentityRequestError';
   }
 }
-export async function identityRequest(path: string, data?: unknown, realm?: AuthRealm) {
+export async function identityRequest(
+  path: string,
+  data?: unknown,
+  realm?: AuthRealm,
+  signal?: AbortSignal,
+) {
   const response = await fetch(path, {
+    signal,
     method: data === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json', ...(realm ? { 'x-tuheng-realm': realm } : {}) },
     ...(data === undefined ? {} : { body: JSON.stringify(data) }),

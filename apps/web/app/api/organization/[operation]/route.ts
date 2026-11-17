@@ -3,6 +3,7 @@ import { prisma } from '@tuheng/database';
 import { ensure } from '@tuheng/domain';
 import { actor } from '../../../../lib/auth';
 import { checkOrigin, errorResponse, limitedBody } from '../../../../lib/http';
+import { listCredentialDeliveries } from '../../../../../../packages/infrastructure/src/credential-delivery';
 import * as org from '../../../../../../packages/infrastructure/src/organization';
 const text = z.string().trim().min(1).max(100),
   id = z.string().min(1).max(100);
@@ -141,15 +142,54 @@ export async function GET(request: Request, context: { params: Promise<{ operati
           skip: page * 20,
           take: 20,
           orderBy: { code: 'asc' },
-          include: { _count: { select: { users: true } } },
+          include: {
+            _count: { select: { users: true } },
+            users: {
+              where: { kind: 'SCHOOL_ADMIN' },
+              select: { name: true, loginId: true, active: true },
+            },
+          },
         }),
         prisma.school.count({ where }),
       ]);
-      return Response.json({ data: { items, total, page } });
+      const counts = await prisma.user.groupBy({
+        by: ['schoolId', 'kind'],
+        where: { schoolId: { in: items.map((s) => s.id) }, kind: { in: ['TEACHER', 'STUDENT'] } },
+        _count: true,
+      });
+      return Response.json(
+        {
+          data: {
+            items: items.map(({ users, ...school }) => ({
+              ...school,
+              administrators: users,
+              counts: {
+                teachers:
+                  counts.find((c) => c.schoolId === school.id && c.kind === 'TEACHER')?._count ?? 0,
+                students:
+                  counts.find((c) => c.schoolId === school.id && c.kind === 'STUDENT')?._count ?? 0,
+              },
+            })),
+            total,
+            page,
+          },
+        },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     }
     const schoolId =
       a.kind === 'SITE_ADMIN' ? id.parse(url.searchParams.get('schoolId')) : a.schoolId!;
     await org.requireActiveSchool(a, schoolId);
+    if (operation === 'scope')
+      return Response.json(
+        {
+          data: await prisma.school.findUniqueOrThrow({
+            where: { id: schoolId },
+            select: { id: true, name: true, code: true, active: true },
+          }),
+        },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     if (operation === 'classes') {
       const where = {
         schoolId,
@@ -205,6 +245,7 @@ export async function GET(request: Request, context: { params: Promise<{ operati
         OR: [
           { name: { contains: q, mode: 'insensitive' as const } },
           { studentNumber: { contains: q } },
+          { emailNormalized: { contains: q.toLowerCase() } },
           { loginId: { contains: q, mode: 'insensitive' as const } },
         ],
       };
@@ -226,6 +267,7 @@ export async function GET(request: Request, context: { params: Promise<{ operati
             lastLoginAt: true,
             schoolId: true,
             enrollments: { select: { classId: true, teachingClass: { select: { name: true } } } },
+            grants: { select: { classId: true, teachingClass: { select: { name: true } } } },
           },
         }),
         prisma.user.count({ where }),
@@ -236,19 +278,10 @@ export async function GET(request: Request, context: { params: Promise<{ operati
       );
     }
     if (operation === 'deliveries')
-      return Response.json({
-        data: await prisma.credentialDeliveryBatch.findMany({
-          where: { schoolId, ...(a.kind === 'TEACHER' ? { creatorId: a.id } : {}) },
-          select: {
-            id: true,
-            expiresAt: true,
-            createdAt: true,
-            _count: { select: { items: true } },
-          },
-          take: 50,
-          orderBy: { createdAt: 'desc' },
-        }),
-      });
+      return Response.json(
+        { data: await listCredentialDeliveries(a, schoolId, page) },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
     return Response.json({ error: 'NOT_FOUND' }, { status: 404 });
   } catch (e) {
     return errorResponse(e);

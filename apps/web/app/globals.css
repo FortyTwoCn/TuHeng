@@ -1891,6 +1891,8 @@ footer {
   padding-top: 8px;
 }
 .ui-drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
   width: min(660px, calc(100vw - 24px));
   height: 100vh;
   height: 100dvh;

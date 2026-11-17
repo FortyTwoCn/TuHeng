@@ -1,12 +1,99 @@
 import { randomBytes } from 'node:crypto';
 import ExcelJS from 'exceljs';
 import { prisma } from '@tuheng/database';
-import { ensure, requireIdentityManager, requireSchoolScope, type Actor } from '@tuheng/domain';
+import {
+  ensure,
+  initialCredentialIsAvailable,
+  requireIdentityManager,
+  requireSchoolScope,
+  type Actor,
+} from '@tuheng/domain';
 import { AccountKind } from '@tuheng/contracts';
 import { requireRecentAuthentication } from './identity-security';
 import { securityDigest } from './security-throttle';
 import { readSecret } from './secret-store';
 import { requireManagedAccount } from './organization';
+export async function listCredentialDeliveries(actor: Actor, schoolId: string, page = 0) {
+  requireSchoolScope(actor, schoolId);
+  requireIdentityManager(actor, schoolId, 'STUDENT');
+  const allowedKinds =
+    actor.kind === 'SITE_ADMIN'
+      ? ['SCHOOL_ADMIN', 'TEACHER', 'STUDENT']
+      : actor.kind === 'SCHOOL_ADMIN'
+        ? ['TEACHER', 'STUDENT']
+        : ['STUDENT'];
+  const where = { schoolId, ...(actor.kind === 'TEACHER' ? { creatorId: actor.id } : {}) };
+  const [batches, total] = await Promise.all([
+    prisma.credentialDeliveryBatch.findMany({
+      where,
+      include: { items: true },
+      take: 10,
+      skip: Math.max(0, page) * 10,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    }),
+    prisma.credentialDeliveryBatch.count({ where }),
+  ]);
+  const allItems = batches.flatMap((b) => b.items);
+  const [accounts, secrets] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        id: { in: allItems.map((i) => i.accountId) },
+        schoolId,
+        ...(actor.kind === 'TEACHER'
+          ? {
+              enrollments: {
+                some: {
+                  teachingClass: {
+                    schoolId,
+                    archived: false,
+                    grants: { some: { userId: actor.id } },
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        kind: true,
+        active: true,
+        mustChangePassword: true,
+        credentialVersion: true,
+        passwordExpiresAt: true,
+      },
+    }),
+    prisma.secretRecord.findMany({
+      where: { id: { in: allItems.map((i) => i.secretId) } },
+      select: { id: true, purpose: true, revokedAt: true, expiresAt: true },
+    }),
+  ]);
+  const byAccount = new Map(accounts.map((a) => [a.id, a])),
+    bySecret = new Map(secrets.map((s) => [s.id, s])),
+    now = new Date();
+  return {
+    page,
+    total,
+    items: batches.map((b) => ({
+      id: b.id,
+      createdAt: b.createdAt,
+      expiresAt: b.expiresAt,
+      expired: b.expiresAt <= now,
+      kinds: allowedKinds.map((kind) => {
+        const items = b.items.filter((i) => byAccount.get(i.accountId)?.kind === kind);
+        const available = items.filter((i) =>
+          initialCredentialIsAvailable(
+            byAccount.get(i.accountId),
+            i,
+            bySecret.get(i.secretId),
+            b.expiresAt,
+            now,
+          ),
+        ).length;
+        return { kind, total: items.length, available, unavailable: items.length - available };
+      }),
+    })),
+  };
+}
 export async function requireCredentialBatch(actor: Actor, batchId: string) {
   const batch = await prisma.credentialDeliveryBatch.findUnique({ where: { id: batchId } });
   ensure(batch?.schoolId && batch.expiresAt > new Date(), 'CREDENTIAL_DELIVERY_EXPIRED', 410);
@@ -75,8 +162,13 @@ export async function downloadCredentials(
   requireIdentityManager(actor, batch.schoolId!, AccountKind.parse(ticket.kind));
   const school = await prisma.school.findUniqueOrThrow({ where: { id: batch.schoolId! } });
   const items = await prisma.credentialDeliveryItem.findMany({
-    where: { batchId: batch.id, expiresAt: { gt: new Date() } },
+    where: { batchId: batch.id },
   });
+  const secrets = await prisma.secretRecord.findMany({
+    where: { id: { in: items.map((i) => i.secretId) } },
+    select: { id: true, purpose: true, revokedAt: true, expiresAt: true },
+  });
+  const bySecret = new Map(secrets.map((s) => [s.id, s]));
   const rows: string[][] = [];
   let unavailable = 0;
   for (const item of items) {
@@ -85,13 +177,7 @@ export async function downloadCredentials(
       include: { enrollments: { include: { teachingClass: true } } },
     });
     if (u.kind !== ticket.kind) continue;
-    if (
-      !u.active ||
-      !u.mustChangePassword ||
-      u.credentialVersion !== item.credentialVersion ||
-      !u.passwordExpiresAt ||
-      u.passwordExpiresAt <= new Date()
-    ) {
+    if (!initialCredentialIsAvailable(u, item, bySecret.get(item.secretId), batch.expiresAt)) {
       unavailable++;
       continue;
     }
@@ -107,7 +193,7 @@ export async function downloadCredentials(
             u.studentNumber!,
             u.name,
             password,
-            u.passwordExpiresAt.toISOString(),
+            u.passwordExpiresAt!.toISOString(),
             '首次登录必须改密；邮箱可选绑定',
           ]
         : [
@@ -115,7 +201,7 @@ export async function downloadCredentials(
             u.name,
             u.loginId!,
             password,
-            u.passwordExpiresAt.toISOString(),
+            u.passwordExpiresAt!.toISOString(),
             '首次登录必须改密并验证邮箱',
           ],
     );

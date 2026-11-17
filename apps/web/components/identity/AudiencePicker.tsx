@@ -66,10 +66,14 @@ export function AudiencePicker({
     [selectedOnly, setSelectedOnly] = useState(false),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(true),
+    [refresh, setRefresh] = useState(0),
     [saved] = useState(value);
   useEffect(() => {
     let current = true;
+    const controller = new AbortController();
     const timer = setTimeout(() => {
+      setLoading(true);
       identityRequest(
         '/api/audience',
         {
@@ -85,6 +89,7 @@ export function AudiencePicker({
           selectedOnly,
         },
         'STAFF',
+        controller.signal,
       )
         .then((r) => {
           if (current) {
@@ -95,14 +100,19 @@ export function AudiencePicker({
         })
         .catch((e) => {
           if (current) setError(e.message);
+        })
+        .finally(() => {
+          if (current) setLoading(false);
         });
     }, 180);
     return () => {
       current = false;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [
     value,
+    refresh,
     query,
     page,
     teacherPage,
@@ -170,7 +180,7 @@ export function AudiencePicker({
           }}
         />
       </label>
-      <div className="audience-columns">
+      <div className="audience-columns" aria-busy={loading}>
         <div>
           <label>
             搜索教师或班级
@@ -332,11 +342,20 @@ export function AudiencePicker({
         </div>
       </div>
       <div className="audience-summary" role="status">
-        已选 {browse?.count ?? 0} 人 · 显式排除 {browse?.excluded ?? 0} 人
+        {loading ? (
+          '正在更新接收人预览…'
+        ) : (
+          <>
+            已选 {browse?.count ?? 0} 人 · 显式排除 {browse?.excluded ?? 0} 人
+          </>
+        )}
       </div>
       {error && (
         <p role="alert" className="field-error">
-          {error}
+          {error}{' '}
+          <button type="button" onClick={() => setRefresh((v) => v + 1)}>
+            重试预览
+          </button>
         </p>
       )}
     </fieldset>

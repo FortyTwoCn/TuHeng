@@ -1,153 +1,181 @@
 'use client';
-import { useEffect, useState, useCallback, useRef } from 'react';
-import type { AccountKind } from '@tuheng/contracts';
+import { useEffect, useRef, useState } from 'react';
+import { Empty, PageTitle } from '@tuheng/ui';
 import { identityRequest, IdentityRequestError } from './client';
 import { Reauthentication, type ReauthenticationHandle } from './Reauthentication';
 import { RosterImportWizard } from './RosterImportWizard';
 import { CredentialDelivery } from './CredentialDelivery';
-type Person = {
-  id: string;
-  name: string;
-  loginId?: string;
-  studentNumber?: string;
-  active?: boolean;
-  mustChangePassword?: boolean;
-  emailVerifiedAt?: string;
-  kind?: string;
-  enrollments?: { classId: string; teachingClass: { name: string } }[];
-};
-type ClassRow = {
-  id: string;
-  name: string;
-  archived: boolean;
-  offering: { term: string; course: { title: string } };
-  grants: { user: Person }[];
-  _count: { enrollments: number };
-};
-type School = {
-  id: string;
-  name: string;
-  code: string;
-  active: boolean;
-  _count: { users: number };
-};
-type Offering = { id: string; term: string; course: { title: string } };
+import { OrganizationCreate } from './OrganizationCreate';
+import { ClassRowView, PersonRow, SchoolRow } from './OrganizationRows';
+import { OrganizationSelect } from './OrganizationSelect';
+import { FormDrawer, FormFeedback } from './FormDrawer';
+import type {
+  ClassRow,
+  Offering,
+  OrganizationIdentity,
+  Person,
+  School,
+} from './organization-types';
+
 export function OrganizationConsole({
   identity,
   initial = 'students',
 }: {
-  identity: { id: string; kind: AccountKind; schoolId?: string | null };
+  identity: OrganizationIdentity;
   initial?: string;
 }) {
   const auth = useRef<ReauthenticationHandle>(null);
+  const importGuard = useRef<{ requestLeave: () => boolean }>(null);
   const root = identity.kind === 'SITE_ADMIN',
     teacher = identity.kind === 'TEACHER';
-  const [tab, setTab] = useState(initial === 'schools' && !root ? 'students' : initial),
-    [schoolId, setSchoolId] = useState(identity.schoolId ?? ''),
-    [schools, setSchools] = useState<School[]>([]),
+  const [tab, setTab] = useState(initial === 'schools' && !root ? 'students' : initial);
+  const [schoolId, setSchoolId] = useState(identity.schoolId ?? ''),
+    [scope, setScope] = useState<{ name: string; code: string }>();
+  const [schools, setSchools] = useState<School[]>([]),
     [schoolQuery, setSchoolQuery] = useState(''),
     [schoolPage, setSchoolPage] = useState(0),
     [schoolTotal, setSchoolTotal] = useState(0);
   const [people, setPeople] = useState<Person[]>([]),
     [classes, setClasses] = useState<ClassRow[]>([]),
-    [teachers, setTeachers] = useState<Person[]>([]),
     [offerings, setOfferings] = useState<Offering[]>([]);
   const [query, setQuery] = useState(''),
     [page, setPage] = useState(0),
-    [total, setTotal] = useState(0),
-    [message, setMessage] = useState(''),
+    [total, setTotal] = useState(0);
+  const [filterClass, setFilterClass] = useState(''),
+    [filterName, setFilterName] = useState('');
+  const [message, setMessage] = useState(''),
+    [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [batchId, setBatchId] = useState(''),
-    [filterClass, setFilterClass] = useState('');
-  const [classChoiceQuery, setClassChoiceQuery] = useState(''),
-    [classChoicePage, setClassChoicePage] = useState(0),
-    [classChoiceTotal, setClassChoiceTotal] = useState(0);
-  const [teacherChoiceQuery, setTeacherChoiceQuery] = useState(''),
-    [teacherChoicePage, setTeacherChoicePage] = useState(0),
-    [teacherChoiceTotal, setTeacherChoiceTotal] = useState(0);
-  const loadSchools = useCallback(async () => {
+    [loading, setLoading] = useState(false),
+    [schoolLoading, setSchoolLoading] = useState(false);
+  const [batchId, setBatchId] = useState(''),
+    [revision, setRevision] = useState(0);
+  useEffect(() => {
     if (!root) return;
-    const r = await identityRequest(
-      '/api/organization/schools?' +
-        new URLSearchParams({ q: schoolQuery, page: String(schoolPage) }),
-    );
-    setSchools(r.items);
-    setSchoolTotal(r.total);
-  }, [root, schoolQuery, schoolPage]);
-  const load = useCallback(async () => {
+    const abort = new AbortController();
+    const timer = setTimeout(async () => {
+      setSchoolLoading(true);
+      try {
+        const r = await identityRequest(
+          '/api/organization/schools?' +
+            new URLSearchParams({ q: schoolQuery, page: String(schoolPage) }),
+          undefined,
+          'STAFF',
+          abort.signal,
+        );
+        if (!abort.signal.aborted) {
+          setSchools(r.items);
+          setSchoolTotal(r.total);
+        }
+      } catch (e) {
+        if (!abort.signal.aborted) setError((e as Error).message);
+      } finally {
+        if (!abort.signal.aborted) setSchoolLoading(false);
+      }
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [root, schoolQuery, schoolPage, revision]);
+  useEffect(() => {
     if (!schoolId) return;
-    const params = new URLSearchParams({
-      schoolId,
-      q: query,
-      page: String(page),
-      ...(filterClass ? { classId: filterClass } : {}),
-    });
-    if (['students', 'teachers'].includes(tab)) {
-      const r = await identityRequest(
-        '/api/organization/accounts?' +
-          params +
-          '&kind=' +
-          (tab === 'students' ? 'STUDENT' : 'TEACHER'),
-      );
-      setPeople(r.items);
-      setTotal(r.total);
-    }
-    if (tab === 'classes') {
-      const r = await identityRequest('/api/organization/classes?' + params);
-      setClasses(r.items);
-      setTotal(r.total);
-    }
-    const [o, t, c] = await Promise.all([
-      identityRequest('/api/organization/offerings?schoolId=' + schoolId),
+    const abort = new AbortController();
+    void Promise.all([
       identityRequest(
-        '/api/organization/accounts?schoolId=' +
-          schoolId +
-          '&kind=TEACHER&q=' +
-          encodeURIComponent(teacherChoiceQuery) +
-          '&page=' +
-          teacherChoicePage,
+        '/api/organization/scope?schoolId=' + encodeURIComponent(schoolId),
+        undefined,
+        'STAFF',
+        abort.signal,
       ),
       identityRequest(
-        '/api/organization/classes?schoolId=' +
-          schoolId +
-          '&q=' +
-          encodeURIComponent(classChoiceQuery) +
-          '&page=' +
-          classChoicePage,
+        '/api/organization/offerings?schoolId=' + encodeURIComponent(schoolId),
+        undefined,
+        'STAFF',
+        abort.signal,
       ),
-    ]);
-    setOfferings(o);
-    setTeachers(t.items);
-    setTeacherChoiceTotal(t.total);
-    setClassChoiceTotal(c.total);
-    if (tab !== 'classes') setClasses(c.items);
-  }, [
-    schoolId,
-    query,
-    page,
-    tab,
-    filterClass,
-    classChoiceQuery,
-    classChoicePage,
-    teacherChoiceQuery,
-    teacherChoicePage,
-  ]);
+    ])
+      .then(([s, o]) => {
+        if (!abort.signal.aborted) {
+          setScope(s);
+          setOfferings(o);
+        }
+      })
+      .catch((e) => {
+        if (!abort.signal.aborted) setError(e.message);
+      });
+    return () => abort.abort();
+  }, [schoolId, revision]);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      loadSchools().catch((e) => setMessage(e.message));
+    if (!schoolId || !['students', 'teachers', 'classes'].includes(tab)) return;
+    const abort = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      const params = new URLSearchParams({
+        schoolId,
+        q: query,
+        page: String(page),
+        ...(filterClass ? { classId: filterClass } : {}),
+        ...(tab !== 'classes' ? { kind: tab === 'students' ? 'STUDENT' : 'TEACHER' } : {}),
+      });
+      try {
+        const r = await identityRequest(
+          '/api/organization/' + (tab === 'classes' ? 'classes' : 'accounts') + '?' + params,
+          undefined,
+          'STAFF',
+          abort.signal,
+        );
+        if (abort.signal.aborted) return;
+        if (tab === 'classes') setClasses(r.items);
+        else setPeople(r.items);
+        setTotal(r.total);
+        setError('');
+      } catch (e) {
+        if (!abort.signal.aborted) setError((e as Error).message);
+      } finally {
+        if (!abort.signal.aborted) setLoading(false);
+      }
     }, 150);
-    return () => clearTimeout(timer);
-  }, [loadSchools]);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      load().catch((e) => setMessage(e.message));
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [load]);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [schoolId, tab, query, page, filterClass, revision]);
+  function changeSchool(id: string) {
+    if (id !== schoolId && importGuard.current && !importGuard.current.requestLeave()) return;
+    setSchoolId(id);
+    setScope(undefined);
+    setQuery('');
+    setPage(0);
+    setFilterClass('');
+    setFilterName('');
+    setPeople([]);
+    setClasses([]);
+    setTotal(0);
+    setOfferings([]);
+    setBatchId('');
+    setMessage('');
+    setError('');
+    setLoading(!!id);
+  }
+  function changeTab(next: string) {
+    if (next !== tab && importGuard.current && !importGuard.current.requestLeave()) return;
+    setTab(next);
+    setPage(0);
+    setQuery('');
+    setFilterClass('');
+    setFilterName('');
+    setPeople([]);
+    setClasses([]);
+    setTotal(0);
+    setError('');
+    setLoading(!!schoolId && ['teachers', 'students', 'classes'].includes(next));
+  }
   async function command(operation: string, data: Record<string, unknown>) {
     if (busy) return;
     setBusy(true);
     setMessage('');
+    setError('');
     try {
       const sensitive = [
         'create-school',
@@ -164,28 +192,25 @@ export function OrganizationConsole({
         { ...data, schoolId, proof },
         'STAFF',
       );
-      setMessage('操作已保存。');
-      if (result.credentialBatchId) setBatchId(result.credentialBatchId);
       if (result.school) {
-        setSchoolId(result.school.id);
+        changeSchool(result.school.id);
         setTab('delivery');
       }
-      await loadSchools();
-      await load();
+      if (result.credentialBatchId) setBatchId(result.credentialBatchId);
+      setMessage(
+        result.credentialBatchId ? '操作已保存。请在凭据交付中领取初始凭据。' : '操作已保存。',
+      );
+      setRevision((v) => v + 1);
       return result;
     } catch (e) {
       if (e instanceof IdentityRequestError && e.code === 'RECENT_AUTH_REQUIRED') {
         auth.current?.invalidate();
         void auth.current?.request();
       }
-      setMessage((e as Error).message);
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
-  }
-  function formData(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    return Object.fromEntries(new FormData(event.currentTarget));
   }
   const tabs = [
     ...(root ? [['schools', '学校']] : []),
@@ -196,515 +221,302 @@ export function OrganizationConsole({
     ['delivery', '凭据交付'],
   ];
   return (
-    <div className="organization-console">
-      <h1>学校与人员</h1>
-      <div className="identity-tabs">
-        {tabs.map(([key, label]) => (
-          <button
-            key={key}
-            aria-pressed={tab === key}
-            onClick={() => {
-              setTab(key);
-              setPage(0);
-              setQuery('');
-              setFilterClass('');
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {root && (
-        <section className="identity-panel">
-          <label>
-            搜索学校
-            <input
-              value={schoolQuery}
-              onChange={(e) => {
-                setSchoolQuery(e.target.value);
-                setSchoolPage(0);
-              }}
-            />
-          </label>
-          <label>
-            当前操作学校
-            <select
-              value={schoolId}
-              onChange={(e) => {
-                setSchoolId(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="">请明确选择学校</option>
-              {schoolId && !schools.some((s) => s.id === schoolId) && (
-                <option value={schoolId}>已选择学校</option>
-              )}
-              {schools.map((s) => (
-                <option value={s.id} key={s.id}>
-                  {s.name} · {s.code}
-                  {s.active ? '' : '（停用）'}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="identity-inline">
-            <button disabled={!schoolPage} onClick={() => setSchoolPage((v) => v - 1)}>
-              上一页学校
-            </button>
-            <span>{schoolTotal} 所学校</span>
-            <button
-              disabled={(schoolPage + 1) * 20 >= schoolTotal}
-              onClick={() => setSchoolPage((v) => v + 1)}
-            >
-              下一页学校
-            </button>
-          </div>
-        </section>
-      )}
-      <Reauthentication ref={auth} />
-      <p role="status">{message}</p>
-      {tab === 'schools' && root && (
-        <>
-          <details className="identity-panel">
-            <summary>新增学校和管理账号</summary>
-            <form onSubmit={(e) => command('create-school', formData(e))}>
-              <label>
-                学校名称
-                <input name="name" required />
-              </label>
-              <label>
-                学校管理员姓名
-                <input name="administratorName" required />
-              </label>
-              <button className="button" disabled={busy}>
-                创建学校并生成独立凭据
-              </button>
-            </form>
-          </details>
-          <div className="identity-list">
-            {schools.map((s) => (
-              <article key={s.id}>
-                <h2>{s.name}</h2>
-                <details>
-                  <summary>编辑学校名称</summary>
-                  <form onSubmit={(e) => command('rename-school', { ...formData(e), id: s.id })}>
-                    <label>
-                      学校名称
-                      <input name="name" defaultValue={s.name} required maxLength={100} />
-                    </label>
-                    <button disabled={busy}>保存名称</button>
-                  </form>
-                </details>
-                <p>
-                  {s.code} · {s._count.users} 个账号 · {s.active ? '启用' : '停用'}
-                </p>
-                <div className="identity-inline">
-                  <button
-                    onClick={() => {
-                      setSchoolId(s.id);
-                      setTab('teachers');
-                    }}
-                  >
-                    管理该学校
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `此操作影响该校 ${s._count.users} 个账号及后台任务；保留数据。确认继续？`,
-                        )
-                      )
-                        void command('set-school-active', { id: s.id, active: !s.active });
-                    }}
-                  >
-                    {s.active ? '停用学校' : '启用学校'}
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
-      {tab !== 'schools' && !schoolId && <p>请选择操作学校。</p>}
-      {schoolId && tab !== 'schools' && (
-        <>
-          {['teachers', 'students', 'classes'].includes(tab) && (
+    <FormFeedback.Provider value={{ error, clear: () => setError('') }}>
+      <div className="organization-console identity-console">
+        <PageTitle
+          eyebrow={root ? '平台管理' : teacher ? '教学管理' : '学校管理'}
+          title="学校与人员"
+          description={
+            teacher
+              ? '管理获授权的班级与学生；历史作答与成绩独立保留。'
+              : '在明确的学校范围内管理账号、班级与初始凭据。'
+          }
+        />
+        <section className="organization-scope" aria-label="当前管理范围">
+          {root ? (
             <>
               <label>
-                搜索{tab === 'classes' ? '班级' : '姓名 / 登录 ID / 学号'}
+                搜索学校
                 <input
-                  value={query}
+                  type="search"
+                  value={schoolQuery}
+                  placeholder="名称或编号"
+                  disabled={busy}
                   onChange={(e) => {
-                    setQuery(e.target.value);
-                    setPage(0);
+                    setSchoolQuery(e.target.value);
+                    setSchoolPage(0);
                   }}
                 />
               </label>
-              {tab === 'students' && (
-                <label>
-                  按班级筛选
-                  <select
-                    value={filterClass}
-                    onChange={(e) => {
-                      setFilterClass(e.target.value);
-                      setPage(0);
-                    }}
-                  >
-                    <option value="">所有授权班级 / 范围</option>
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </>
-          )}
-          {tab === 'teachers' && (
-            <details className="identity-panel">
-              <summary>新增教师</summary>
-              <form onSubmit={(e) => command('create-teacher', formData(e))}>
-                <label>
-                  教师姓名
-                  <input name="name" required />
-                </label>
-                <button className="button" disabled={busy}>
-                  创建并生成初始凭据
-                </button>
-              </form>
-            </details>
-          )}
-          {(tab === 'students' || (tab === 'classes' && !teacher)) && (
-            <details className="identity-panel">
-              <summary>查找表单中的{tab === 'students' ? '班级' : '教师'}选项</summary>
-              <p>下面的新增与调整表单使用当前这一页的选项，可搜索全部授权对象。</p>
-              {tab === 'students' ? (
-                <>
-                  <label>
-                    搜索班级选项
-                    <input
-                      value={classChoiceQuery}
-                      onChange={(e) => {
-                        setClassChoiceQuery(e.target.value);
-                        setClassChoicePage(0);
-                      }}
-                    />
-                  </label>
-                  <div className="identity-inline">
-                    <button
-                      disabled={!classChoicePage}
-                      onClick={() => setClassChoicePage((p) => p - 1)}
-                    >
-                      上一页班级选项
-                    </button>
-                    <span>{classChoiceTotal} 个班级</span>
-                    <button
-                      disabled={(classChoicePage + 1) * 20 >= classChoiceTotal}
-                      onClick={() => setClassChoicePage((p) => p + 1)}
-                    >
-                      下一页班级选项
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <label>
-                    搜索教师选项
-                    <input
-                      value={teacherChoiceQuery}
-                      onChange={(e) => {
-                        setTeacherChoiceQuery(e.target.value);
-                        setTeacherChoicePage(0);
-                      }}
-                    />
-                  </label>
-                  <div className="identity-inline">
-                    <button
-                      disabled={!teacherChoicePage}
-                      onClick={() => setTeacherChoicePage((p) => p - 1)}
-                    >
-                      上一页教师选项
-                    </button>
-                    <span>{teacherChoiceTotal} 位教师</span>
-                    <button
-                      disabled={(teacherChoicePage + 1) * 20 >= teacherChoiceTotal}
-                      onClick={() => setTeacherChoicePage((p) => p + 1)}
-                    >
-                      下一页教师选项
-                    </button>
-                  </div>
-                </>
-              )}
-            </details>
-          )}
-          {tab === 'students' && (
-            <details className="identity-panel">
-              <summary>新增学生 / 复用已有学号加入班级</summary>
-              <form
-                onSubmit={(e) => {
-                  const data = formData(e);
-                  return command('upsert-student', {
-                    name: data.name,
-                    studentNumber: data.studentNumber,
-                    classIds: data.classId ? [data.classId] : [],
-                  });
-                }}
-              >
-                <label>
-                  学号（保留前导零）
-                  <input name="studentNumber" required inputMode="text" />
-                </label>
-                <label>
-                  学生姓名
-                  <input name="name" required />
-                </label>
-                <label>
-                  加入班级
-                  <select name="classId" required={teacher}>
-                    <option value="">暂不分班</option>
-                    {classes
-                      .filter((c) => !c.archived)
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <button className="button" disabled={busy}>
-                  保存学生与班级关系
-                </button>
-              </form>
-            </details>
-          )}
-          {['teachers', 'students'].includes(tab) && (
-            <div className="identity-list">
-              {people.map((p) => (
-                <article key={p.id}>
-                  <h2>{p.name}</h2>
-                  <p>
-                    {p.studentNumber ?? p.loginId} · {p.active ? '启用' : '停用'} ·{' '}
-                    {p.mustChangePassword ? '待首次改密' : '已改密'} ·{' '}
-                    {p.emailVerifiedAt ? '邮箱已验证' : '邮箱未绑定'}
-                  </p>
-                  {p.enrollments && (
-                    <p>
-                      班级：{p.enrollments.map((e) => e.teachingClass.name).join('、') || '未分班'}
-                    </p>
-                  )}
-                  <details>
-                    <summary>管理账号</summary>
-                    <form onSubmit={(e) => command('update-account', { id: p.id, ...formData(e) })}>
-                      <label>
-                        姓名
-                        <input name="name" defaultValue={p.name} />
-                      </label>
-                      {p.studentNumber && (
-                        <label>
-                          学号
-                          <input name="studentNumber" defaultValue={p.studentNumber} />
-                        </label>
-                      )}
-                      <button disabled={busy}>保存资料</button>
-                    </form>
-                    <div className="identity-inline">
-                      <button
-                        disabled={busy}
-                        onClick={() => {
-                          if (window.confirm('生成新的独立临时密码，撤销旧凭据和所有会话？'))
-                            void command('reset-password', { id: p.id });
-                        }}
-                      >
-                        重置初始密码
-                      </button>
-                      <button
-                        disabled={busy}
-                        onClick={() => command('update-account', { id: p.id, active: !p.active })}
-                      >
-                        {p.active ? '停用' : '启用'}
-                      </button>
-                    </div>
-                    {tab === 'students' && (
-                      <form
-                        onSubmit={(e) => {
-                          const d = formData(e);
-                          return command('membership', {
-                            classId: d.classId,
-                            studentId: p.id,
-                            joined: d.action === 'JOIN',
-                          });
-                        }}
-                      >
-                        <label>
-                          班级
-                          <select name="classId">
-                            {classes
-                              .filter((c) => !c.archived)
-                              .map((c) => (
-                                <option value={c.id} key={c.id}>
-                                  {c.name}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                        <label>
-                          成员操作
-                          <select name="action">
-                            <option value="JOIN">加入（保留其他班级）</option>
-                            <option value="LEAVE">退出此班级</option>
-                          </select>
-                        </label>
-                        <button disabled={busy}>调整成员关系</button>
-                      </form>
-                    )}
-                  </details>
-                </article>
-              ))}
-            </div>
-          )}
-          {tab === 'classes' && (
-            <>
-              <details className="identity-panel">
-                <summary>新增课程 / 开课学期</summary>
-                <form onSubmit={(e) => command('create-course', formData(e))}>
-                  <label>
-                    课程名称
-                    <input name="title" required />
-                  </label>
-                  <label>
-                    本校课程编号
-                    <input name="code" required />
-                  </label>
-                  <label>
-                    学期
-                    <input name="term" required placeholder="例如 2026 秋季" />
-                  </label>
-                  <button disabled={busy}>创建课程与开课实例</button>
-                </form>
-              </details>
-              <details className="identity-panel">
-                <summary>新增班级</summary>
-                <form
-                  onSubmit={(e) =>
-                    command('create-class', {
-                      ...formData(e),
-                      ...(teacher ? { teacherId: identity.id } : {}),
-                    })
-                  }
+              <label>
+                当前操作学校
+                <select
+                  disabled={busy}
+                  value={schoolId}
+                  onChange={(e) => changeSchool(e.target.value)}
                 >
-                  <label>
-                    班级名称
-                    <input name="name" required />
-                  </label>
-                  <label>
-                    课程 / 学期
-                    <select name="offeringId" required>
-                      <option value="">请选择</option>
-                      {offerings.map((o) => (
-                        <option value={o.id} key={o.id}>
-                          {o.course.title} · {o.term}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {!teacher && (
-                    <label>
-                      负责教师
-                      <select name="teacherId" required>
-                        {teachers.map((t) => (
-                          <option value={t.id} key={t.id}>
-                            {t.name} · {t.loginId}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                  <option value="">请选择学校</option>
+                  {schoolId && !schools.some((s) => s.id === schoolId) && (
+                    <option value={schoolId}>{scope?.name ?? '已选择学校'}</option>
                   )}
-                  <button disabled={busy}>创建班级</button>
-                </form>
-              </details>
-              <div className="identity-list">
-                {classes.map((c) => (
-                  <article key={c.id}>
-                    <h2>{c.name}</h2>
-                    <p>
-                      {c.offering.course.title} · {c.offering.term} · {c._count.enrollments} 人 ·{' '}
-                      {c.archived ? '已归档' : '使用中'}
-                    </p>
-                    <p>教师：{c.grants.map((g) => g.user.name).join('、')}</p>
-                    <div className="identity-inline">
-                      <button
-                        onClick={() => {
-                          setTab('students');
-                          setFilterClass(c.id);
-                        }}
-                      >
-                        查看学生
-                      </button>
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          command('update-class', { classId: c.id, archived: !c.archived })
-                        }
-                      >
-                        {c.archived ? '恢复班级' : '归档班级'}
-                      </button>
-                    </div>
-                    {!teacher && (
-                      <details>
-                        <summary>交接教师</summary>
-                        <p>交接后保留学生与历史作答。已发布作业的复核分工需显式修订。</p>
-                        <form
-                          onSubmit={(e) =>
-                            command('update-class', { classId: c.id, ...formData(e) })
-                          }
-                        >
-                          <label>
-                            新负责教师
-                            <select name="teacherId">
-                              {teachers.map((t) => (
-                                <option value={t.id} key={t.id}>
-                                  {t.name} · {t.loginId}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <button disabled={busy}>确认交接</button>
-                        </form>
-                      </details>
-                    )}
-                  </article>
-                ))}
+                  {schools.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} · {s.code}
+                      {s.active ? '' : '（停用）'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="scope-pagination">
+                <button
+                  type="button"
+                  aria-label="上一页学校"
+                  disabled={!schoolPage || schoolLoading}
+                  onClick={() => setSchoolPage((p) => p - 1)}
+                >
+                  ‹
+                </button>
+                <small>{schoolLoading ? '查询中…' : schoolTotal + ' 所学校'}</small>
+                <button
+                  type="button"
+                  aria-label="下一页学校"
+                  disabled={(schoolPage + 1) * 20 >= schoolTotal || schoolLoading}
+                  onClick={() => setSchoolPage((p) => p + 1)}
+                >
+                  ›
+                </button>
               </div>
             </>
+          ) : (
+            <p>
+              <strong>{scope?.name ?? '本校授权范围'}</strong>
+              {scope && <small> · {scope.code}</small>} ·{' '}
+              {teacher ? '仅获授权的班级和学生' : '学校范围已锁定'}
+            </p>
           )}
-          {['teachers', 'students', 'classes'].includes(tab) && (
-            <div className="identity-inline">
-              <button disabled={!page} onClick={() => setPage((v) => v - 1)}>
-                上一页
+        </section>
+        <nav className="identity-tabs" aria-label="人员管理分类">
+          {tabs.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              disabled={busy}
+              aria-pressed={tab === key}
+              onClick={() => changeTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="management-toolbar">
+          <div>
+            {tab !== 'schools' && scope && <strong>{scope.name}</strong>}
+            <Reauthentication ref={auth} />
+          </div>
+          <OrganizationCreate
+            tab={tab}
+            schoolId={schoolId}
+            identity={identity}
+            offerings={offerings}
+            busy={busy}
+            command={command}
+          />
+        </div>
+        {error && (
+          <p className="field-error" role="alert">
+            {error}
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => setRevision((v) => v + 1)}
+            >
+              重新加载
+            </button>
+          </p>
+        )}
+        {message && (
+          <p role="status">
+            {message}
+            {batchId && tab !== 'delivery' && (
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => changeTab('delivery')}
+              >
+                领取初始凭据
               </button>
-              <span>
-                {total} 条 · 第 {page + 1} 页
-              </span>
-              <button disabled={(page + 1) * 20 >= total} onClick={() => setPage((v) => v + 1)}>
-                下一页
-              </button>
+            )}
+          </p>
+        )}
+        {tab === 'schools' && root && (
+          <>
+            <div className="organization-list">
+              {schools.map((s) => (
+                <SchoolRow
+                  key={s.id}
+                  school={s}
+                  busy={busy}
+                  command={command}
+                  choose={() => {
+                    changeSchool(s.id);
+                    setTab('teachers');
+                  }}
+                />
+              ))}
             </div>
-          )}
-          {tab === 'imports' && (
-            <RosterImportWizard
-              key={schoolId}
-              schoolId={schoolId}
-              teacher={teacher}
-              offerings={offerings}
-            />
-          )}
-          {(tab === 'delivery' || batchId) && (
-            <CredentialDelivery schoolId={schoolId} batchId={batchId} siteAdmin={root} />
-          )}
-        </>
-      )}
-    </div>
+            {!schoolLoading && !schools.length && (
+              <Empty
+                title="没有匹配的学校"
+                description="调整名称或编号搜索，或创建新的学校与管理账号。"
+              />
+            )}
+          </>
+        )}
+        {tab !== 'schools' && !schoolId && (
+          <Empty
+            title="先选择操作学校"
+            description="使用上方范围栏定位学校，再查看教师、班级、学生或导入名单。"
+          />
+        )}
+        {schoolId && tab !== 'schools' && (
+          <>
+            {['teachers', 'students', 'classes'].includes(tab) && (
+              <>
+                <div className="management-filters">
+                  <label>
+                    搜索{tab === 'classes' ? '班级' : '姓名 / 登录 ID / 学号'}
+                    <input
+                      type="search"
+                      value={query}
+                      placeholder={tab === 'classes' ? '当前学校的班级名称' : '也可搜索已绑定邮箱'}
+                      onChange={(e) => {
+                        setQuery(e.target.value);
+                        setPage(0);
+                      }}
+                    />
+                  </label>
+                  {tab === 'students' && (
+                    <>
+                      <FormDrawer
+                        trigger={filterName ? '班级：' + filterName : '筛选班级'}
+                        title="筛选班级"
+                      >
+                        {(saved) => (
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const select = e.currentTarget.elements.namedItem(
+                                'classId',
+                              ) as HTMLSelectElement;
+                              setFilterClass(select.value);
+                              setFilterName(select.selectedOptions[0]?.text ?? '');
+                              setPage(0);
+                              saved();
+                            }}
+                          >
+                            <OrganizationSelect
+                              schoolId={schoolId}
+                              kind="classes"
+                              label="班级"
+                              name="classId"
+                              required
+                            />
+                            <button className="button primary">应用班级筛选</button>
+                          </form>
+                        )}
+                      </FormDrawer>
+                      {filterClass && (
+                        <button
+                          type="button"
+                          className="button secondary"
+                          onClick={() => {
+                            setFilterClass('');
+                            setFilterName('');
+                            setPage(0);
+                          }}
+                        >
+                          清除班级筛选
+                        </button>
+                      )}
+                    </>
+                  )}
+                  <span className="muted">{loading ? '正在加载…' : total + ' 条匹配记录'}</span>
+                </div>
+                <div className="organization-list" aria-busy={loading}>
+                  {tab === 'classes'
+                    ? classes.map((c) => (
+                        <ClassRowView
+                          key={c.id}
+                          row={c}
+                          schoolId={schoolId}
+                          teacher={teacher}
+                          busy={busy}
+                          command={command}
+                          members={() => {
+                            changeTab('students');
+                            setFilterClass(c.id);
+                            setFilterName(c.name);
+                          }}
+                        />
+                      ))
+                    : people.map((p) => (
+                        <PersonRow
+                          key={p.id}
+                          person={p}
+                          schoolId={schoolId}
+                          student={tab === 'students'}
+                          busy={busy}
+                          command={command}
+                        />
+                      ))}
+                </div>
+                {!loading && !error && total === 0 && (
+                  <Empty
+                    title="暂无匹配记录"
+                    description="可调整搜索或班级筛选，也可从右上方新增或导入名单。"
+                  />
+                )}
+                <div className="identity-inline organization-pagination">
+                  <button
+                    type="button"
+                    disabled={!page || loading}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    上一页
+                  </button>
+                  <span>
+                    {total} 条 · 第 {page + 1} 页
+                  </span>
+                  <button
+                    type="button"
+                    disabled={(page + 1) * 20 >= total || loading}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    下一页
+                  </button>
+                </div>
+              </>
+            )}
+            {tab === 'imports' && (
+              <RosterImportWizard
+                guardRef={importGuard}
+                key={schoolId}
+                schoolId={schoolId}
+                teacher={teacher}
+                offerings={offerings}
+              />
+            )}
+            {tab === 'delivery' && (
+              <CredentialDelivery
+                key={schoolId}
+                schoolId={schoolId}
+                batchId={batchId}
+                siteAdmin={root}
+              />
+            )}
+          </>
+        )}
+      </div>
+    </FormFeedback.Provider>
   );
 }

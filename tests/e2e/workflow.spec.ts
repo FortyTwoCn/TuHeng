@@ -103,10 +103,11 @@ test('F: admin creates, searches and disables a scoped teacher with generated cr
   await page.getByLabel('教师姓名', { exact: true }).fill(name);
   await page.getByRole('button', { name: '创建并生成初始凭据' }).click();
   await page.getByLabel('搜索姓名 / 登录 ID / 学号').fill(name);
-  const row = page.locator('.identity-list article').filter({ hasText: name });
+  const row = page.locator('.organization-row').filter({ hasText: name });
   await expect(row).toBeVisible();
   await verifyIdentity(page, process.env.SEED_PASSWORD!);
-  await row.locator('summary').click();
+  await row.getByRole('button', { name: '查看详情', exact: true }).click();
+  page.once('dialog', (dialog) => dialog.accept());
   await row.getByRole('button', { name: '停用', exact: true }).click();
   await expect(row).toContainText('停用');
   await expect(row.getByRole('button', { name: '启用', exact: true })).toBeVisible();

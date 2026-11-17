@@ -25,6 +25,7 @@ import {
 import {
   prepareCredentialDownload,
   downloadCredentials,
+  listCredentialDeliveries,
 } from '../../packages/infrastructure/src/credential-delivery';
 const tag = randomUUID();
 let root: Actor,
@@ -167,6 +168,13 @@ describe.sequential('real XLSX, import and credential delivery', () => {
       temporary,
       'New-Student-Password-2026!',
     );
+    const summary = await listCredentialDeliveries(root, schoolId);
+    expect(
+      summary.items
+        .find((b) => b.id === credentialBatchId)
+        ?.kinds.find((k) => k.kind === 'STUDENT'),
+    ).toMatchObject({ available: 0, unavailable: 1 });
+    expect(JSON.stringify(summary)).not.toMatch(/ciphertext|password|secretId/);
     const after = await prepareCredentialDownload(root, credentialBatchId, 'STUDENT', proof);
     await expect(downloadCredentials(root, after.token)).rejects.toThrow(
       'NO_AVAILABLE_INITIAL_CREDENTIALS',
@@ -209,6 +217,17 @@ describe.sequential('real XLSX, import and credential delivery', () => {
       proof,
     );
     expect((await downloadCredentials(root, current.token)).bytes.length).toBeGreaterThan(1000);
+    const summary = await listCredentialDeliveries(root, schoolId);
+    expect(
+      summary.items
+        .find((b) => b.id === teacher.credentialBatchId)
+        ?.kinds.find((k) => k.kind === 'TEACHER'),
+    ).toMatchObject({ available: 0, unavailable: 1 });
+    expect(
+      summary.items
+        .find((b) => b.id === reset.credentialBatchId)
+        ?.kinds.find((k) => k.kind === 'TEACHER'),
+    ).toMatchObject({ available: 1, unavailable: 0 });
     await prisma.credentialDeliveryBatch.update({
       where: { id: reset.credentialBatchId },
       data: { expiresAt: new Date(Date.now() - 1000) },
@@ -216,6 +235,14 @@ describe.sequential('real XLSX, import and credential delivery', () => {
     await expect(
       prepareCredentialDownload(root, reset.credentialBatchId, 'TEACHER', proof),
     ).rejects.toThrow('CREDENTIAL_DELIVERY_EXPIRED');
+    const expired = (await listCredentialDeliveries(root, schoolId)).items.find(
+      (b) => b.id === reset.credentialBatchId,
+    );
+    expect(expired).toMatchObject({ expired: true });
+    expect(expired?.kinds.find((k) => k.kind === 'TEACHER')).toMatchObject({
+      available: 0,
+      unavailable: 1,
+    });
   });
   it('ID10: teacher cannot create another teacher or attach a cross-school class', async () => {
     const created = await createTeacher(root, { schoolId, name: '另一个教师' });

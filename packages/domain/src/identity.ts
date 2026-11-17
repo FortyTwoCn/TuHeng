@@ -34,6 +34,36 @@ export function requireIdentityManager(actor: Actor, schoolId: string, target: A
     (actor.kind === 'TEACHER' && target === 'STUDENT');
   ensure(allowed && target !== 'SITE_ADMIN', 'IDENTITY_FORBIDDEN', 403);
 }
+/** The same account state gates delivery metadata and the sensitive download. */
+export function initialCredentialIsAvailable(
+  account:
+    | {
+        active: boolean;
+        mustChangePassword: boolean;
+        credentialVersion: number;
+        passwordExpiresAt: Date | null;
+      }
+    | undefined,
+  item: { credentialVersion: number; expiresAt: Date },
+  secret: { purpose: string; revokedAt: Date | null; expiresAt: Date | null } | undefined,
+  batchExpiresAt: Date,
+  now = new Date(),
+) {
+  return (
+    !!account &&
+    !!secret &&
+    account.active &&
+    account.mustChangePassword &&
+    account.credentialVersion === item.credentialVersion &&
+    !!account.passwordExpiresAt &&
+    account.passwordExpiresAt > now &&
+    item.expiresAt > now &&
+    batchExpiresAt > now &&
+    secret.purpose === 'TEMPORARY_PASSWORD' &&
+    !secret.revokedAt &&
+    (!secret.expiresAt || secret.expiresAt > now)
+  );
+}
 export function requireSMTPManager(actor: Actor) {
   ensure(actor.kind === 'SITE_ADMIN' && !actor.onboarding, 'FORBIDDEN', 403);
 }

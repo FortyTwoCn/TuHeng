@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { identityRequest } from './client';
 import { CredentialDelivery } from './CredentialDelivery';
 type Mapping = {
@@ -49,7 +49,10 @@ export function RosterImportWizard({
   schoolId,
   teacher = false,
   offerings,
+  guardRef,
 }: {
+  guardRef?: React.Ref<{ requestLeave: () => boolean }>;
+
   schoolId: string;
   teacher?: boolean;
   offerings: { id: string; term: string; course: { title: string } }[];
@@ -65,14 +68,51 @@ export function RosterImportWizard({
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false),
     [page, setPage] = useState(0);
+  const fileInput = useRef<HTMLInputElement>(null);
+  useImperativeHandle(
+    guardRef,
+    () => ({
+      requestLeave: () =>
+        !preview?.analysis || window.confirm('离开将清除本页预检和未确认的映射。确认离开？'),
+    }),
+    [preview],
+  );
+  const executing = !!preview && ['QUEUED', 'RUNNING'].includes(preview.status);
+  const completed = preview?.status === 'SUCCEEDED';
+  const step = completed ? 4 : executing ? 3 : preview ? 2 : offering ? 1 : 0;
+  useEffect(() => {
+    if (!preview?.analysis) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [preview?.analysis]);
+  function clearPreflight() {
+    setPreview(undefined);
+    setMapping(undefined);
+    setPage(0);
+    setMessage('');
+    if (fileInput.current) fileInput.current.value = '';
+  }
   useEffect(() => {
     if (!preview?.id || !['QUEUED', 'RUNNING'].includes(preview.status)) return;
+    const controller = new AbortController();
     const timer = setInterval(() => {
-      identityRequest('/api/roster/status?id=' + preview.id)
+      if (document.visibilityState === 'hidden') return;
+      identityRequest(
+        '/api/roster/status?id=' + preview.id,
+        undefined,
+        undefined,
+        controller.signal,
+      )
         .then(setPreview)
-        .catch((e) => setMessage(e.message));
+        .catch((e) => {
+          if (!controller.signal.aborted) setMessage(e.message);
+        });
     }, 2000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
   }, [preview?.id, preview?.status]);
   async function apply(path: string, data: object) {
     setBusy(true);
@@ -92,18 +132,32 @@ export function RosterImportWizard({
   return (
     <section className="identity-panel">
       <h2>{teacher ? '教师三列' : '学校四列'} Excel 导入</h2>
-      <ol className="identity-steps">
-        <li>下载模板，选择当前课程与学期。</li>
-        <li>上传 .xlsx 文件，学号必须保持文本格式。</li>
-        <li>检查冲突，确认教师与班级映射。</li>
-        <li>执行导入，分别交付初始凭据。</li>
+      <ol className="import-steps" aria-label="导入进度">
+        {['模板与范围', '上传文件', '检查与映射', '执行导入', '结果与凭据'].map((label, index) => (
+          <li
+            key={label}
+            aria-current={step === index ? 'step' : undefined}
+            data-complete={step > index}
+          >
+            <span>{index + 1}</span>
+            {label}
+          </li>
+        ))}
       </ol>
+      <p>学号使用文本格式，保留前导零。预检不会创建账号；确认后由后台执行导入。</p>
       <a className="button secondary" href="/api/roster/template">
         下载 Excel 模板
       </a>
       <label>
         课程 / 学期
-        <select value={offering} onChange={(e) => setOffering(e.target.value)}>
+        <select
+          value={offering}
+          disabled={busy || executing}
+          onChange={(e) => {
+            clearPreflight();
+            setOffering(e.target.value);
+          }}
+        >
           <option value="">请选择</option>
           {offerings.map((o) => (
             <option value={o.id} key={o.id}>
@@ -118,7 +172,11 @@ export function RosterImportWizard({
           <input
             type="checkbox"
             checked={customColumns}
-            onChange={(e) => setCustomColumns(e.target.checked)}
+            disabled={busy || executing}
+            onChange={(e) => {
+              clearPreflight();
+              setCustomColumns(e.target.checked);
+            }}
           />
           手动指定列位置
         </label>
@@ -131,7 +189,11 @@ export function RosterImportWizard({
                 min={1}
                 max={8}
                 value={columns[name] ?? i + 1}
-                onChange={(e) => setColumns((c) => ({ ...c, [name]: Number(e.target.value) }))}
+                disabled={busy || executing}
+                onChange={(e) => {
+                  clearPreflight();
+                  setColumns((c) => ({ ...c, [name]: Number(e.target.value) }));
+                }}
               />
             </label>
           ))}
@@ -141,11 +203,15 @@ export function RosterImportWizard({
         上传 XLSX（最多 5 MB、5000 行）
         <input
           type="file"
+          ref={fileInput}
           accept=".xlsx"
-          disabled={busy || !offering}
+          disabled={busy || executing || !offering}
           onChange={async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
+            setPreview(undefined);
+            setMapping(undefined);
+            setPage(0);
             setBusy(true);
             setMessage('');
             try {
@@ -182,6 +248,9 @@ export function RosterImportWizard({
           }}
         />
       </label>
+      {executing && (
+        <p role="status">导入已提交，文件、课程与映射已锁定。离开此页不会停止后台任务。</p>
+      )}
       <p role="status">{message}</p>
       {preview?.errors?.map((e, i) => (
         <p key={i} role="alert">

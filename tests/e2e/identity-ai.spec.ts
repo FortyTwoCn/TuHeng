@@ -290,6 +290,14 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
       buffer: bytes,
     });
     await expect(manager.getByText('预计新增教师', { exact: false })).toBeVisible();
+    // Changing the source scope must invalidate the old preflight without creating accounts.
+    await manager.getByRole('combobox', { name: '课程 / 学期', exact: true }).selectOption('');
+    await expect(manager.getByRole('button', { name: '确认执行导入', exact: true })).toHaveCount(0);
+    await manager.getByRole('combobox', { name: '课程 / 学期', exact: true }).selectOption(offering.id);
+    await manager.getByLabel('上传 XLSX（最多 5 MB、5000 行）', { exact: true }).setInputFiles({
+      name: 'browser-' + kind + '.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: bytes,
+    });
+    await expect(manager.getByText('预计新增教师', { exact: false })).toBeVisible();
     if (kind === 'SCHOOL') {
       await manager.getByLabel('确认该组对应同一位教师').check();
       await manager.getByRole('button', { name: '保存映射并重新预检', exact: true }).click();
