@@ -1,0 +1,205 @@
+{
+  "schemaVersion": "tuheng.geometry/2.0.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "y"
+      ],
+      "signs": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "y",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "94aaa467-e267-4c5c-bc13-d17fff0eaf86",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 55,
+        "y": 35
+      },
+      "name": "P1",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "de3501bb-c39e-4c35-a54b-062a6473d3cc",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "94aaa467-e267-4c5c-bc13-d17fff0eaf86",
+      "endPoint": "4b25ddc7-705b-462f-9961-174d6e32e44b"
+    },
+    {
+      "id": "4b25ddc7-705b-462f-9961-174d6e32e44b",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 15
+      },
+      "name": "P3",
+      "spatial": null,
+      "labelVisible": false,
+      "aliases": [
+        "P2"
+      ],
+      "mergedFrom": [
+        "c3b65853-a2bc-466c-bd02-4bc48b98bed8"
+      ]
+    },
+    {
+      "id": "f6fe8dfc-6396-4739-8072-6515482d8b4c",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 45
+      },
+      "name": "P4",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "c12c5c82-76a8-4801-99bf-a7e9e1a22b5e",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "4b25ddc7-705b-462f-9961-174d6e32e44b",
+      "endPoint": "f6fe8dfc-6396-4739-8072-6515482d8b4c"
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

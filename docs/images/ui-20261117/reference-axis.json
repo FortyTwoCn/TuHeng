@@ -1,0 +1,292 @@
+{
+  "schemaVersion": "tuheng.geometry/2.1.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [
+    {
+      "id": "46fff4a2-ca02-4f83-9f9b-80fe2f7486eb",
+      "name": "X1",
+      "version": 1,
+      "owner": "STUDENT",
+      "locked": false,
+      "referenceStatus": "UNVERIFIED",
+      "parentId": null,
+      "retainedViewId": "view-1",
+      "replacedViewId": "view-0",
+      "newViewId": "9d5e1ea9-1c29-4fa2-8ea4-075520695c09",
+      "anchor": {
+        "x": -40,
+        "y": 10
+      },
+      "tangent": {
+        "x": 0.7071067811865475,
+        "y": 0.7071067811865475
+      },
+      "side": 1,
+      "positiveNormal": {
+        "x": -0.7071067811865475,
+        "y": 0.7071067811865475
+      },
+      "oldAxis": {
+        "anchor": {
+          "x": 0,
+          "y": 0
+        },
+        "tangent": {
+          "x": -1,
+          "y": 0
+        },
+        "positiveNormal": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "method": "FREE",
+      "referenceEntityId": null
+    }
+  ],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "y"
+      ],
+      "signs": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "y",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "9d5e1ea9-1c29-4fa2-8ea4-075520695c09",
+      "name": "V1",
+      "transform": {
+        "origin": {
+          "x": -40,
+          "y": 10
+        },
+        "xAxis": {
+          "x": 0.7071067811865475,
+          "y": 0.7071067811865475
+        },
+        "yAxis": {
+          "x": -0.7071067811865475,
+          "y": 0.7071067811865475
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "A_V",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 29.74999509960127,
+        "y": 20.25000490039873
+      },
+      "name": "a′",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "A_H",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 30,
+        "y": -20
+      },
+      "name": "a",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "A_W",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 20,
+        "y": 40
+      },
+      "name": "a″",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "a27312b9-fba0-4df8-ac52-d88af3912091",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "scope": "SHEET",
+      "kind": "line",
+      "anchor": {
+        "x": 19.99999536020934,
+        "y": 49.99999650495083
+      },
+      "direction": {
+        "x": -0.7071067811865474,
+        "y": 0.7071067811865474
+      },
+      "referenceEntityId": null
+    }
+  ],
+  "constraints": [],
+  "referenceRelations": [
+    {
+      "id": "1b695e01-9a44-4472-b57e-34322f7eda07",
+      "targetId": "A_V",
+      "reference": {
+        "kind": "projectionAxis",
+        "systemId": "46fff4a2-ca02-4f83-9f9b-80fe2f7486eb"
+      },
+      "kind": "POINT_ON_REFERENCE",
+      "mode": "POSITION",
+      "source": "SNAP_CONFIRMED",
+      "status": "SATISFIED"
+    },
+    {
+      "id": "81f39eca-3702-494b-84d2-f32b73ce22ab",
+      "targetId": "a27312b9-fba0-4df8-ac52-d88af3912091",
+      "reference": {
+        "kind": "projectionAxis",
+        "systemId": "46fff4a2-ca02-4f83-9f9b-80fe2f7486eb"
+      },
+      "kind": "PARALLEL",
+      "mode": "POSITION",
+      "source": "USER",
+      "status": "SATISFIED"
+    }
+  ],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

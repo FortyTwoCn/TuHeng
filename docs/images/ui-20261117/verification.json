@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-17",
+  "branch": "codex/ui-concepts-20261117",
+  "implementationCommit": "0d54ca566048ce4658ab513a0338581a8f8aa7b6",
+  "typecheck": 0,
+  "lint": 0,
+  "unit": {
+    "exitCode": 0,
+    "passed": 238,
+    "files": 22
+  },
+  "integration": {
+    "exitCode": 0,
+    "passed": 51,
+    "files": 7
+  },
+  "fullBrowserRun": {
+    "exitCode": 0,
+    "minutes": 6.9,
+    "passed": 96
+  },
+  "subsequentBrowserChecks": {
+    "productionAdminCases": 10,
+    "newMobileLink": "passed",
+    "extendedNewSchoolTeachingChain": "passed",
+    "productionGeometryCases": 3
+  },
+  "productionBuild": {
+    "reminderRequiredRetry": true,
+    "exitCode": 0
+  },
+  "unverified": [
+    "Physical tablet/stylus/soft keyboard",
+    "External SMTP delivery",
+    "Real model providers and grading quality",
+    "Production TLS SMTP integration"
+  ],
+  "restoredDevelopmentServices": {
+    "web": "passed",
+    "worker": "ready",
+    "adminLogin": "passed",
+    "settingsRead": 200
+  }
+}

@@ -13,18 +13,18 @@
 
 ## 实际现状与方案
 
-| 模块 / 真实入口 | 现有代码与接口 | 实际能力与缺口 | 实施方向 / 验收 |
-| --- | --- | --- | --- |
-| 登录 `/login`、`/login/student`、`/login/staff` | LoginPanel、identity/client、schools API、双域 auth API | 六种认证方法已实现；独立角色中转页；学校搜索、下拉和分页分离；切方式未完整清空敏感输入 | 同页分段身份与方法、一个异步学校选择器、安全回跳与旧路由兼容；G01–05 |
-| 首次设置、`/{area}/security` | AccountSetup、identity status/change-password/bind-email | 服务端门禁和管理员邮箱可选已实现；布局与密码确认待完善 | 共用认证外壳，服务器步骤，确认密码与就地错误，保留管理员例外；G03–04 |
-| 所有工作空间 | Shell、MobileNavigation、globals.css、@tuheng/ui | 单一导航已存在；大段说明、重复边框和永久密码表单占空间 | 整理 tokens、两列以内表单、可访问弹窗/详情抽屉、紧凑再认证、按需详情；C01–02/S04 |
-| `/admin/users`、`/school/*`、`/teacher/classes` | OrganizationConsole、organization API | 学校/人员/班级分页和增改用例存在；创建表单/学校大卡常驻，操作密集 | 范围头部、紧凑列表、详情/创建抽屉、状态分离与切校草稿处理；G06–07 |
-| 导入与凭据 | RosterImportWizard、CredentialDelivery、roster/credentials API | 两模板、预检、Worker、限时独立交付已有；步骤与状态不够集中 | 明确阶段与真实结果，统一敏感验证，手机局部滚动；G08–10 |
-| 接收人 | AudiencePicker、resolveAudience、audience API | 真实范围、三态、排除和冻结快照已存在 | 复用选择语义，整理树与选择摘要，避免分页/分支选择丢失；G11–12 |
-| `/geometry` 与业务嵌入 | ToolPicker、EditorPopover、FloatingInspector、MeasurementOverlay、geometry-core | 真实拖拽/HUD/吸附/框选/曲线已接入；分裂按钮在视觉上仍显示成两个独立完整按钮 | 合并工具入口、保留所有命令，容器/手机布局与核心行为回归；E01–06 |
-| `/admin/models` | AICenter、AIProviderEditor/AIModelEditor/AITaskBindings、AIInvocationList、api/ai | 真实版本与持久配置、双协议和能力测试已有；选择下拉代替列表、密码验证常驻、未保存处理与测试版本提示不足 | 供应商/模型/规则列表与详情、共用密钥/再认证/草稿保护、能力与实际证据分开；A01–06 |
-| `/admin/jobs` | views/admin JobsView、现有运行查询与 actions | 原/现配置重试已有；需复核列表范围、诊断、安全字段与刷新 | 真实名称、显式状态/诊断、服务端分页、保留展开与筛选、操作确认；T01–03 |
-| `/admin/mail` | SMTPSettings、api/settings/mail、EmailService/SecretStore | 四个真实操作与版本已有；表单多列，缺编辑/生效上下文，载入旧版留空密码来源需核对 | 系统设置分类、分组表单、版本明确、按需再认证、保留安全连接策略；S01–04 |
+| 模块 / 真实入口                                 | 现有代码与接口                                                                    | 实际能力与缺口                                                                                         | 实施方向 / 验收                                                                  |
+| ----------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 登录 `/login`、`/login/student`、`/login/staff` | LoginPanel、identity/client、schools API、双域 auth API                           | 六种认证方法已实现；独立角色中转页；学校搜索、下拉和分页分离；切方式未完整清空敏感输入                 | 同页分段身份与方法、一个异步学校选择器、安全回跳与旧路由兼容；G01–05             |
+| 首次设置、`/{area}/security`                    | AccountSetup、identity status/change-password/bind-email                          | 服务端门禁和管理员邮箱可选已实现；布局与密码确认待完善                                                 | 共用认证外壳，服务器步骤，确认密码与就地错误，保留管理员例外；G03–04             |
+| 所有工作空间                                    | Shell、MobileNavigation、globals.css、@tuheng/ui                                  | 单一导航已存在；大段说明、重复边框和永久密码表单占空间                                                 | 整理 tokens、两列以内表单、可访问弹窗/详情抽屉、紧凑再认证、按需详情；C01–02/S04 |
+| `/admin/users`、`/school/*`、`/teacher/classes` | OrganizationConsole、organization API                                             | 学校/人员/班级分页和增改用例存在；创建表单/学校大卡常驻，操作密集                                      | 范围头部、紧凑列表、详情/创建抽屉、状态分离与切校草稿处理；G06–07                |
+| 导入与凭据                                      | RosterImportWizard、CredentialDelivery、roster/credentials API                    | 两模板、预检、Worker、限时独立交付已有；步骤与状态不够集中                                             | 明确阶段与真实结果，统一敏感验证，手机局部滚动；G08–10                           |
+| 接收人                                          | AudiencePicker、resolveAudience、audience API                                     | 真实范围、三态、排除和冻结快照已存在                                                                   | 复用选择语义，整理树与选择摘要，避免分页/分支选择丢失；G11–12                    |
+| `/geometry` 与业务嵌入                          | ToolPicker、EditorPopover、FloatingInspector、MeasurementOverlay、geometry-core   | 真实拖拽/HUD/吸附/框选/曲线已接入；分裂按钮在视觉上仍显示成两个独立完整按钮                            | 合并工具入口、保留所有命令，容器/手机布局与核心行为回归；E01–06                  |
+| `/admin/models`                                 | AICenter、AIProviderEditor/AIModelEditor/AITaskBindings、AIInvocationList、api/ai | 真实版本与持久配置、双协议和能力测试已有；选择下拉代替列表、密码验证常驻、未保存处理与测试版本提示不足 | 供应商/模型/规则列表与详情、共用密钥/再认证/草稿保护、能力与实际证据分开；A01–06 |
+| `/admin/jobs`                                   | views/admin JobsView、现有运行查询与 actions                                      | 原/现配置重试已有；需复核列表范围、诊断、安全字段与刷新                                                | 真实名称、显式状态/诊断、服务端分页、保留展开与筛选、操作确认；T01–03            |
+| `/admin/mail`                                   | SMTPSettings、api/settings/mail、EmailService/SecretStore                         | 四个真实操作与版本已有；表单多列，缺编辑/生效上下文，载入旧版留空密码来源需核对                        | 系统设置分类、分组表单、版本明确、按需再认证、保留安全连接策略；S01–04           |
 
 ## 各页面设计决策
 
@@ -40,3 +40,27 @@
 A 审查和原界面留证 → B 公共外壳/敏感交互 → C 统一登录 → D 人员/导入/接收人 → E 编辑器工具整理 → F AI 中心 → G 任务与邮件设置 → H 全链路/响应式/安全回归。
 
 验证必须覆盖 360/390/768/1024/1366/1440 和窄容器；真实 mouse down/move/up 的松手前 HUD；隔离库、队列、存储、SMTP 与模型协议替身。真实设备、外部邮件和模型调用未测则单列，不冒充验收。逐项证据维护在 `UI_REDESIGN_ACCEPTANCE.md`，不以本计划作为完成证据。
+
+## 实施后的接口与兼容说明
+
+本轮没有修改数据库 Schema、GeometryDocument 或历史正式数据。原 API、Gateway、私有上传、队列和教师确认流程继续使用。界面需要的最小服务端改动如下：
+
+| 位置                                                | 改动与边界                                                                                                                                                           |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `domain/ai-routing.ts`、`grading-jobs.ts`           | 共享路由诊断和任务操作能力，前端显示服务端结果，不在页面复制评分与权限规则。                                                                                         |
+| `api/admin/jobs`、`job-records.ts`、`ai-records.ts` | 任务/调用服务端分页与同范围总数；只提供元数据。旧 PLATFORM_OPERATOR 保留只读任务访问，修改仍限网站管理员。                                                           |
+| `api/actions/run-retry`、`run-current-config`       | HTTP 命令增加近期授权与 UUID requestId；原快照不补写、不切换。当前配置产生新 run；重复 requestId 不创建第二次执行。                                                  |
+| `api/settings/mail`、`email.ts`                     | SAVE 显式 sourceId/expectedVersion；ENABLE/DISABLE 显式 expectedActiveId。旧配置留空密码从所选版本继承，并发冲突原子拒绝。旧内部调用仍兼容；外部脚本需更新这些参数。 |
+| `organization/credentials`                          | 列表与下载复用同一个凭据有效性判断，普通列表不暴露密码或 secretId；交付仍限时且需授权。                                                                              |
+
+旧登录地址转到统一入口并保留经过校验的回跳；`/admin/mail` 转到 `/admin/settings/mail`。任务页链接可直接打开手机上的指定模块规则并返回原筛选。回退应同时回退本轮 Web 与配套服务端提交；无 SQL 回退或历史几何迁移步骤，不能通过补写旧模型快照让重试恢复可用。
+
+## 复用的组件与职责
+
+- `LoginPanel/SchoolCombobox/AccountSetup`：统一登录、异步学校选择与首次设置；认证域仍由服务端隔离。
+- `Dialog/SecretInput/Reauthentication/useDraftNavigation`：抽屉与焦点、仅新输入的可见性、按需敏感授权、草稿离开保护。重新授权后不自动重放结果不明的写操作。
+- `OrganizationConsole/OrganizationCreate/OrganizationRows/RosterImportWizard/CredentialDelivery/AudiencePicker`：学校范围、人员详情、真实导入进度、安全交付和完整接收人语义。
+- `ToolPicker/EditorPopover`：在现有命令注册表上整理分裂按钮和键盘菜单；几何预览、拓扑、电子笔与评分模块未另建实现。
+- `ConfigurationList/AICenter/SMTPSettings/JobsConsole`：列表定位、分组配置、版本上下文、真实诊断与刷新。手机保存区避让底部导航，详情抽屉独立滚动。
+
+截图中的测试学校、供应商、模型、任务计数均来自隔离验收库，不是向开发/生产数据库注入的示意数据。界面参考中的多列邮件表单改为最多两列；手机采用列表/详情切换；任务不添加伪进度、优先执行或其他未实现按钮。
