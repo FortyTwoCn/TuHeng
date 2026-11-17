@@ -64,6 +64,27 @@ test('UX01: live length HUD exists before pointerup', async ({ page }) => {
   await expect(page.locator('[data-measurement-hud]')).toContainText('mm', { timeout: 1500 });
   await page.mouse.up();
 });
+
+test('E01: one split entry per drawing family remembers the last command and supports keyboard menus', async ({
+  page,
+}) => {
+  await load(page);
+  const arrow = page.getByRole('button', { name: '线工具', exact: true });
+  await expect(arrow).toHaveText('⌄');
+  await arrow.focus();
+  await page.keyboard.press('ArrowDown');
+  const menu = page.getByRole('dialog', { name: '线工具菜单', exact: true });
+  await expect(menu).toBeVisible();
+  await menu.getByRole('button', { name: '虚线', exact: true }).click();
+  await expect(menu).not.toBeVisible();
+  await expect(page.locator('.geo-split [data-command="hidden"]')).toBeVisible();
+  await arrow.click();
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
+  await expect(arrow).toBeFocused();
+  await expect(page.getByRole('button', { name: '圆与圆弧', exact: true })).toHaveText('⌄');
+  await expect(page.getByRole('button', { name: '电子笔线型', exact: true })).toHaveText('⌄');
+});
 test('UX05: a standalone point snaps to the actual Z axis', async ({ page }) => {
   await load(page, standardSheet());
   await press(page, { x: -30, y: 40 });

@@ -91,16 +91,23 @@ export function ToolPicker({
       {button('select')}
       {button('point')}
       {(['line', 'round'] as const).map((group) => (
-        <span className="geo-split" key={group}>
+        <span
+          className="geo-split"
+          role="group"
+          aria-label={group === 'line' ? '线' : '圆与圆弧'}
+          key={group}
+        >
           {button(last[group])}
-          <EditorPopover label={group === 'line' ? '线工具' : '圆与圆弧'}>
+          <EditorPopover arrowOnly label={group === 'line' ? '线工具' : '圆与圆弧'}>
             {commandRegistry.filter((e) => e.group === group).map((e) => button(e.id))}
           </EditorPopover>
         </span>
       ))}
-      <span className="geo-split">
+      <span className="geo-split" role="group" aria-label="电子笔">
         {button('pen')}
-        <EditorPopover label="电子笔线型">{penStyles}</EditorPopover>
+        <EditorPopover arrowOnly label="电子笔线型">
+          {penStyles}
+        </EditorPopover>
       </span>
       <EditorPopover label="构造">
         {commandRegistry

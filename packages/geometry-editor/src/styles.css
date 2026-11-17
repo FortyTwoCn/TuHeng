@@ -97,8 +97,27 @@
 }
 .geo-split {
   display: inline-flex;
-  gap: 2px;
+  gap: 0;
   flex-shrink: 0;
+}
+.geo-split > button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.geometry-editor .geo-split-arrow {
+  width: 28px;
+  min-width: 28px;
+  padding-inline: 3px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 0;
+}
+.geo-split > button:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+@media (pointer: coarse) {
+  .geometry-editor .geo-split-arrow {
+    width: 44px;
+  }
 }
 .geo-views {
   display: grid;
@@ -175,7 +194,7 @@
   right: 10px;
   top: 92px;
   bottom: 30px;
-  width: min(370px, calc(100% - 20px));
+  width: min(320px, calc(100% - 20px));
   z-index: 90;
   overflow: auto;
   background: #fff;
