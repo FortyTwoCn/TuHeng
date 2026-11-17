@@ -23,7 +23,7 @@ const stateName = (row: { enabled: boolean; archived: boolean }) =>
 export function AICenter({
   initialTab = 'providers',
   initialRunId = '',
-  initialTaskKey = 'grading.assignment',
+  initialTaskKey = '',
   returnTo,
 }: {
   initialTab?: string;
@@ -46,7 +46,10 @@ export function AICenter({
     [taskKey, setTaskKey] = useState(
       initialTaskKey === 'grading.selftest' ? initialTaskKey : 'grading.assignment',
     ),
-    [detail, setDetail] = useState(false),
+    [detail, setDetail] = useState(
+      initialTab === 'bindings' &&
+        ['grading.assignment', 'grading.selftest'].includes(initialTaskKey),
+    ),
     [draftKey, setDraftKey] = useState(0);
   const [providerQuery, setProviderQuery] = useState(''),
     [modelQuery, setModelQuery] = useState(''),

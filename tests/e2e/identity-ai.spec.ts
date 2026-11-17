@@ -4,6 +4,7 @@ import { hash } from 'bcryptjs';
 import { SMTPServer } from 'smtp-server';
 import { prisma } from '@tuheng/database';
 import { prepareLogin, verifyIdentity } from './identity-login';
+import { verifyOnboardedTeaching } from './onboarded-teaching';
 
 const origin = 'http://localhost:3000';
 const password = 'Browser-Identity-2026!new';
@@ -308,6 +309,7 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
     ),
   ).toBe(true);
 
+  let importedStudent: { id: string; password: string } | undefined;
   for (const [manager, kind] of [
     [teacherPage, 'TEACHER'],
     [staff, 'SCHOOL'],
@@ -368,6 +370,15 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
       const file = await download;
       expect(file.suggestedFilename()).toContain(label.includes('教师') ? '教师' : '学生');
       expect(await file.failure()).toBeNull();
+      if (kind === 'TEACHER') {
+        const delivered = new ExcelJS.Workbook();
+        await delivered.xlsx.readFile((await file.path())!);
+        const row = delivered.worksheets[0].getRow(3);
+        importedStudent = {
+          id: String(row.getCell(4).value),
+          password: String(row.getCell(6).value),
+        };
+      }
     }
     await manager.setViewportSize({ width: 390, height: 844 });
     expect(
@@ -378,6 +389,18 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
       fullPage: true,
     });
   }
+  if (!importedStudent) throw new Error('IMPORTED_STUDENT_DELIVERY_REQUIRED');
+  await loginId(
+    studentPage,
+    importedStudent.id,
+    importedStudent.password,
+    'STUDENT',
+    school.school,
+  );
+  await changePassword(studentPage, importedStudent.password);
+  await studentPage.getByRole('link', { name: '暂不绑定邮箱，进入学习空间', exact: true }).click();
+  await expect(studentPage).toHaveURL('/student/dashboard');
+  await verifyOnboardedTeaching(teacherPage, studentPage, importedStudent.id);
   await root.close();
   await staff.close();
   await teacherPage.close();

@@ -73,6 +73,33 @@ test('A01/A05: configuration lists protect a draft, keep secret input local, and
   });
 });
 
+test('T03/A04: a mobile task configuration link opens the requested module and returns to the same filter', async ({
+  page,
+}) => {
+  await loginRoot(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const returnTo = '/admin/jobs?status=BLOCKED_CONFIG';
+  await page.goto(
+    '/admin/models?tab=bindings&taskKey=grading.selftest&returnTo=' + encodeURIComponent(returnTo),
+  );
+  const detail = page.locator('.configuration-detail');
+  await expect(detail).toBeVisible();
+  await expect(detail).toContainText('grading.selftest');
+  await page.getByRole('button', { name: '返回列表', exact: true }).click();
+  await expect(page.getByLabel('搜索模块', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-record-id="grading.selftest"]')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('link', { name: '返回任务列表', exact: true }).click();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === '/admin/jobs' && url.searchParams.get('status') === 'BLOCKED_CONFIG',
+  );
+  await expect(page.getByRole('combobox', { name: '任务状态', exact: true })).toHaveValue(
+    'BLOCKED_CONFIG',
+  );
+});
+
 test('A06: invocation filters, unknown usage and stable paginated details work on a phone', async ({
   page,
 }) => {
