@@ -1,9 +1,10 @@
 import { expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { Client } from 'pg';
 
-it('ID01/ID02: fresh CLI install is unique and idempotent; mailbox recovery restores restricted installation', async () => {
+it('ID01/ID02: CLI install is unique; optional root email migration preserves credentials and first-password restrictions', async () => {
   const url = new URL(process.env.DATABASE_URL!);
   if (!url.pathname.endsWith('_test')) throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
   const schema = 'identity_install_test_' + randomUUID().replaceAll('-', '');
@@ -48,6 +49,18 @@ it('ID01/ID02: fresh CLI install is unique and idempotent; mailbox recovery rest
     expect(repeated.status).not.toBe(0);
     expect(repeated.stderr).toContain('ROOT_ALREADY_EXISTS');
     expect(await read()).toEqual(before);
+    const emailMigration = await readFile(
+      'packages/database/prisma/migrations/2026111701_admin_optional_email/migration.sql',
+      'utf8',
+    );
+    await db.query(emailMigration);
+    expect(await read()).toEqual(before); // An unchanged initial password still restricts setup.
+    await db.query('UPDATE "User" SET "mustChangePassword"=false');
+    const changedPassword = (await read())[0];
+    await db.query(emailMigration);
+    expect((await read())[0]).toEqual({ ...changedPassword, installationComplete: true });
+    await db.query(emailMigration);
+    expect((await read())[0]).toEqual({ ...changedPassword, installationComplete: true });
     await expect(
       db.query(
         'INSERT INTO "User" (id,name,email,"passwordHash",roles,kind,realm,"loginId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',

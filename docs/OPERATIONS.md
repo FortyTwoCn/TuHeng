@@ -60,9 +60,9 @@ Prisma JS adapter 的提交冲突释放行为由 `SafePrismaPg` 集中保护，`
 ## 身份安装与密钥恢复
 
 - 新部署：`npm run identity:secrets -- --initialize` 在本机 git 忽略的 .env 初始化随机 32 字节主密钥；已有配置不替换。生产也可由 Secret/KMS 注入同名环境变量。
-- `npm run identity:bootstrap -- --output .runtime/admin-delivery.txt` 仅在没有根账号时创建 admin；重复执行拒绝并保持凭据不变。文件以当前 Windows 用户和 SYSTEM 的受限 ACL 创建，安全交付后删除。首次改密、SMTP、邮箱验证完成前不开放普通后台。
+- `npm run identity:bootstrap -- --output .runtime/admin-delivery.txt` 仅在没有根账号时创建 admin；重复执行拒绝并保持凭据不变。文件以当前 Windows 用户和 SYSTEM 的受限 ACL 创建，安全交付后删除。管理员完成首次改密后直接进入后台，不强制绑定邮箱；SMTP 通过后台“邮件服务”配置，个人邮箱可在“账号安全”自愿绑定。学校和教师仍须验证邮箱。
 - 根账号密码恢复：`npm run identity:bootstrap -- --reset-root --output .runtime/admin-recovery.txt`，生成新随机临时密码、撤销旧会话并审计；保留已验证邮箱。服务器恢复权限不可授予普通学校/教师。
-- 丢失根账号邮箱或需要重新进入受限 SMTP 安装：在服务器执行 `npm run identity:bootstrap -- --reset-root --recover-mailbox --output .runtime/admin-mailbox-recovery.txt`。这是独立审计的邮箱恢复动作，清除根账号邮箱绑定、撤销会话、重新要求改密和验证邮箱；不允许通过网页对其他账号调用，也不授予普通后台权限。
+- 丢失根账号邮箱：在服务器执行 `npm run identity:bootstrap -- --reset-root --recover-mailbox --output .runtime/admin-mailbox-recovery.txt`。这是独立审计的邮箱恢复动作，清除根账号邮箱绑定、撤销会话、重新要求改密；完成改密后可进入后台，是否重新绑定邮箱由管理员决定。不允许通过网页对其他账号调用。
 - SMTP 修改、初始凭据导出、AI 密钥操作要求近期密码验证。验证码 5 分钟/最多 5 次失败/60 秒重发；密码登录和邮件发送同时限制身份目标、网络与平台预算。仅在反向代理覆盖 X-Real-IP 且禁用直接访问时设置 TUHENG_TRUST_PROXY_IP=1，否则使用保守的未知网络桶；不能信任客户端自报 IP。
 - `npm run identity:secrets -- --rotate` 先保留旧主密钥、追加新 keyId，再重包有效 SecretRecord。中途失败可重跑；旧 keyId 留作恢复历史备份。轮换后重启 Web/Worker 载入部署密钥；后台 AI/SMTP 配置本身无需重启。
 - 数据库备份与主密钥分开加密保管，恢复时必须同时具备匹配的 keyId。缺失/错误主密钥安全失败，不改成明文。对象存储恢复点也必须与数据库一致。

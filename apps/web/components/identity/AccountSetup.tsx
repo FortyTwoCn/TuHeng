@@ -3,7 +3,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { AuthRealm } from '@tuheng/contracts';
 import { identityRequest, realmSignOut } from './client';
-import { SMTPSettings } from './SMTPSettings';
 import { Reauthentication } from './Reauthentication';
 type Status = {
   kind: string;
@@ -11,10 +10,9 @@ type Status = {
   name: string;
   mustChangePassword: boolean;
   emailVerified: boolean;
+  emailBindingRequired: boolean;
   emailHint?: string;
   onboarding: boolean;
-  installationComplete: boolean;
-  smtpConfigured: boolean;
 };
 export function AccountSetup({
   realm,
@@ -37,6 +35,10 @@ export function AccountSetup({
       .then(setStatus)
       .catch((e) => setError(e.message));
   }, [realm]);
+  useEffect(() => {
+    if (!security && status?.kind === 'SITE_ADMIN' && !status.onboarding)
+      router.replace('/admin/dashboard');
+  }, [router, security, status?.kind, status?.onboarding]);
   useEffect(() => {
     if (!seconds) return;
     const id = setTimeout(() => setSeconds((s) => s - 1), 1000);
@@ -61,17 +63,19 @@ export function AccountSetup({
       <p>
         {status?.name} · {realm === 'STUDENT' ? '学生' : '教师与管理'}身份
       </p>
-      {!security && (
+      {!security && status && (
         <ol className="identity-steps">
           <li>{status?.mustChangePassword ? '① 修改初始密码' : '✓ 密码已更新'}</li>
-          <li>
-            {status?.emailVerified
-              ? '✓ 邮箱已验证'
-              : realm === 'STUDENT'
-                ? '② 绑定邮箱（可选）'
-                : '② 验证绑定邮箱'}
-          </li>
-          <li>③ 进入工作空间</li>
+          {status.kind !== 'SITE_ADMIN' && (
+            <li>
+              {status.emailVerified
+                ? '✓ 邮箱已验证'
+                : status.emailBindingRequired
+                  ? '② 验证绑定邮箱'
+                  : '② 绑定邮箱（可选）'}
+            </li>
+          )}
+          <li>{status.kind === 'SITE_ADMIN' ? '②' : '③'} 进入工作空间</li>
         </ol>
       )}
       {(security || status?.mustChangePassword) && (
@@ -112,15 +116,10 @@ export function AccountSetup({
       )}
       {status && !status.mustChangePassword && (
         <>
-          {status.kind === 'SITE_ADMIN' && !status.installationComplete && (
-            <>
-              <p>首次安装需要先配置并启用邮件服务，再验证管理员本人邮箱。</p>
-              <SMTPSettings />
-            </>
-          )}
-          {(!status.emailVerified || security) && (
+          {(security || status.kind !== 'SITE_ADMIN') && (!status.emailVerified || security) && (
             <section className="identity-panel">
               <h2>{status.emailVerified ? '更换绑定邮箱' : '验证邮箱'}</h2>
+              {!status.emailBindingRequired && <p>邮箱绑定为可选项，可用于邮箱登录和找回密码。</p>}
               {status.emailHint && <p>当前绑定：{status.emailHint}</p>}
               {status.emailVerified && <Reauthentication realm={realm} onProof={setProof} />}
               <label>

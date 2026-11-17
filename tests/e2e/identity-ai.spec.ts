@@ -428,13 +428,21 @@ test('AI: browser provider versions mask keys, model and module forms; responsiv
   });
 });
 
-test('first admin: installation privilege permits SMTP only until password and mailbox complete', async ({
+test('first admin: password change opens the dashboard without SMTP or email binding; backend mail remains available', async ({
   page,
 }) => {
   expect(process.env.SEED_TEST_ACCOUNTS).toBe('1');
   expect(new URL(process.env.DATABASE_URL!).pathname).toBe('/tuheng_test');
   const before = await prisma.user.findUniqueOrThrow({ where: { id: 'admin' } });
+  const enabledMail = await prisma.sMTPConfigurationVersion.findMany({
+    where: { enabled: true },
+    select: { id: true },
+  });
   try {
+    await prisma.sMTPConfigurationVersion.updateMany({
+      where: { enabled: true },
+      data: { enabled: false },
+    });
     await prisma.user.update({
       where: { id: before.id },
       data: {
@@ -456,7 +464,8 @@ test('first admin: installation privilege permits SMTP only until password and m
     await page.getByRole('button', { name: '登录', exact: true }).click();
     await expect(page).toHaveURL('/onboarding/staff');
     expect((await page.request.get('/api/ai')).status()).toBe(403);
-    await changePassword(page, process.env.SEED_PASSWORD!);
+    await expect(page.getByRole('heading', { name: '邮件服务', exact: true })).toHaveCount(0);
+    await expect(page.getByText('验证绑定邮箱', { exact: false })).toHaveCount(0);
     expect(
       (
         await page.request.post('/api/organization/create-school', {
@@ -465,29 +474,63 @@ test('first admin: installation privilege permits SMTP only until password and m
         })
       ).status(),
     ).toBe(403);
+    const mailBefore = mail.length;
+    await page.getByLabel('当前密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
+    await page.getByLabel('新密码', { exact: true }).fill(password);
+    await page.getByRole('button', { name: '确认修改', exact: true }).click();
+    await expect(page).toHaveURL('/admin/dashboard');
+    expect((await page.request.get('/api/ai')).status()).toBe(200);
+    expect(
+      (await (await page.request.get('/api/identity/status?realm=STAFF')).json()).data,
+    ).toMatchObject({
+      kind: 'SITE_ADMIN',
+      emailVerified: false,
+      emailBindingRequired: false,
+      onboarding: false,
+      installationComplete: true,
+      smtpConfigured: false,
+    });
+    expect(mail).toHaveLength(mailBefore);
+    // Old bookmarks must not bring an initialized root back into the removed email setup.
+    await page.goto('/onboarding/staff');
+    await expect(page).toHaveURL('/admin/dashboard');
+    await page.goto('/admin/mail');
     const mailPanel = page
       .locator('section')
       .filter({ has: page.getByRole('heading', { name: '邮件服务', exact: true }) })
       .first();
     await mailPanel.getByLabel('验证当前密码（敏感操作授权 10 分钟）').fill(password);
     await mailPanel.getByRole('button', { name: '验证身份', exact: true }).click();
-    await mailPanel.getByLabel('配置名称').fill('Initial install SMTP');
+    await mailPanel.getByLabel('配置名称').fill('Optional backend SMTP');
     await mailPanel.getByLabel('SMTP 主机').fill('127.0.0.1');
     await mailPanel.getByLabel('端口', { exact: true }).fill('1026');
     await mailPanel.getByLabel('传输安全').selectOption('LOCAL_TEST');
     await mailPanel.getByLabel('发件邮箱').fill('install@tuheng.invalid');
     await mailPanel.getByRole('button', { name: '保存为新版本', exact: true }).click();
     const newest = mailPanel.locator('.identity-list article').first();
-    await expect(newest).toContainText('Initial install SMTP');
+    await expect(newest).toContainText('Optional backend SMTP');
     await newest.getByRole('button', { name: '启用', exact: true }).click();
     await expect(newest.getByRole('button', { name: '停用', exact: true })).toBeVisible();
-    await bind(page, 'root-install-' + Date.now() + '@browser.invalid');
-    await page.getByRole('link', { name: '进入工作空间', exact: true }).click();
+    await page.goto('/admin/security');
+    await expect(page.getByText('邮箱绑定为可选项，可用于邮箱登录和找回密码。')).toBeVisible();
+    await page.getByRole('button', { name: '退出当前身份', exact: true }).click();
+    await prepareLogin(page, 'admin');
+    await page.getByRole('button', { name: '登录 ID', exact: true }).click();
+    await page.getByLabel('登录 ID / 已绑定邮箱').fill('admin');
+    await page.getByLabel('密码', { exact: true }).fill(password);
+    await page.getByRole('button', { name: '登录', exact: true }).click();
     await expect(page).toHaveURL('/admin/dashboard');
     expect(
       (await prisma.user.findUniqueOrThrow({ where: { id: 'admin' } })).installationComplete,
     ).toBe(true);
   } finally {
+    await prisma.$transaction([
+      prisma.sMTPConfigurationVersion.updateMany({ data: { enabled: false } }),
+      prisma.sMTPConfigurationVersion.updateMany({
+        where: { id: { in: enabledMail.map((config) => config.id) } },
+        data: { enabled: true },
+      }),
+    ]);
     await prisma.user.update({
       where: { id: 'admin' },
       data: {

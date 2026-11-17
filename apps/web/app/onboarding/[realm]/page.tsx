@@ -5,10 +5,7 @@ export default async function Onboarding({ params }: { params: Promise<{ realm: 
   const { realm } = await params;
   if (!['student', 'staff'].includes(realm)) notFound();
   const domain = realm === 'student' ? 'STUDENT' : 'STAFF';
-  try {
-    await actor(domain, true);
-  } catch {
-    redirect('/login/' + realm);
-  }
+  const current = await actor(domain, true).catch(() => redirect('/login/' + realm));
+  if (current.kind === 'SITE_ADMIN' && !current.onboarding) redirect('/admin/dashboard');
   return <AccountSetup realm={domain} />;
 }

@@ -74,7 +74,7 @@ try {
     // Exclusive creation prevents replacing a previous delivery file. Transaction rolls back on failure.
     await writePrivateFile(
       file,
-      `图衡管理员安装凭据（敏感信息，请安全交付）\n登录 ID：admin\n临时密码：${password}\n7 天内有效；首次登录必须改密并验证邮箱。\n`,
+      `图衡管理员安装凭据（敏感信息，请安全交付）\n登录 ID：admin\n临时密码：${password}\n7 天内有效；首次登录必须改密；邮箱可在后台自愿绑定。\n`,
     );
   });
   console.log(

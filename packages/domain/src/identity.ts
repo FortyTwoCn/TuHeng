@@ -7,12 +7,16 @@ export const realmForKind = (kind: AccountKind): AuthRealm =>
 export function accountRoles(kind: AccountKind) {
   return [kind === 'SITE_ADMIN' ? 'ADMIN' : kind] as Actor['roles'];
 }
+export function requiresVerifiedEmail(account: { kind: string; realm: string }) {
+  return account.realm === 'STAFF' && account.kind !== 'SITE_ADMIN';
+}
 export function needsOnboarding(account: {
+  kind: string;
   mustChangePassword: boolean;
   realm: string;
   emailVerifiedAt: Date | null;
 }) {
-  return account.mustChangePassword || (account.realm === 'STAFF' && !account.emailVerifiedAt);
+  return account.mustChangePassword || (requiresVerifiedEmail(account) && !account.emailVerifiedAt);
 }
 export function requireSchoolScope(actor: Actor, schoolId: string) {
   ensure(!actor.onboarding, 'ONBOARDING_REQUIRED', 403);
@@ -30,6 +34,6 @@ export function requireIdentityManager(actor: Actor, schoolId: string, target: A
     (actor.kind === 'TEACHER' && target === 'STUDENT');
   ensure(allowed && target !== 'SITE_ADMIN', 'IDENTITY_FORBIDDEN', 403);
 }
-export function requireSMTPManager(actor: Actor, bootstrap: boolean) {
-  ensure(actor.kind === 'SITE_ADMIN' && (!actor.onboarding || bootstrap), 'FORBIDDEN', 403);
+export function requireSMTPManager(actor: Actor) {
+  ensure(actor.kind === 'SITE_ADMIN' && !actor.onboarding, 'FORBIDDEN', 403);
 }

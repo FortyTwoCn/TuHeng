@@ -40,7 +40,7 @@ npm run dev
 npm run worker
 ```
 
-访问 http://localhost:3000/login/staff，使用固定 ID `admin` 和本地受限交付文件中的临时密码。首次登录必须改密，在安装向导中配置/启用 SMTP，再通过真实邮件验证码绑定邮箱。安装完成后创建学校、教师和学生；不存在公开注册或固定初始密码。已有数据库先执行[迁移说明](docs/IDENTITY_AI_REFACTOR.md)，不要重复 bootstrap 或重建库。
+访问 http://localhost:3000/login/staff，使用固定 ID `admin` 和本地受限交付文件中的临时密码。管理员首次改密后直接进入后台，无需配置 SMTP 或绑定邮箱。邮件服务在后台“邮件服务”中配置，管理员可在“账号安全”自愿绑定邮箱；学校和教师仍须首次改密并验证邮箱，启用这些账号前应配置邮件服务。不存在公开注册或固定初始密码。已有数据库先执行[迁移说明](docs/IDENTITY_AI_REFACTOR.md)，不要重复 bootstrap 或重建库。
 
 平板通过局域网访问时，在 `.env` 增加 `APP_ALLOWED_ORIGINS=http://本机局域网IP:3000`，重启 `npm run dev`，在平板打开该地址。`NEXTAUTH_URL=http://localhost:3000` 可保留供本机使用；多个受信任地址用逗号分隔，必须包含协议和端口，不使用通配符。IP 变化后需更新配置。开发资源、登录跳转和保存接口共用这些应用地址；操作与排查见 [局域网开发与平板访问](docs/OPERATIONS.md#局域网开发与平板访问)。
 

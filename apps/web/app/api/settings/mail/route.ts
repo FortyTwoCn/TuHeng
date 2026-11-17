@@ -2,13 +2,12 @@ import { z } from 'zod';
 import { prisma } from '@tuheng/database';
 import { actor } from '../../../../lib/auth';
 import { checkOrigin, errorResponse, limitedBody } from '../../../../lib/http';
-import { ensure } from '@tuheng/domain';
+import { requireSMTPManager } from '@tuheng/domain';
 import { manageSMTP, saveSMTP } from '../../../../../../packages/infrastructure/src/email';
 export async function GET() {
   try {
-    const a = await actor('STAFF', true);
-    const u = await prisma.user.findUniqueOrThrow({ where: { id: a.id } });
-    ensure(a.kind === 'SITE_ADMIN' && !u.mustChangePassword, 'FORBIDDEN', 403);
+    const a = await actor('STAFF');
+    requireSMTPManager(a);
     const rows = await prisma.sMTPConfigurationVersion.findMany({
       orderBy: { version: 'desc' },
       take: 30,
@@ -38,7 +37,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     checkOrigin(request);
-    const a = await actor('STAFF', true),
+    const a = await actor('STAFF'),
       b = JSON.parse((await limitedBody(request, 20000)).toString());
     const proof = z.string().parse(b.proof);
     const data =

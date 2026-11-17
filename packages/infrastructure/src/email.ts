@@ -9,10 +9,7 @@ import { rateLimit } from './security-throttle';
 import { requireRecentAuthentication } from './identity-security';
 
 export async function smtpManager(actor: Actor, proof?: string) {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
-  const bootstrap =
-    user.kind === 'SITE_ADMIN' && !user.installationComplete && !user.mustChangePassword;
-  requireSMTPManager(actor, bootstrap);
+  requireSMTPManager(actor);
   await requireRecentAuthentication(actor, proof);
 }
 export async function saveSMTP(actor: Actor, input: unknown, password?: string, proof?: string) {

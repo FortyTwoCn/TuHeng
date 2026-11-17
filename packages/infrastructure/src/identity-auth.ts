@@ -110,7 +110,9 @@ export async function loadIdentity(
     schoolId: u.schoolId,
     tokenVersion,
     roles: accountRoles(kind),
-    onboarding: onboarding || needsOnboarding(u),
+    // Older root sessions can still carry the retired mandatory-email onboarding flag.
+    // The database must still require the first password change, even for those sessions.
+    onboarding: (kind !== 'SITE_ADMIN' && onboarding) || needsOnboarding(u),
   };
 }
 export async function changeOwnPassword(actor: Actor, current: string, next: string) {
@@ -129,6 +131,7 @@ export async function changeOwnPassword(actor: Actor, current: string, next: str
         passwordExpiresAt: null,
         tokenVersion: { increment: 1 },
         credentialVersion: { increment: 1 },
+        ...(user.kind === 'SITE_ADMIN' ? { installationComplete: true } : {}),
       },
     });
     ensure(changed.count === 1, 'SESSION_REVOKED', 401);

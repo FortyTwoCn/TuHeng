@@ -1,13 +1,13 @@
 # 身份、组织与 AI 重构验收记录
 
-日期：2026-11-16。基线 `f354b31`；开发分支 `codex/identity-ai-refactor`。权限与迁移决策见 [架构记录](IDENTITY_AI_REFACTOR.md)，部署、恢复和密钥轮换见 [运行手册](OPERATIONS.md)。本报告只把实际执行的测试记为通过。
+初次验收日期：2026-11-16。基线 `f354b31`；开发分支 `codex/identity-ai-refactor`。2026-11-17 按用户要求取消网站管理员强制绑邮箱，补充结果见文末。权限与迁移决策见 [架构记录](IDENTITY_AI_REFACTOR.md)，部署、恢复和密钥轮换见 [运行手册](OPERATIONS.md)。本报告只把实际执行的测试记为通过。
 
 ## 交付范围与入口
 
 | 范围                   | 实现及入口                                                                                                                 | 主要代码                                                                                      |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | 四类账号、双认证域     | `/login/student`、`/login/staff`，独立 Cookie、JWT audience、CSRF、邮箱命名空间；没有公开注册和任意切换角色                | `contracts/identity.ts`、`domain/identity.ts`、`infrastructure/identity-*`、`web/lib/auth.ts` |
-| 首次启用及恢复         | 所有账号改密；STAFF 验证邮箱；学生可跳过邮箱；根账号仅有 SMTP 安装特权，完成后关闭                                         | `AccountSetup`、`SMTPSettings`、`scripts/identity-bootstrap.ts`                               |
+| 首次启用及恢复         | 所有账号首次改密；学校与教师验证邮箱；管理员改密后直接进入后台，邮箱可选；SMTP 仅在后台配置，学生可跳过邮箱                 | `AccountSetup`、`SMTPSettings`、`scripts/identity-bootstrap.ts`                               |
 | 学校、教师、班级、学生 | 学校独立实体；S/T 登录编号、同校字符串学号；课程/学期、成员调整、交接、启停、重置、服务器分页搜索                          | `infrastructure/organization.ts`、`OrganizationConsole`                                       |
 | 实际 XLSX 导入与交付   | 学校四列、教师三列；列映射、重名教师确认/拆分、预检、真实 Worker 进度和结果；分开下载教师/学生凭据，学校管理账号交付卡     | `roster-xlsx.ts`、`roster-import.ts`、`credential-delivery.ts`、`RosterImportWizard`          |
 | 名单与复核分工         | 公共选择器，全选/排除/跨班去重；发布快照、显式补发/移除、按班或个人分配复核人、站内通知                                    | `domain/audience.ts`、`teaching.ts`、`AudiencePicker`、`ReviewerAssignments`                  |
@@ -25,7 +25,7 @@
 | 编号 | 实际验证                                                                                                  | 证据 / 结果                                                                       |
 | ---- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | ID01 | 空 schema 首装 CLI；重复安装不改密码；唯一根账号数据库约束；独立邮箱恢复后重新受限                        | `integration/identity-install.test.ts`，通过                                      |
-| ID02 | 无 SMTP 的首次 admin 改密 → 只能配置 SMTP → 接收真实验证码 → 绑定 → 管理后台；提前创建学校/AI 配置被拒绝  | `e2e/identity-ai.spec.ts` first admin，通过                                       |
+| ID02 | 无 SMTP 的首次 admin 改密 → 自动进入后台；改密前普通 API 被拒绝；未绑邮箱仍可配置 SMTP，退出后用 ID 正常登录 | `e2e/identity-ai.spec.ts` first admin，2026-11-17 通过                             |
 | ID03 | 学校和教师实际用新凭据登录、改密、收信绑定；设置未完成时普通 API 返回 403                                 | 同文件 identity 流程；`integration/identity.test.ts`，通过                        |
 | ID04 | 学生首次改密；可不绑邮箱进入；未验证邮箱不能登录                                                          | 同上，通过                                                                        |
 | ID05 | 学号字符串及前导零、学校范围、重复复用与冲突校验                                                          | `integration/roster.test.ts`、浏览器 `0000123` 登录，通过                         |
@@ -131,6 +131,26 @@
 ## 外部条件与保留事项
 
 - 没有发送真实外部 SMTP 邮件，没有调用真实 OpenAI/Anthropic 或消耗模型额度。本地 SMTP 收件和 HTTP 协议替身通过不代表真实邮箱投递、网关兼容性或模型评分质量通过；后台保留明确测试按钮供配置后验证。
-- 当前开发库已生成独立根账号临时凭据，写入 git 忽略且受限 ACL 的本机文件，未写入本文。用户需完成首次改密、实际 SMTP 配置和邮箱验证后启用完整管理功能。
+- 根账号凭据通过 git 忽略且受限 ACL 的本机文件交付，未写入本文。2026-11-17 起，管理员首次改密后即可进入后台；SMTP 配置和个人邮箱绑定不再是管理员启用条件。学校与教师仍须验证邮箱。
 - `npm audit` 本次检查仍有 13 项告警（4 high / 9 moderate），包括既有 Prisma/Sharp/ESLint 链及 ExcelJS 的间接 uuid 链。uuid 告警涉及 v3/v5/v6 的 buffer 参数，当前 ExcelJS 使用 v4；仍记录依赖告警，不宣称审计清零。未以自动跨主版本升级框架来掩盖告警，需后续依赖升级验证。
 - 未做全恶意文件语料模糊测试、多机器模型负载或真实移动硬件测试。照片识别、OCR、DWG/DXF、协同与新评分平台均不属于此次实现。
+
+## 2026-11-17：管理员邮箱改为可选
+
+根因：`domain/identity.ts` 将所有 STAFF 账号都判为必须验证邮箱，旧会话的 onboarding 标记又会持续限制已经改密的管理员；`AccountSetup` 还在首次设置中嵌入 SMTP 表单。现按账号种类判断邮箱要求，管理员改密后自动进入后台，旧根会话从当前数据库状态重新判定，旧设置页链接重定向到后台。SMTP 配置入口保留在 `/admin/mail`，仍要求敏感操作再认证；个人邮箱在 `/admin/security` 可选绑定。学校与教师的验证要求不变。
+
+`2026111701_admin_optional_email` 已在开发库及隔离测试 schema 执行，仅回填已改密根账号的 installationComplete。开发库 7 个账号的全部其余字段经执行前后比较一致，密码和邮箱未重置。CLI 集成测试验证迁移幂等、未改初始密码仍受限；身份集成测试验证旧根会话恢复访问、撤销会话仍被拒绝。
+
+| 本次实际命令 | 结果 | 本机记录 |
+| --- | --- | --- |
+| `npx vitest run tests/unit/identity-security.test.ts` | 修改前管理员无需邮箱用例失败；修改后 9/9 | 本轮执行记录 |
+| `npm run typecheck` / `npm run lint` | 均通过 | `.runtime/admin-email-typecheck.log`、`admin-email-lint.log` |
+| `npm test` | 218/218，18 个文件 | `.runtime/admin-email-unit.log` |
+| `npm run test:integration` | 46/46，7 个文件，隔离测试库 | `.runtime/admin-email-integration.log` |
+| `npm run test:e2e -- tests/e2e/identity-ai.spec.ts --output .runtime/e2e-admin-email-retry` | 4/4，真实 Chrome 操作、隔离 Web/Worker/数据库 | `.runtime/admin-email-browser-retry.log` |
+| `npm run build` | 生产构建通过 | `.runtime/admin-email-build-retry.log` |
+| 增量迁移及账号前后比较 | 通过，无密码或邮箱变化 | `.runtime/admin-email-migration.log` |
+
+浏览器覆盖无 SMTP、未绑邮箱管理员的首次改密自动跳转、改密前 API 拒绝、旧设置页跳转、后台 SMTP 保存/启用、账号安全的可选提示及退出后 ID 登录；同时回归学校/教师改密与邮件验证、学生可跳过绑定、双域隔离、导入交付和后台 AI 配置。邮件投递仍仅验证本地 SMTP 接收器，未请求真实外部邮箱或模型服务。
+
+首轮浏览器连接失败及构建非零退出来自 Next.js 16.4.2 的已知安全升级提醒；按原命令重启/重试后分别通过。本次未升级框架或关闭安全检查，依赖告警仍需单独处理。上述是本次针对性验证，前文的 82 项全量 E2E 为 2026-11-16 的验收记录。

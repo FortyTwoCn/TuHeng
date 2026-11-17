@@ -13,16 +13,21 @@ describe('identity security contracts', () => {
     expect(NewPassword.safeParse('图'.repeat(25)).success).toBe(false);
     expect(NewPassword.safeParse('图'.repeat(12)).success).toBe(true);
   });
-  it('requires first change for every kind and verified email only in STAFF', () => {
+  it.each([
+    { kind: 'SITE_ADMIN', realm: 'STAFF', emailRequired: false },
+    { kind: 'SCHOOL_ADMIN', realm: 'STAFF', emailRequired: true },
+    { kind: 'TEACHER', realm: 'STAFF', emailRequired: true },
+    { kind: 'STUDENT', realm: 'STUDENT', emailRequired: false },
+  ])('requires first password change for $kind; email requirement: $emailRequired', (account) => {
+    expect(needsOnboarding({ ...account, mustChangePassword: true, emailVerifiedAt: null })).toBe(
+      true,
+    );
+    expect(needsOnboarding({ ...account, mustChangePassword: false, emailVerifiedAt: null })).toBe(
+      account.emailRequired,
+    );
     expect(
-      needsOnboarding({ mustChangePassword: true, realm: 'STUDENT', emailVerifiedAt: null }),
-    ).toBe(true);
-    expect(
-      needsOnboarding({ mustChangePassword: false, realm: 'STUDENT', emailVerifiedAt: null }),
+      needsOnboarding({ ...account, mustChangePassword: false, emailVerifiedAt: new Date() }),
     ).toBe(false);
-    expect(
-      needsOnboarding({ mustChangePassword: false, realm: 'STAFF', emailVerifiedAt: null }),
-    ).toBe(true);
     expect(accountRoles('SCHOOL_ADMIN')).toEqual(['SCHOOL_ADMIN']);
   });
   it('separates organization administration from teaching permissions', () => {

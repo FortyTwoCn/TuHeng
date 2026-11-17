@@ -441,4 +441,51 @@ describe.sequential('real database + local SMTP identity flows', () => {
       }),
     ).toBeNull();
   });
+  it('ID02: old root onboarding claims no longer require email, but password and session checks still apply', async () => {
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: 'admin' } });
+    try {
+      const changed = await prisma.user.update({
+        where: { id: before.id },
+        data: {
+          mustChangePassword: false,
+          email: '',
+          emailNormalized: null,
+          emailVerifiedAt: null,
+          installationComplete: false,
+          tokenVersion: { increment: 1 },
+        },
+      });
+      const rootWithOldClaim = await loadIdentity(changed.id, 'STAFF', changed.tokenVersion, true);
+      expect(rootWithOldClaim.onboarding).toBe(false);
+      expect(
+        (
+          await authenticate({
+            realm: 'STAFF',
+            method: 'PASSWORD',
+            identifier: 'admin',
+            password: process.env.SEED_PASSWORD!,
+          })
+        )?.onboarding,
+      ).toBe(false);
+      await expect(loadIdentity(changed.id, 'STAFF', before.tokenVersion, true)).rejects.toThrow(
+        'SESSION_REVOKED',
+      );
+      await prisma.user.update({ where: { id: changed.id }, data: { mustChangePassword: true } });
+      expect(
+        (await loadIdentity(changed.id, 'STAFF', changed.tokenVersion, false)).onboarding,
+      ).toBe(true);
+    } finally {
+      await prisma.user.update({
+        where: { id: before.id },
+        data: {
+          mustChangePassword: before.mustChangePassword,
+          email: before.email,
+          emailNormalized: before.emailNormalized,
+          emailVerifiedAt: before.emailVerifiedAt,
+          installationComplete: before.installationComplete,
+          tokenVersion: { increment: 1 },
+        },
+      });
+    }
+  });
 });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '@tuheng/database';
 import { AuthRealm, VerificationPurpose } from '@tuheng/contracts';
+import { requiresVerifiedEmail } from '@tuheng/domain';
 import { actor, rotateIdentitySession } from '../../../../lib/auth';
 import {
   checkOrigin,
@@ -96,6 +97,7 @@ export async function GET(request: Request) {
           realm: u.realm,
           mustChangePassword: u.mustChangePassword,
           emailVerified: !!u.emailVerifiedAt,
+          emailBindingRequired: requiresVerifiedEmail(u),
           emailHint: u.emailNormalized?.replace(/^(.).+(@.+)$/, '$1***$2'),
           onboarding: a.onboarding,
           installationComplete: u.installationComplete,
