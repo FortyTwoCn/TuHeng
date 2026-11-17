@@ -1,324 +1,239 @@
 'use client';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AuthRealm } from '@tuheng/contracts';
-import { BrandLogo } from '../BrandLogo';
-import { LoginProjection } from '../LoginProjection';
 import { identityRequest, realmSignIn } from './client';
-export function LoginPanel({ realm }: { realm: AuthRealm }) {
-  const [mode, setMode] = useState<'ID' | 'EMAIL' | 'CODE' | 'RECOVER'>('ID');
-  const [schools, setSchools] = useState<{ id: string; name: string; code: string }[]>([]);
-  const [recent, setRecent] = useState<{ id: string; name: string; code: string }>();
-  useEffect(() => {
-    void Promise.resolve().then(() => {
-      try {
-        const value = JSON.parse(localStorage.getItem('tuheng-recent-school') ?? 'null');
-        if (
-          value &&
-          typeof value.id === 'string' &&
-          typeof value.name === 'string' &&
-          typeof value.code === 'string'
-        )
-          setRecent(value);
-      } catch {
-        /* Preference storage is optional. */
-      }
-    });
-  }, []);
-  const [school, setSchool] = useState(''),
-    [query, setQuery] = useState(''),
-    [page, setPage] = useState(0),
-    [more, setMore] = useState(false);
+import { SchoolCombobox } from './SchoolCombobox';
+import { SecretInput } from './SecretInput';
+import { loginDestination } from './auth-navigation';
+
+type LoginMethod = 'ID' | 'EMAIL' | 'CODE' | 'RECOVER';
+export function LoginPanel({
+  realm,
+  onBusyChange,
+}: {
+  realm: AuthRealm;
+  onBusyChange?: (busy: boolean) => void;
+}) {
+  const [mode, setMode] = useState<LoginMethod>('ID');
+  const [school, setSchool] = useState('');
   const [email, setEmail] = useState(''),
     [challenge, setChallenge] = useState(''),
     [seconds, setSeconds] = useState(0);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
+  const mounted = useRef(true);
   useEffect(() => {
-    if (realm !== 'STUDENT') return;
-    const abort = new AbortController();
-    const timer = setTimeout(() => {
-      fetch(`/api/schools?q=${encodeURIComponent(query)}&page=${page}`, { signal: abort.signal })
-        .then((r) => r.json())
-        .then((r) => {
-          setSchools(r.schools);
-          setMore(r.hasMore);
-        })
-        .catch(() => {});
-    }, 150);
+    mounted.current = true;
     return () => {
-      clearTimeout(timer);
-      abort.abort();
+      mounted.current = false;
     };
-  }, [query, page, realm]);
+  }, []);
   useEffect(() => {
     if (!seconds) return;
-    const timer = setTimeout(() => setSeconds((v) => v - 1), 1000);
+    const timer = setTimeout(() => setSeconds((v) => Math.max(0, v - 1)), 1000);
     return () => clearTimeout(timer);
   }, [seconds]);
+  function working(value: boolean) {
+    if (mounted.current) {
+      setBusy(value);
+      onBusyChange?.(value);
+    }
+  }
+  function changeMethod(value: LoginMethod) {
+    setMode(value);
+    setSchool('');
+    setError('');
+    setNotice('');
+    setChallenge('');
+    setSeconds(0);
+    setEmail('');
+  }
   const codeMode = mode === 'CODE' || mode === 'RECOVER';
   return (
-    <main className="login">
-      <div className="login-art">
-        <div className="brand">
-          <BrandLogo />
-          <b>
-            图衡 <small>TuHeng</small>
-          </b>
-        </div>
-        <p className="eyebrow">ENGINEERING GRAPHICS · LEARNING WITH EVIDENCE</p>
-        <h1>
-          一笔一线，
-          <br />
-          构建空间思维。
-        </h1>
-        <p>
-          从作图、反馈到再一次练习，
-          <br />
-          让每一步学习都有清晰的方向。
-        </p>
-        <LoginProjection />
+    <>
+      <div className="identity-tabs login-method-tabs" aria-label="登录方式">
+        {(['ID', 'EMAIL', 'CODE'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            disabled={busy}
+            aria-pressed={mode === value}
+            onClick={() => changeMethod(value)}
+          >
+            {value === 'ID'
+              ? realm === 'STUDENT'
+                ? '学号'
+                : '登录 ID'
+              : value === 'EMAIL'
+                ? '邮箱密码'
+                : '邮箱验证码'}
+          </button>
+        ))}
       </div>
-      <section className="login-form">
-        <Link href="/login">← 选择登录身份</Link>
-        <h1>{realm === 'STUDENT' ? '学生登录' : '教师与管理登录'}</h1>
-        <div className="identity-tabs" aria-label="登录方式">
-          {(['ID', 'EMAIL', 'CODE'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={mode === value}
-              onClick={() => {
-                setMode(value);
-                setError('');
+      {mode === 'RECOVER' && <h3>通过已绑定邮箱找回密码</h3>}
+      <form
+        key={realm + ':' + mode}
+        className="login-fields"
+        method="post"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (busy) return;
+          const f = new FormData(e.currentTarget);
+          if (mode === 'ID' && realm === 'STUDENT' && !school) {
+            setError('请先搜索并选择学校。');
+            return;
+          }
+          if (mode === 'RECOVER' && f.get('password') !== f.get('confirm')) {
+            setError('两次输入的新密码不一致。');
+            return;
+          }
+          working(true);
+          setError('');
+          try {
+            if (mode === 'RECOVER') {
+              await identityRequest('/api/identity/recover-password', {
+                realm,
+                challengeId: challenge,
+                code: f.get('code'),
+                password: f.get('password'),
+              });
+              if (!mounted.current) return;
+              changeMethod('EMAIL');
+              setNotice('密码已更新，请使用新密码登录。');
+              return;
+            }
+            await realmSignIn(realm, {
+              method: codeMode ? 'CODE' : 'PASSWORD',
+              identifier: String(mode === 'ID' ? f.get('identifier') : email),
+              schoolId: mode === 'ID' ? school : '',
+              password: String(f.get('password') ?? ''),
+              challengeId: challenge,
+              ...(codeMode ? { code: String(f.get('code') ?? '') } : {}),
+            });
+            if (!mounted.current) return;
+            const status = await identityRequest('/api/identity/status?realm=' + realm);
+            if (!mounted.current) return;
+            window.location.assign(
+              status.onboarding
+                ? `/onboarding/${realm.toLowerCase()}`
+                : loginDestination(
+                    status.kind,
+                    new URLSearchParams(location.search).get('callbackUrl'),
+                  ),
+            );
+          } catch (e) {
+            if (mounted.current) setError((e as Error).message);
+          } finally {
+            working(false);
+          }
+        }}
+      >
+        {mode === 'ID' && realm === 'STUDENT' && (
+          <SchoolCombobox value={school} onChange={setSchool} />
+        )}
+        {mode === 'ID' ? (
+          <label>
+            {realm === 'STUDENT' ? '学号' : '登录 ID / 已绑定邮箱'}
+            <input name="identifier" autoComplete="username" required maxLength={254} />
+          </label>
+        ) : (
+          <label>
+            已绑定邮箱
+            <input
+              type="email"
+              name="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
                 setChallenge('');
               }}
+              required
+            />
+          </label>
+        )}
+        {codeMode && (
+          <div className="login-code-field">
+            <label>
+              六位验证码
+              <input
+                name="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+              />
+            </label>
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy || seconds > 0 || !email}
+              onClick={async () => {
+                working(true);
+                setError('');
+                setNotice('');
+                try {
+                  const r = await identityRequest('/api/identity/request-code', {
+                    realm,
+                    purpose: mode === 'RECOVER' ? 'RESET_PASSWORD' : 'LOGIN',
+                    email,
+                  });
+                  if (!mounted.current) return;
+                  setChallenge(r.challengeId);
+                  setSeconds(r.resendInSeconds);
+                  setNotice('若邮箱绑定了此身份的有效账号，将收到验证码。');
+                } catch (e) {
+                  if (mounted.current) setError((e as Error).message);
+                } finally {
+                  working(false);
+                }
+              }}
             >
-              {value === 'ID'
-                ? realm === 'STUDENT'
-                  ? '学号'
-                  : '登录 ID'
-                : value === 'EMAIL'
-                  ? '邮箱密码'
-                  : '邮箱验证码'}
+              {seconds ? `${seconds} 秒后重发` : '获取验证码'}
             </button>
-          ))}
-        </div>
-        <form
-          method="post"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            setError('');
-            const f = new FormData(e.currentTarget);
-            try {
-              if (mode === 'RECOVER') {
-                await identityRequest('/api/identity/recover-password', {
-                  realm,
-                  challengeId: challenge,
-                  code: f.get('code'),
-                  password: f.get('password'),
-                });
-                setNotice('密码已更新，请重新登录；首次设置仍需完成。');
-                setMode('EMAIL');
-                return;
-              }
-              await realmSignIn(realm, {
-                method: codeMode ? 'CODE' : 'PASSWORD',
-                identifier: String(mode === 'ID' ? f.get('identifier') : email),
-                schoolId: school,
-                password: String(f.get('password') ?? ''),
-                challengeId: challenge,
-                ...(codeMode ? { code: String(f.get('code') ?? '') } : {}),
-              });
-              const status = await identityRequest('/api/identity/status?realm=' + realm);
-              const fallback =
-                status.kind === 'STUDENT'
-                  ? '/student/dashboard'
-                  : status.kind === 'TEACHER'
-                    ? '/teacher/dashboard'
-                    : status.kind === 'SCHOOL_ADMIN'
-                      ? '/school/dashboard'
-                      : '/admin/dashboard';
-              const requested = new URLSearchParams(window.location.search).get('callbackUrl');
-              const safeReturn =
-                requested &&
-                /^\/(geometry(?:[/?]|$)|student\/|teacher\/|school\/|admin\/)/.test(requested) &&
-                !requested.includes('\\')
-                  ? requested
-                  : fallback;
-              window.location.assign(
-                status.onboarding ? `/onboarding/${realm.toLowerCase()}` : safeReturn,
-              );
-            } catch (e) {
-              setError((e as Error).message);
-            } finally {
-              setBusy(false);
+          </div>
+        )}
+        {mode !== 'CODE' && (
+          <SecretInput
+            label={mode === 'RECOVER' ? '新密码' : '密码'}
+            name="password"
+            required
+            minLength={mode === 'RECOVER' ? 12 : undefined}
+            autoComplete={mode === 'RECOVER' ? 'new-password' : 'current-password'}
+            hint={
+              mode === 'RECOVER'
+                ? '至少 12 个字符；中文等字符占用多个字节，总计不超过 72 字节。'
+                : undefined
             }
-          }}
+          />
+        )}
+        {mode === 'RECOVER' && (
+          <SecretInput label="确认新密码" name="confirm" required autoComplete="new-password" />
+        )}
+        {error && (
+          <p role="alert" className="field-error">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="login-notice">
+            {notice}
+          </p>
+        )}
+        <button className="button primary login-submit" disabled={busy || (codeMode && !challenge)}>
+          {busy ? '处理中…' : mode === 'RECOVER' ? '更新密码' : '登录'}
+        </button>
+        <button
+          type="button"
+          className="login-recover"
+          disabled={busy}
+          onClick={() => changeMethod(mode === 'RECOVER' ? 'ID' : 'RECOVER')}
         >
-          {mode === 'ID' && realm === 'STUDENT' && (
-            <>
-              <label>
-                搜索学校
-                <input
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setPage(0);
-                  }}
-                  placeholder="学校名称或学校编号"
-                />
-              </label>
-              <label>
-                学校
-                <select
-                  value={school}
-                  required
-                  onChange={(e) => {
-                    setSchool(e.target.value);
-                    const chosen = schools.find((s) => s.id === e.target.value);
-                    if (chosen) {
-                      setRecent(chosen);
-                      try {
-                        localStorage.setItem('tuheng-recent-school', JSON.stringify(chosen));
-                      } catch {
-                        /* optional preference */
-                      }
-                    }
-                  }}
-                >
-                  <option value="">请选择学校</option>
-                  {recent && school === recent.id && !schools.some((s) => s.id === recent.id) && (
-                    <option value={recent.id}>
-                      {recent.name}（{recent.code}）
-                    </option>
-                  )}
-                  {schools.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}（{s.code}）
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {recent && (
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => setSchool(recent.id)}
-                >
-                  上次选择：{recent.name}
-                </button>
-              )}
-              <div className="identity-inline">
-                <button type="button" disabled={!page} onClick={() => setPage((p) => p - 1)}>
-                  上一页
-                </button>
-                <button type="button" disabled={!more} onClick={() => setPage((p) => p + 1)}>
-                  下一页
-                </button>
-              </div>
-            </>
-          )}
-          {mode === 'ID' ? (
-            <label>
-              {realm === 'STUDENT' ? '学号' : '登录 ID / 已绑定邮箱'}
-              <input
-                key="identifier"
-                name="identifier"
-                autoComplete="username"
-                required
-                maxLength={254}
-              />
-            </label>
-          ) : (
-            <label>
-              已绑定邮箱
-              <input
-                type="email"
-                key="email"
-                name="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </label>
-          )}
-          {codeMode && (
-            <>
-              <div className="identity-inline">
-                <button
-                  type="button"
-                  disabled={busy || seconds > 0 || !email}
-                  onClick={async () => {
-                    setBusy(true);
-                    setError('');
-                    try {
-                      const r = await identityRequest('/api/identity/request-code', {
-                        realm,
-                        purpose: mode === 'RECOVER' ? 'RESET_PASSWORD' : 'LOGIN',
-                        email,
-                      });
-                      setChallenge(r.challengeId);
-                      setSeconds(r.resendInSeconds);
-                      setNotice('若邮箱绑定了此身份的有效账号，将收到验证码。');
-                    } catch (e) {
-                      setError((e as Error).message);
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  {seconds ? `${seconds} 秒后重发` : '获取验证码'}
-                </button>
-              </div>
-              <label>
-                六位验证码
-                <input
-                  name="code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  required
-                />
-              </label>
-            </>
-          )}
-          {mode !== 'CODE' && (
-            <label>
-              {mode === 'RECOVER' ? '新密码（至少 12 字符，最多 72 UTF-8 字节）' : '密码'}
-              <input
-                name="password"
-                type="password"
-                required
-                autoComplete={mode === 'RECOVER' ? 'new-password' : 'current-password'}
-              />
-            </label>
-          )}
-          {error && (
-            <p role="alert" className="field-error">
-              {error}
-            </p>
-          )}
-          {notice && <p role="status">{notice}</p>}
-          <button className="button" disabled={busy || (codeMode && !challenge)}>
-            {busy ? '处理中…' : mode === 'RECOVER' ? '更新密码' : '登录'}
-          </button>
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => {
-              setMode('RECOVER');
-              setChallenge('');
-            }}
-          >
-            忘记密码
-          </button>
-        </form>
-      </section>
-    </main>
+          {mode === 'RECOVER' ? '返回登录' : '忘记密码'}
+        </button>
+      </form>
+    </>
   );
 }

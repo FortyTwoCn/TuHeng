@@ -4,12 +4,10 @@ import { AITaskParameters } from '@tuheng/contracts';
 export function AITaskBindings({
   data,
   busy,
-  proof,
   command,
 }: {
   data: Center;
   busy: boolean;
-  proof: string;
   command: (body: Record<string, unknown>) => Promise<{ id?: string } | null>;
 }) {
   return (
@@ -82,7 +80,7 @@ export function AITaskBindings({
               max={10000}
             />
             <Check name="enabled" value={binding?.enabled ?? false} title="启用此规则" />
-            <button disabled={!proof || busy}>保存模块规则</button>
+            <button disabled={busy}>保存模块规则</button>
             {binding && (
               <details>
                 <summary>规则历史</summary>
@@ -94,7 +92,7 @@ export function AITaskBindings({
                       {data.models.find((m) => m.id === b.modelId)?.name ?? b.modelId}{' '}
                       <button
                         type="button"
-                        disabled={!proof || busy}
+                        disabled={busy}
                         onClick={() =>
                           command({
                             operation: 'rollback',

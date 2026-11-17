@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { actor } from '../../../lib/auth';
 import { OrganizationConsole } from '../../../components/identity/OrganizationConsole';
 import { AccountSetup } from '../../../components/identity/AccountSetup';
-import { SMTPSettings } from '../../../components/identity/SMTPSettings';
+import { SystemSettings } from '../../../components/identity/SystemSettings';
 import { Shell } from '../../../components/Shell';
 import { requireRole, DomainError, type Actor } from '@tuheng/domain';
 import { Panel } from '@tuheng/ui';
@@ -18,6 +18,16 @@ import {
 } from '../../../views/teacher';
 import { AdminDashboard, ModelsView, JobsView, AuditView, SystemView } from '../../../views/admin';
 export const dynamic = 'force-dynamic';
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ area: string; segments?: string[] }>;
+}) {
+  const { area, segments = [] } = await params;
+  if (area === 'admin' && ['settings', 'mail'].includes(segments[0]))
+    return { title: '系统设置 · 邮件服务 · 图衡' };
+  return { title: '图衡 · 智能工程图学教学平台' };
+}
 export default async function Workspace({
   params,
   searchParams,
@@ -161,7 +171,9 @@ async function workspaceView(
           }
         />
       );
-    else if (section === 'mail') view = <SMTPSettings />;
+    else if (section === 'mail' || (section === 'settings' && !segments[1]))
+      redirect('/admin/settings/mail');
+    else if (section === 'settings' && segments[1] === 'mail') view = <SystemSettings />;
     else if (section === 'assignments')
       view =
         segments[1] === 'new'

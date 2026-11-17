@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { hash } from 'bcryptjs';
 import { SMTPServer } from 'smtp-server';
 import { prisma } from '@tuheng/database';
-import { prepareLogin } from './identity-login';
+import { prepareLogin, verifyIdentity } from './identity-login';
 
 const origin = 'http://localhost:3000';
 const password = 'Browser-Identity-2026!new';
@@ -51,11 +51,8 @@ async function loginId(
 ) {
   await page.goto('/login/' + realm.toLowerCase());
   if (school) {
-    await page.getByLabel('搜索学校').fill(school.name);
-    await expect(page.getByRole('combobox', { name: '学校', exact: true })).toContainText(
-      school.name,
-    );
-    await page.getByRole('combobox', { name: '学校', exact: true }).selectOption(school.id);
+    await page.getByRole('combobox', { name: '学校', exact: true }).fill(school.name);
+    await page.getByRole('option').filter({ hasText: school.name }).click();
   }
   await page
     .getByLabel(realm === 'STAFF' ? '登录 ID / 已绑定邮箱' : '学号', { exact: true })
@@ -107,6 +104,7 @@ async function credentials(page: Page, batchId: string, kind: string, proof: str
 async function changePassword(page: Page, temporary: string) {
   await page.getByLabel('当前密码', { exact: true }).fill(temporary);
   await page.getByLabel('新密码', { exact: true }).fill(password);
+  await page.getByLabel('确认新密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '确认修改', exact: true }).click();
   await expect(page.getByText('✓ 密码已更新', { exact: true })).toBeVisible();
 }
@@ -127,9 +125,8 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
     staff = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await rootLogin(root);
   await root.goto('/admin/mail');
-  await root.getByLabel('验证当前密码（敏感操作授权 10 分钟）').fill(process.env.SEED_PASSWORD!);
-  await root.getByRole('button', { name: '验证身份', exact: true }).click();
-  await expect(root.getByText('已验证', { exact: true })).toBeVisible();
+  await verifyIdentity(root, process.env.SEED_PASSWORD!);
+  await expect(root.getByText(/敏感操作已验证至/)).toBeVisible();
   await root.getByLabel('配置名称').fill('Browser local SMTP ' + Date.now());
   await root.getByLabel('SMTP 主机').fill('127.0.0.1');
   await root.getByLabel('端口', { exact: true }).fill('1026');
@@ -163,10 +160,7 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
     .locator('section')
     .filter({ has: root.getByRole('heading', { name: '初始凭据交付', exact: true }) })
     .first();
-  await delivery
-    .getByLabel('验证当前密码（敏感操作授权 10 分钟）')
-    .fill(process.env.SEED_PASSWORD!);
-  await delivery.getByRole('button', { name: '验证身份', exact: true }).click();
+  await verifyIdentity(delivery, process.env.SEED_PASSWORD!);
   await root.getByRole('button', { name: '学校管理账号交付', exact: true }).first().click();
   const card = root.getByRole('region', { name: '学校管理账号一次性交付卡' });
   await expect(card.getByLabel('登录 ID', { exact: true })).toHaveValue(initial.id);
@@ -308,9 +302,8 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
       .locator('section')
       .filter({ has: manager.getByRole('heading', { name: '初始凭据交付', exact: true }) })
       .last();
-    await delivery.getByLabel('验证当前密码（敏感操作授权 10 分钟）').fill(password);
-    await delivery.getByRole('button', { name: '验证身份', exact: true }).click();
-    await expect(delivery.getByText('已验证', { exact: true })).toBeVisible();
+    await verifyIdentity(delivery, password);
+    await expect(delivery.getByText(/敏感操作已验证至/)).toBeVisible();
     for (const label of kind === 'SCHOOL'
       ? ['下载教师初始凭据', '下载学生初始凭据']
       : ['下载学生初始凭据']) {
@@ -344,13 +337,12 @@ test('AI: browser provider versions mask keys, model and module forms; responsiv
   await page.getByRole('button', { name: '更多导航', exact: true }).click();
   await page
     .getByRole('navigation', { name: '移动端更多导航' })
-    .getByRole('link', { name: 'AI 模型配置', exact: true })
+    .getByRole('link', { name: 'AI 中心', exact: true })
     .click();
   await expect(page).toHaveURL('/admin/models');
   await expect(page.getByRole('dialog', { name: '更多工作空间导航' })).not.toBeVisible();
-  await page.getByLabel('验证当前密码（敏感操作授权 10 分钟）').fill(process.env.SEED_PASSWORD!);
-  await page.getByRole('button', { name: '验证身份', exact: true }).click();
-  await expect(page.getByText('已验证', { exact: true })).toBeVisible();
+  await verifyIdentity(page, process.env.SEED_PASSWORD!);
+  await expect(page.getByText(/敏感操作已验证至/)).toBeVisible();
   const name = 'Browser provider ' + Date.now();
   await page.getByLabel('显示名称', { exact: true }).fill(name);
   await page
@@ -414,7 +406,7 @@ test('AI: browser provider versions mask keys, model and module forms; responsiv
   await page.getByRole('button', { name: '更多导航', exact: true }).click();
   await page
     .getByRole('navigation', { name: '移动端更多导航' })
-    .getByRole('link', { name: '邮件服务', exact: true })
+    .getByRole('link', { name: '系统设置', exact: true })
     .click();
   await expect(page.getByRole('heading', { name: '邮件服务', exact: true })).toBeVisible();
   await page.goto('/admin/users');
@@ -477,6 +469,7 @@ test('first admin: password change opens the dashboard without SMTP or email bin
     const mailBefore = mail.length;
     await page.getByLabel('当前密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
     await page.getByLabel('新密码', { exact: true }).fill(password);
+    await page.getByLabel('确认新密码', { exact: true }).fill(password);
     await page.getByRole('button', { name: '确认修改', exact: true }).click();
     await expect(page).toHaveURL('/admin/dashboard');
     expect((await page.request.get('/api/ai')).status()).toBe(200);
@@ -499,8 +492,7 @@ test('first admin: password change opens the dashboard without SMTP or email bin
       .locator('section')
       .filter({ has: page.getByRole('heading', { name: '邮件服务', exact: true }) })
       .first();
-    await mailPanel.getByLabel('验证当前密码（敏感操作授权 10 分钟）').fill(password);
-    await mailPanel.getByRole('button', { name: '验证身份', exact: true }).click();
+    await verifyIdentity(mailPanel, password);
     await mailPanel.getByLabel('配置名称').fill('Optional backend SMTP');
     await mailPanel.getByLabel('SMTP 主机').fill('127.0.0.1');
     await mailPanel.getByLabel('端口', { exact: true }).fill('1026');
@@ -664,9 +656,10 @@ test('email methods: same verified address stays isolated across domains, codes 
   await page.getByRole('button', { name: '获取验证码', exact: true }).tap();
   await expect.poll(() => mail.length).toBeGreaterThan(count);
   await page.getByLabel('六位验证码').fill(lastCode());
-  await page.getByLabel('新密码（至少 12 字符，最多 72 UTF-8 字节）').fill('Recovered-Staff-2026!');
+  await page.getByLabel('新密码', { exact: true }).fill('Recovered-Staff-2026!');
+  await page.getByLabel('确认新密码', { exact: true }).fill('Recovered-Staff-2026!');
   await page.getByRole('button', { name: '更新密码', exact: true }).tap();
-  await expect(page.getByText('密码已更新，请重新登录；首次设置仍需完成。')).toBeVisible();
+  await expect(page.getByText('密码已更新，请使用新密码登录。')).toBeVisible();
   await page.getByLabel('已绑定邮箱', { exact: true }).fill(email);
   await page.getByLabel('密码', { exact: true }).fill('Recovered-Staff-2026!');
   await page.getByRole('button', { name: '登录', exact: true }).tap();

@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { identityRequest } from './client';
+import { useEffect, useRef, useState } from 'react';
+import { identityRequest, IdentityRequestError } from './client';
 import type { SchoolCredentialCard } from '../../../../packages/infrastructure/src/credential-delivery';
-import { Reauthentication } from './Reauthentication';
+import { Reauthentication, type ReauthenticationHandle } from './Reauthentication';
 export function CredentialDelivery({
   schoolId,
   batchId,
@@ -12,10 +12,10 @@ export function CredentialDelivery({
   batchId?: string;
   siteAdmin?: boolean;
 }) {
+  const auth = useRef<ReauthenticationHandle>(null);
   const [batches, setBatches] = useState<
       { id: string; expiresAt: string; createdAt: string; _count: { items: number } }[]
     >([]),
-    [proof, setProof] = useState(''),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false);
   const [card, setCard] = useState<SchoolCredentialCard>();
@@ -38,9 +38,12 @@ export function CredentialDelivery({
         .catch((e) => setMessage(e.message));
   }, [schoolId, batchId]);
   async function download(id: string, kind: 'TEACHER' | 'STUDENT' | 'SCHOOL_ADMIN') {
+    if (busy) return;
     setBusy(true);
     setMessage('');
     try {
+      const proof = await auth.current?.request();
+      if (!proof) return;
       const ticket = await identityRequest(
         '/api/credentials',
         { operation: 'prepare', batchId: id, kind, proof },
@@ -77,6 +80,10 @@ export function CredentialDelivery({
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage('已下载。文件含敏感初始凭据，请安全交付；服务端过期无法撤回本地副本。');
     } catch (e) {
+      if (e instanceof IdentityRequestError && e.code === 'RECENT_AUTH_REQUIRED') {
+        auth.current?.invalidate();
+        void auth.current?.request();
+      }
       setMessage((e as Error).message);
     } finally {
       setBusy(false);
@@ -89,7 +96,7 @@ export function CredentialDelivery({
         导出窗口 24 小时；临时密码 7
         天有效。用户改密或再次重置后，旧凭据立即失效。普通名单不包含密码。
       </p>
-      <Reauthentication onProof={setProof} />
+      <Reauthentication ref={auth} />
       <p role="status">{message}</p>
       {card && (
         <section className="identity-panel" aria-label="学校管理账号一次性交付卡">
@@ -119,19 +126,19 @@ export function CredentialDelivery({
           <p>导出截止：{new Date(b.expiresAt).toLocaleString()}</p>
           <div className="identity-inline">
             <button
-              disabled={!proof || busy || new Date(b.expiresAt) <= new Date()}
+              disabled={busy || new Date(b.expiresAt) <= new Date()}
               onClick={() => download(b.id, 'TEACHER')}
             >
               下载教师初始凭据
             </button>
             <button
-              disabled={!proof || busy || new Date(b.expiresAt) <= new Date()}
+              disabled={busy || new Date(b.expiresAt) <= new Date()}
               onClick={() => download(b.id, 'STUDENT')}
             >
               下载学生初始凭据
             </button>
             {siteAdmin && (
-              <button disabled={!proof || busy} onClick={() => download(b.id, 'SCHOOL_ADMIN')}>
+              <button disabled={busy} onClick={() => download(b.id, 'SCHOOL_ADMIN')}>
                 学校管理账号交付
               </button>
             )}

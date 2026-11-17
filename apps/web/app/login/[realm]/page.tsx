@@ -1,7 +1,19 @@
-import { notFound } from 'next/navigation';
-import { LoginPanel } from '../../../components/identity/LoginPanel';
-export default async function LoginPage({ params }: { params: Promise<{ realm: string }> }) {
+import { notFound, redirect } from 'next/navigation';
+import { loginEntryUrl } from '../../../components/identity/auth-navigation';
+export default async function LegacyLoginPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ realm: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { realm } = await params;
   if (realm !== 'student' && realm !== 'staff') notFound();
-  return <LoginPanel realm={realm === 'student' ? 'STUDENT' : 'STAFF'} />;
+  const { callbackUrl } = await searchParams;
+  redirect(
+    loginEntryUrl(
+      realm === 'student' ? 'STUDENT' : 'STAFF',
+      typeof callbackUrl === 'string' ? callbackUrl : undefined,
+    ),
+  );
 }

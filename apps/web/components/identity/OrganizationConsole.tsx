@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { AccountKind } from '@tuheng/contracts';
-import { identityRequest } from './client';
-import { Reauthentication } from './Reauthentication';
+import { identityRequest, IdentityRequestError } from './client';
+import { Reauthentication, type ReauthenticationHandle } from './Reauthentication';
 import { RosterImportWizard } from './RosterImportWizard';
 import { CredentialDelivery } from './CredentialDelivery';
 type Person = {
@@ -39,6 +39,7 @@ export function OrganizationConsole({
   identity: { id: string; kind: AccountKind; schoolId?: string | null };
   initial?: string;
 }) {
+  const auth = useRef<ReauthenticationHandle>(null);
   const root = identity.kind === 'SITE_ADMIN',
     teacher = identity.kind === 'TEACHER';
   const [tab, setTab] = useState(initial === 'schools' && !root ? 'students' : initial),
@@ -54,7 +55,6 @@ export function OrganizationConsole({
   const [query, setQuery] = useState(''),
     [page, setPage] = useState(0),
     [total, setTotal] = useState(0),
-    [proof, setProof] = useState(''),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false),
     [batchId, setBatchId] = useState(''),
@@ -145,9 +145,20 @@ export function OrganizationConsole({
     return () => clearTimeout(timer);
   }, [load]);
   async function command(operation: string, data: Record<string, unknown>) {
+    if (busy) return;
     setBusy(true);
     setMessage('');
     try {
+      const sensitive = [
+        'create-school',
+        'rename-school',
+        'reset-password',
+        'update-account',
+        'set-school-active',
+        'update-class',
+      ].includes(operation);
+      const proof = sensitive ? await auth.current?.request() : undefined;
+      if (sensitive && !proof) return;
       const result = await identityRequest(
         '/api/organization/' + operation,
         { ...data, schoolId, proof },
@@ -163,6 +174,10 @@ export function OrganizationConsole({
       await load();
       return result;
     } catch (e) {
+      if (e instanceof IdentityRequestError && e.code === 'RECENT_AUTH_REQUIRED') {
+        auth.current?.invalidate();
+        void auth.current?.request();
+      }
       setMessage((e as Error).message);
     } finally {
       setBusy(false);
@@ -246,10 +261,7 @@ export function OrganizationConsole({
           </div>
         </section>
       )}
-      <details>
-        <summary>敏感操作验证（重置、停用、交接）</summary>
-        <Reauthentication onProof={setProof} />
-      </details>
+      <Reauthentication ref={auth} />
       <p role="status">{message}</p>
       {tab === 'schools' && root && (
         <>
@@ -264,7 +276,7 @@ export function OrganizationConsole({
                 学校管理员姓名
                 <input name="administratorName" required />
               </label>
-              <button className="button" disabled={busy || !proof}>
+              <button className="button" disabled={busy}>
                 创建学校并生成独立凭据
               </button>
             </form>
@@ -280,7 +292,7 @@ export function OrganizationConsole({
                       学校名称
                       <input name="name" defaultValue={s.name} required maxLength={100} />
                     </label>
-                    <button disabled={!proof || busy}>保存名称</button>
+                    <button disabled={busy}>保存名称</button>
                   </form>
                 </details>
                 <p>
@@ -296,7 +308,7 @@ export function OrganizationConsole({
                     管理该学校
                   </button>
                   <button
-                    disabled={!proof || busy}
+                    disabled={busy}
                     onClick={() => {
                       if (
                         window.confirm(
@@ -495,11 +507,11 @@ export function OrganizationConsole({
                           <input name="studentNumber" defaultValue={p.studentNumber} />
                         </label>
                       )}
-                      <button disabled={!proof || busy}>保存资料</button>
+                      <button disabled={busy}>保存资料</button>
                     </form>
                     <div className="identity-inline">
                       <button
-                        disabled={!proof || busy}
+                        disabled={busy}
                         onClick={() => {
                           if (window.confirm('生成新的独立临时密码，撤销旧凭据和所有会话？'))
                             void command('reset-password', { id: p.id });
@@ -508,7 +520,7 @@ export function OrganizationConsole({
                         重置初始密码
                       </button>
                       <button
-                        disabled={!proof || busy}
+                        disabled={busy}
                         onClick={() => command('update-account', { id: p.id, active: !p.active })}
                       >
                         {p.active ? '停用' : '启用'}
@@ -631,7 +643,7 @@ export function OrganizationConsole({
                         查看学生
                       </button>
                       <button
-                        disabled={!proof || busy}
+                        disabled={busy}
                         onClick={() =>
                           command('update-class', { classId: c.id, archived: !c.archived })
                         }
@@ -658,7 +670,7 @@ export function OrganizationConsole({
                               ))}
                             </select>
                           </label>
-                          <button disabled={!proof || busy}>确认交接</button>
+                          <button disabled={busy}>确认交接</button>
                         </form>
                       </details>
                     )}

@@ -1,9 +1,10 @@
 'use client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AuthRealm } from '@tuheng/contracts';
-import { identityRequest, realmSignOut } from './client';
-import { Reauthentication } from './Reauthentication';
+import { identityRequest, IdentityRequestError, realmSignOut } from './client';
+import { SecretInput } from './SecretInput';
+import { Reauthentication, type ReauthenticationHandle } from './Reauthentication';
 type Status = {
   kind: string;
   realm: AuthRealm;
@@ -21,14 +22,14 @@ export function AccountSetup({
   realm: AuthRealm;
   security?: boolean;
 }) {
+  const auth = useRef<ReauthenticationHandle>(null);
   const router = useRouter();
   const [status, setStatus] = useState<Status>(),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [email, setEmail] = useState(''),
     [challenge, setChallenge] = useState(''),
-    [seconds, setSeconds] = useState(0),
-    [proof, setProof] = useState('');
+    [seconds, setSeconds] = useState(0);
   const refresh = () => identityRequest('/api/identity/status?realm=' + realm).then(setStatus);
   useEffect(() => {
     identityRequest('/api/identity/status?realm=' + realm)
@@ -45,13 +46,25 @@ export function AccountSetup({
     return () => clearTimeout(id);
   }, [seconds]);
   async function act(path: string, data: object) {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
-      const r = await identityRequest('/api/identity/' + path, { ...data, realm });
+      const changingEmail = path === 'request-code' && status?.emailVerified;
+      const proof = changingEmail ? await auth.current?.request() : undefined;
+      if (changingEmail && !proof) return;
+      const r = await identityRequest('/api/identity/' + path, {
+        ...data,
+        realm,
+        ...(proof ? { proof } : {}),
+      });
       await refresh();
       return r;
     } catch (e) {
+      if (e instanceof IdentityRequestError && e.code === 'RECENT_AUTH_REQUIRED') {
+        auth.current?.invalidate();
+        void auth.current?.request();
+      }
       setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -85,30 +98,30 @@ export function AccountSetup({
             method="post"
             onSubmit={async (e) => {
               e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              await act('change-password', {
+              const form = e.currentTarget;
+              const f = new FormData(form);
+              if (f.get('password') !== f.get('confirm')) {
+                setError('两次输入的新密码不一致。');
+                return;
+              }
+              const result = await act('change-password', {
                 current: f.get('current'),
                 password: f.get('password'),
               });
-              e.currentTarget?.reset();
+              if (result) form.reset();
             }}
           >
-            <label>
-              当前密码
-              <input name="current" type="password" autoComplete="current-password" required />
-            </label>
-            <label>
-              新密码
-              <input
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                minLength={12}
-                required
-              />
-            </label>
-            <p>至少 12 个字符，UTF-8 编码不超过 72 字节。</p>
-            <button className="button" disabled={busy}>
+            <SecretInput label="当前密码" name="current" autoComplete="current-password" required />
+            <SecretInput
+              label="新密码"
+              name="password"
+              autoComplete="new-password"
+              minLength={12}
+              required
+              hint="至少 12 个字符；中文等字符占用多个字节，总计不超过 72 字节。"
+            />
+            <SecretInput label="确认新密码" name="confirm" autoComplete="new-password" required />
+            <button className="button primary" disabled={busy}>
               确认修改
             </button>
           </form>
@@ -121,7 +134,7 @@ export function AccountSetup({
               <h2>{status.emailVerified ? '更换绑定邮箱' : '验证邮箱'}</h2>
               {!status.emailBindingRequired && <p>邮箱绑定为可选项，可用于邮箱登录和找回密码。</p>}
               {status.emailHint && <p>当前绑定：{status.emailHint}</p>}
-              {status.emailVerified && <Reauthentication realm={realm} onProof={setProof} />}
+              {status.emailVerified && <Reauthentication key={realm} realm={realm} ref={auth} />}
               <label>
                 邮箱
                 <input
@@ -133,12 +146,11 @@ export function AccountSetup({
               </label>
               <button
                 className="button secondary"
-                disabled={busy || !!seconds || !email || (status.emailVerified && !proof)}
+                disabled={busy || !!seconds || !email}
                 onClick={async () => {
                   const r = await act('request-code', {
                     email,
                     purpose: status.emailVerified ? 'CHANGE_EMAIL' : 'BIND_EMAIL',
-                    proof,
                   });
                   if (r) {
                     setChallenge(r.challengeId);

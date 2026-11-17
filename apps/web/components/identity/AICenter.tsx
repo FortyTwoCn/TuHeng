@@ -1,15 +1,15 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Center } from './AIFields';
 import { AIProviderEditor } from './AIProviderEditor';
 import { AIModelEditor } from './AIModelEditor';
 import { AITaskBindings } from './AITaskBindings';
 import { InvocationList } from './AIInvocationList';
-import { identityRequest } from './client';
-import { Reauthentication } from './Reauthentication';
+import { identityRequest, IdentityRequestError } from './client';
+import { Reauthentication, type ReauthenticationHandle } from './Reauthentication';
 export function AICenter() {
+  const auth = useRef<ReauthenticationHandle>(null);
   const [data, setData] = useState<Center | null>(null),
-    [proof, setProof] = useState(''),
     [tab, setTab] = useState('providers');
   const [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
@@ -40,10 +40,13 @@ export function AICenter() {
     return () => controller.abort();
   }, [query]);
   async function command(body: Record<string, unknown>) {
+    if (busy) return null;
     setError('');
     setNotice('');
     setBusy(true);
     try {
+      const proof = await auth.current?.request();
+      if (!proof) return null;
       const result = await identityRequest('/api/ai', { ...body, proof });
       setNotice(
         result.status
@@ -53,6 +56,10 @@ export function AICenter() {
       await refresh();
       return result;
     } catch (e) {
+      if (e instanceof IdentityRequestError && e.code === 'RECENT_AUTH_REQUIRED') {
+        auth.current?.invalidate();
+        void auth.current?.request();
+      }
       setError((e as Error).message);
       return null;
     } finally {
@@ -64,7 +71,7 @@ export function AICenter() {
     <section className="identity-console">
       <h2>AI 中心</h2>
       <p>供应商、模型和模块规则分别管理。真实密钥只写入；声明能力与测试结果分别保存。</p>
-      <Reauthentication onProof={setProof} />
+      <Reauthentication ref={auth} />
       <nav aria-label="AI 配置分类" className="identity-tabs">
         {[
           ['providers', '供应商'],
@@ -83,7 +90,6 @@ export function AICenter() {
         <AIProviderEditor
           data={data}
           busy={busy}
-          proof={proof}
           command={command}
           providerId={providerId}
           setProviderId={setProviderId}
@@ -93,7 +99,6 @@ export function AICenter() {
         <AIModelEditor
           data={data}
           busy={busy}
-          proof={proof}
           command={command}
           modelId={modelId}
           setModelId={setModelId}
@@ -101,9 +106,7 @@ export function AICenter() {
           setQuery={setQuery}
         />
       )}
-      {tab === 'bindings' && (
-        <AITaskBindings data={data} busy={busy} proof={proof} command={command} />
-      )}
+      {tab === 'bindings' && <AITaskBindings data={data} busy={busy} command={command} />}
       {tab === 'calls' && <InvocationList />}
     </section>
   );

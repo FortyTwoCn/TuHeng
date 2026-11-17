@@ -5,7 +5,6 @@ import { ModelTests } from './AIModelTests';
 export function AIModelEditor({
   data,
   busy,
-  proof,
   command,
   modelId,
   setModelId,
@@ -14,7 +13,6 @@ export function AIModelEditor({
 }: {
   data: Center;
   busy: boolean;
-  proof: string;
   command: (body: Record<string, unknown>) => Promise<{ id?: string } | null>;
   query: string;
   setQuery: (q: string) => void;
@@ -179,11 +177,11 @@ export function AIModelEditor({
           value={model?.archived ?? false}
           title="归档（已有规则不会自动改选其他模型）"
         />
-        <button disabled={!proof || busy || !data.providers.length}>保存模型版本</button>
+        <button disabled={busy || !data.providers.length}>保存模型版本</button>
       </form>
       {model && (
         <>
-          <ModelTests model={model} command={command} disabled={!proof || busy} />
+          <ModelTests model={model} command={command} disabled={busy} />
           <details>
             <summary>版本和模块引用</summary>
             <p>
@@ -195,7 +193,7 @@ export function AIModelEditor({
               <p key={v.id}>
                 版本 {v.version}{' '}
                 <button
-                  disabled={!proof || busy}
+                  disabled={busy}
                   onClick={() =>
                     command({
                       operation: 'rollback',

@@ -4,14 +4,12 @@ import { AIProviderConfig } from '@tuheng/contracts';
 export function AIProviderEditor({
   data,
   busy,
-  proof,
   command,
   providerId,
   setProviderId,
 }: {
   data: Center;
   busy: boolean;
-  proof: string;
   command: (body: Record<string, unknown>) => Promise<{ id?: string } | null>;
   providerId: string;
   setProviderId: (id: string) => void;
@@ -116,7 +114,7 @@ export function AIProviderEditor({
           value={provider?.archived ?? false}
           title="归档（会阻塞引用它的任务）"
         />
-        <button disabled={busy || !proof}>保存供应商版本</button>
+        <button disabled={busy}>保存供应商版本</button>
       </form>
       {provider && (
         <details>
@@ -134,7 +132,7 @@ export function AIProviderEditor({
                 版本 {v.version} · {v.key?.configured ? `密钥尾号 ${v.key.suffix}` : '无有效密钥'}
               </span>
               <button
-                disabled={!proof || busy}
+                disabled={busy}
                 onClick={() =>
                   command({
                     operation: 'rollback',
@@ -149,7 +147,7 @@ export function AIProviderEditor({
               </button>
               {v.secretId && v.key?.configured && (
                 <button
-                  disabled={!proof || busy}
+                  disabled={busy}
                   onClick={() =>
                     command({
                       operation: 'revoke-key',

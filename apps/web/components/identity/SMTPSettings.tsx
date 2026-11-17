@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SMTPConfig } from '@tuheng/contracts';
-import { Reauthentication } from './Reauthentication';
-import { identityRequest } from './client';
+import { Reauthentication, type ReauthenticationHandle } from './Reauthentication';
+import { identityRequest, IdentityRequestError } from './client';
 type Version = {
   id: string;
   version: number;
@@ -12,8 +12,8 @@ type Version = {
   secretSuffix: string;
 };
 export function SMTPSettings() {
+  const auth = useRef<ReauthenticationHandle>(null);
   const [versions, setVersions] = useState<Version[]>([]),
-    [proof, setProof] = useState(''),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false),
     [recipient, setRecipient] = useState('');
@@ -34,9 +34,12 @@ export function SMTPSettings() {
       .catch((e) => setMessage(e.message));
   }, []);
   async function act(data: object) {
+    if (busy) return;
     setBusy(true);
     setMessage('');
     try {
+      const proof = await auth.current?.request();
+      if (!proof) return;
       const r = await identityRequest('/api/settings/mail', { ...data, proof }, 'STAFF');
       setMessage(
         r.status === 'SUBMITTED_TO_SMTP'
@@ -47,6 +50,10 @@ export function SMTPSettings() {
       );
       setVersions(await identityRequest('/api/settings/mail'));
     } catch (e) {
+      if (e instanceof IdentityRequestError && e.code === 'RECENT_AUTH_REQUIRED') {
+        auth.current?.invalidate();
+        void auth.current?.request();
+      }
       setMessage((e as Error).message);
     } finally {
       setBusy(false);
@@ -56,7 +63,7 @@ export function SMTPSettings() {
     <section className="identity-panel">
       <h2>邮件服务</h2>
       <p>保存、测试连接、发送测试邮件和启用是独立操作。密码留空会保留原值。</p>
-      <Reauthentication onProof={setProof} />
+      <Reauthentication ref={auth} />
       <form
         method="post"
         className="identity-grid-form"
@@ -138,7 +145,7 @@ export function SMTPSettings() {
           密码 / 授权码
           <input name="password" type="password" autoComplete="new-password" />
         </label>
-        <button className="button" disabled={busy || !proof}>
+        <button className="button" disabled={busy}>
           保存为新版本
         </button>
       </form>
@@ -159,25 +166,22 @@ export function SMTPSettings() {
             </p>
             <div className="identity-inline">
               {v.secretConfigured && (
-                <button
-                  disabled={!proof || busy}
-                  onClick={() => act({ action: 'REVOKE_KEY', id: v.id })}
-                >
+                <button disabled={busy} onClick={() => act({ action: 'REVOKE_KEY', id: v.id })}>
                   撤销此版本凭据
                 </button>
               )}
               <button onClick={() => setDraft(v.config)}>载入此版本编辑</button>
-              <button disabled={!proof || busy} onClick={() => act({ action: 'VERIFY', id: v.id })}>
+              <button disabled={busy} onClick={() => act({ action: 'VERIFY', id: v.id })}>
                 测试连接
               </button>
               <button
-                disabled={!proof || busy || !recipient}
+                disabled={busy || !recipient}
                 onClick={() => act({ action: 'TEST', id: v.id, recipient })}
               >
                 发送测试邮件
               </button>
               <button
-                disabled={!proof || busy}
+                disabled={busy}
                 onClick={() => act({ action: v.enabled ? 'DISABLE' : 'ENABLE', id: v.id })}
               >
                 {v.enabled ? '停用' : '启用'}

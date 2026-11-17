@@ -46,10 +46,10 @@ const menus = {
     ['organization', '课程与教学组织', Layers],
     ['questions', '题库', Layers],
     ['assignments', '学校作业', ClipboardList],
-    ['models', 'AI 模型配置', Settings2],
+    ['models', 'AI 中心', Settings2],
     ['jobs', 'AI 任务管理', Activity],
     ['audit', '操作审计', ShieldCheck],
-    ['mail', '邮件服务', Settings2],
+    ['settings', '系统设置', Settings2],
     ['system', '系统状态', Settings2],
   ],
 } as const;

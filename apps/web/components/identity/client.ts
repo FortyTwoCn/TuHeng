@@ -17,6 +17,15 @@ const messages: Record<string, string> = {
   OUTBOUND_ADDRESS_FORBIDDEN: '目标地址不在允许的网络范围内。',
   OUTBOUND_PORT_FORBIDDEN: '目标端口未获部署配置授权。',
 };
+export class IdentityRequestError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'IdentityRequestError';
+  }
+}
 export async function identityRequest(path: string, data?: unknown, realm?: AuthRealm) {
   const response = await fetch(path, {
     method: data === undefined ? 'GET' : 'POST',
@@ -25,7 +34,10 @@ export async function identityRequest(path: string, data?: unknown, realm?: Auth
   });
   const body = await response.json();
   if (!response.ok)
-    throw new Error(messages[body.error] ?? body.details?.join('；') ?? body.error ?? '操作失败');
+    throw new IdentityRequestError(
+      body.error ?? 'REQUEST_FAILED',
+      messages[body.error] ?? body.details?.join('；') ?? body.error ?? '操作失败',
+    );
   return body.data;
 }
 export async function realmSignIn(realm: AuthRealm, values: Record<string, string>) {

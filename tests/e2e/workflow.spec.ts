@@ -1,4 +1,4 @@
-import { prepareLogin } from './identity-login';
+import { prepareLogin, verifyIdentity } from './identity-login';
 import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
 const sample = path.resolve('tests/samples/projection.png');
@@ -105,13 +105,7 @@ test('F: admin creates, searches and disables a scoped teacher with generated cr
   await page.getByLabel('搜索姓名 / 登录 ID / 学号').fill(name);
   const row = page.locator('.identity-list article').filter({ hasText: name });
   await expect(row).toBeVisible();
-  await page.getByText('敏感操作验证（重置、停用、交接）', { exact: true }).click();
-  await page
-    .getByLabel('验证当前密码（敏感操作授权 10 分钟）')
-    .first()
-    .fill(process.env.SEED_PASSWORD!);
-  await page.getByRole('button', { name: '验证身份', exact: true }).first().click();
-  await expect(page.getByText('已验证', { exact: true }).first()).toBeVisible();
+  await verifyIdentity(page, process.env.SEED_PASSWORD!);
   await row.locator('summary').click();
   await row.getByRole('button', { name: '停用', exact: true }).click();
   await expect(row).toContainText('停用');

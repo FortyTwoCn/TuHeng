@@ -1,27 +1,9 @@
-import Link from 'next/link';
-import { BrandLogo } from '../../components/BrandLogo';
-export default async function LoginChoice({
+import { UnifiedLogin } from '../../components/identity/UnifiedLogin';
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | undefined>>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const requested = (await searchParams).callbackUrl;
-  const suffix = requested ? '?callbackUrl=' + encodeURIComponent(requested) : '';
-  return (
-    <main className="identity-entry">
-      <BrandLogo />
-      <h1>登录图衡</h1>
-      <p>请选择本次使用的账号身份。</p>
-      <div className="identity-choices">
-        <Link className="identity-choice" href={'/login/student' + suffix}>
-          <h2>学生</h2>
-          <p>学号、已绑定邮箱或邮箱验证码</p>
-        </Link>
-        <Link className="identity-choice" href={'/login/staff' + suffix}>
-          <h2>教师与管理</h2>
-          <p>教师、学校管理和站点管理员</p>
-        </Link>
-      </div>
-    </main>
-  );
+  const { realm } = await searchParams;
+  return <UnifiedLogin initialRealm={realm === 'staff' ? 'STAFF' : 'STUDENT'} />;
 }

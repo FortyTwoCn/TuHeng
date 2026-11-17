@@ -3,8 +3,8 @@
   --teal: #137f80;
   --teal-light: #e6f4f1;
   --text: #1e3442;
-  --muted: #7a8b98;
-  --border: #e3eaee;
+  --muted: #52657a;
+  --border: #d6e0ea;
   --bg: #f4f7f9;
   --red: #b14b4b;
 }
@@ -1130,8 +1130,10 @@ footer {
 }
 .login {
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
+  grid-template-columns: 1fr 1.15fr;
   min-height: 100vh;
+  min-height: 100dvh;
+  background: white;
 }
 .login-art {
   background: var(--navy);
@@ -1190,26 +1192,209 @@ footer {
 }
 .login-form {
   align-self: center;
-  max-width: 430px;
-  margin: 50px auto;
+  max-width: 460px;
+  margin: 36px auto;
   width: 100%;
-  padding: 30px;
+  padding: 24px 32px;
 }
 .login-form h2 {
-  font-size: 26px;
-  margin: 18px 0 10px;
+  font-size: 27px;
+  margin: 0 0 8px;
 }
-.login-form .muted {
-  font-size: 12px;
+.login-form > .muted {
+  margin-bottom: 24px;
 }
-.login-form form {
-  margin-top: 34px;
+.login-mobile-brand {
+  display: none;
 }
-.login-form label {
-  margin-bottom: 20px;
+.login-realm-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--bg);
 }
-.login-form .button {
-  margin: 7px 0 20px;
+.login-realm-tabs button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+}
+.login-realm-tabs [aria-pressed='true'] {
+  background: white;
+  border-color: var(--border);
+  color: var(--teal);
+  box-shadow: 0 1px 4px #13364b0a;
+}
+.login-form .login-method-tabs {
+  gap: 0;
+  margin: 20px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: nowrap;
+}
+.login-form .login-method-tabs button {
+  flex: 1;
+  padding-inline: 4px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.login-form .login-method-tabs [aria-pressed='true'] {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: transparent;
+}
+.login-fields {
+  display: grid;
+  gap: 18px;
+}
+.login-fields label {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  font-weight: 500;
+}
+.login-code-field {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+}
+.login-code-field label {
+  flex: 1;
+  min-width: 0;
+}
+.login-code-field button {
+  flex: none;
+  margin: 0;
+}
+.login-notice,
+.login-fields .field-error {
+  margin: 0;
+  font-size: 13px;
+}
+.login-submit {
+  width: 100%;
+  justify-content: center;
+  min-height: 46px;
+  margin: 0;
+}
+.login-recover {
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  min-height: 44px;
+  margin-top: -12px;
+}
+.school-combobox {
+  position: relative;
+}
+.school-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding-left: 12px;
+  margin-top: 7px;
+  background: white;
+}
+.school-search input {
+  border: 0;
+  padding-inline: 0;
+  background: transparent;
+}
+.school-search:focus-within {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+.school-search input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.school-options {
+  position: absolute;
+  top: 100%;
+  inset-inline: 0;
+  z-index: 3;
+  max-height: 260px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #13364b22;
+  padding: 6px;
+}
+.school-options button {
+  display: block;
+  text-align: left;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px;
+  border: 0;
+  border-radius: 6px;
+  background: white;
+}
+.school-options button small {
+  display: block;
+  color: var(--muted);
+}
+.school-options button:hover,
+.school-options .highlighted {
+  background: var(--teal-light);
+}
+.school-options p {
+  font-size: 13px;
+  padding: 8px;
+  margin: 0;
+}
+.secret-field {
+  min-width: 0;
+}
+.secret-input {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-block: 7px;
+  background: white;
+}
+.secret-input input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.secret-input:focus-within {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+.secret-input input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  color: var(--muted);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
 }
 .tag {
   font-size: 10px;
@@ -1506,46 +1691,33 @@ footer {
     display: block;
   }
   .login-art {
-    padding: 25px 28px;
-  }
-  .login-art .brand {
-    margin-bottom: 28px;
-    font-size: 22px;
-  }
-  .login-art h1 {
-    font-size: 28px;
-    line-height: 1.45;
-    margin-top: 18px;
-  }
-  .login-art > p:not(.eyebrow) {
     display: none;
   }
-  .login-art .eyebrow {
-    font-size: 7px;
-  }
-  .login-art .brand-logo {
-    width: 52px;
-    height: 52px;
-  }
-  .projection-art {
-    position: absolute;
-    width: clamp(80px, calc(100vw - 238px), 152px);
-    bottom: 18px;
-    right: 18px;
-    margin: 0;
-    transform: none;
-    opacity: 0.4;
-  }
   .login-form {
-    padding: 27px;
+    padding: 28px 20px max(24px, env(safe-area-inset-bottom));
     max-width: 440px;
     margin: 0 auto;
   }
   .login-form h2 {
-    font-size: 23px;
+    font-size: 24px;
   }
-  .login-form form {
-    margin-top: 25px;
+  .login-mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  .login-mobile-brand .brand-logo {
+    width: 44px;
+    height: 44px;
+  }
+  .login-mobile-brand strong {
+    font-size: 22px;
+  }
+  .login-mobile-brand small {
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-left: 8px;
   }
   footer span {
     display: none;
@@ -1583,7 +1755,7 @@ footer {
 .identity-choices,
 .identity-grid-form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 .identity-choice,
@@ -1655,14 +1827,88 @@ footer {
   overflow-wrap: anywhere;
 }
 .identity-reauth {
-  padding: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  margin-block: 12px;
+}
+.identity-reauth button {
+  min-height: 36px;
+  padding: 4px 10px;
+}
+.identity-panel .secret-field label {
+  margin-bottom: 0;
+}
+.identity-panel .secret-input button {
+  border: 0;
+  padding: 8px;
+  min-width: 44px;
+}
+.ui-dialog {
+  padding: 0;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 12px;
+  color: var(--text);
+  background: white;
+  box-shadow: 0 16px 64px #13364b30;
+  overflow-y: auto;
+}
+.ui-dialog::backdrop {
+  background: #102b3e66;
+}
+.ui-dialog-heading {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
+}
+.ui-dialog-heading h2 {
+  margin: 0;
+}
+.ui-dialog-body {
+  padding: 20px;
+}
+.identity-dialog-form {
+  display: grid;
+  gap: 14px;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+.ui-drawer {
+  width: min(660px, calc(100vw - 24px));
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  margin: 0 0 0 auto;
+  border-radius: 12px 0 0 12px;
+}
+.ui-drawer .ui-dialog-body {
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 .identity-panel form {
   min-width: 0;
 }
 @media (max-width: 600px) {
+  .identity-choices,
+  .identity-grid-form {
+    grid-template-columns: 1fr;
+  }
   .identity-entry {
     margin: 0 auto;
     padding: 16px 12px max(24px, env(safe-area-inset-bottom));
