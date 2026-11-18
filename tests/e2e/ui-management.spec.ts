@@ -145,7 +145,7 @@ test('S01: one settings navigation entry, legacy mail route and server permissio
   await expect(nav.getByRole('link', { name: '邮件服务', exact: true })).toHaveCount(0);
   await expect(
     page.getByRole('navigation', { name: '系统设置分类' }).getByRole('link'),
-  ).toHaveCount(1);
+  ).toHaveCount(2);
   await expect(page.getByRole('heading', { name: '系统设置', exact: true })).toBeVisible();
   await expect(page.locator('input[autocomplete="current-password"]')).toHaveCount(0);
   const student = await page.context().browser()!.newPage();

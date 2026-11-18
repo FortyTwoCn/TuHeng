@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
+import { SiteFooter } from '../components/SiteFooter';
 import './globals.css';
 import '../components/identity/organization.css';
 import '../components/identity/configuration.css';
@@ -11,7 +13,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <div className="site-content">{children}</div>
+        <Suspense fallback={null}>
+          <SiteFooter />
+        </Suspense>
+      </body>
     </html>
   );
 }

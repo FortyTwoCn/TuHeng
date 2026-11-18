@@ -247,6 +247,7 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
   await card.getByRole('button', { name: '关闭并清除卡片' }).click();
   await expect(card).toHaveCount(0);
   await loginId(staff, initial.id, initial.password);
+  await expect(staff.getByRole('contentinfo', { name: '网站信息' })).toHaveCount(1);
   expect((await staff.request.get('/api/organization/accounts')).status()).toBe(403);
   expect((await staff.request.get('/api/ai')).status()).toBe(403);
   await changePassword(staff, initial.password);
@@ -254,6 +255,15 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
   await bind(staff, 'school' + tag + '@browser.invalid');
   await staff.getByRole('link', { name: '进入工作空间', exact: true }).click();
   await expect(staff).toHaveURL('/school/dashboard');
+  await expect(staff.getByRole('contentinfo', { name: '网站信息' })).toHaveCount(1);
+  expect(
+    (
+      await staff.request.post('/api/settings/site', {
+        headers: { Origin: origin },
+        data: { filingNumber: '学校不能修改全站备案号', expectedVersion: 0 },
+      })
+    ).status(),
+  ).toBe(403);
   expect((await staff.request.get('/api/ai')).status()).toBe(403);
   const teacher = await api(staff, '/api/organization/create-teacher', {
     schoolId: school.school.id,
@@ -523,6 +533,11 @@ test('AI: browser provider versions mask keys, model and module forms; responsiv
   await page
     .getByRole('navigation', { name: '移动端更多导航' })
     .getByRole('link', { name: '系统设置', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: '网站信息', exact: true })).toBeVisible();
+  await page
+    .getByRole('navigation', { name: '系统设置分类' })
+    .getByRole('link', { name: '邮件服务', exact: true })
     .click();
   await expect(page.getByRole('heading', { name: '邮件服务', exact: true })).toBeVisible();
   await page.goto('/admin/users');

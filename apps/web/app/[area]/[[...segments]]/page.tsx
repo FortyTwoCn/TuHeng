@@ -25,7 +25,9 @@ export async function generateMetadata({
 }) {
   const { area, segments = [] } = await params;
   if (area === 'admin' && ['settings', 'mail'].includes(segments[0]))
-    return { title: '系统设置 · 邮件服务 · 图衡' };
+    return {
+      title: `系统设置 · ${segments[0] === 'mail' || segments[1] === 'mail' ? '邮件服务' : '网站信息'} · 图衡`,
+    };
   return { title: '图衡 · 智能工程图学教学平台' };
 }
 export default async function Workspace({
@@ -171,9 +173,10 @@ async function workspaceView(
           }
         />
       );
-    else if (section === 'mail' || (section === 'settings' && !segments[1]))
-      redirect('/admin/settings/mail');
-    else if (section === 'settings' && segments[1] === 'mail') view = <SystemSettings />;
+    else if (section === 'mail') redirect('/admin/settings/mail');
+    else if (section === 'settings' && !segments[1]) redirect('/admin/settings/site');
+    else if (section === 'settings' && ['site', 'mail'].includes(segments[1]))
+      view = <SystemSettings section={segments[1] === 'mail' ? 'mail' : 'site'} />;
     else if (section === 'assignments')
       view =
         segments[1] === 'new'

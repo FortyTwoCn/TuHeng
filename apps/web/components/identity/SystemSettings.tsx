@@ -1,8 +1,16 @@
 import Link from 'next/link';
 import { PageTitle } from '@tuheng/ui';
 import { SMTPSettings } from './SMTPSettings';
+import { SiteSettings } from './SiteSettings';
 
 export const settingSections = [
+  {
+    key: 'site',
+    title: '网站信息',
+    description: '页面底部的备案信息',
+    role: 'SITE_ADMIN',
+    href: '/admin/settings/site',
+  },
   {
     key: 'mail',
     title: '邮件服务',
@@ -12,7 +20,7 @@ export const settingSections = [
   },
 ] as const;
 
-export function SystemSettings() {
+export function SystemSettings({ section = 'site' }: { section?: 'site' | 'mail' }) {
   return (
     <section className="system-settings">
       <PageTitle
@@ -21,18 +29,18 @@ export function SystemSettings() {
         description="管理平台级配置。设置变更与历史版本分别保留。"
       />
       <nav className="identity-tabs" aria-label="系统设置分类">
-        {settingSections.map((section) => (
+        {settingSections.map((item) => (
           <Link
-            key={section.key}
-            href={section.href}
+            key={item.key}
+            href={item.href}
             className="button secondary"
-            aria-current="page"
+            aria-current={section === item.key ? 'page' : undefined}
           >
-            {section.title}
+            {item.title}
           </Link>
         ))}
       </nav>
-      <SMTPSettings />
+      {section === 'site' ? <SiteSettings /> : <SMTPSettings />}
     </section>
   );
 }

@@ -13,6 +13,11 @@ export interface Row {
   id: string;
 }
 export interface Entities {
+  siteConfigurationVersion: Row & {
+    version: number;
+    filingNumber: string;
+    createdAt: Date;
+  };
   user: Row & {
     email: string;
     kind?: import('@tuheng/contracts').AccountKind;

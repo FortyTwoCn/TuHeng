@@ -93,11 +93,6 @@ export function Shell({
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="assistant-note">
-            <span>◇</span>
-            <strong>有据可循的学习反馈</strong>
-            <p>AI 辅助分析，教师确认成绩。每一次修改都保留记录。</p>
-          </div>
           <div className="account">
             <span className="avatar">{a.name.slice(0, 1)}</span>
             <span>
@@ -130,12 +125,7 @@ export function Shell({
             <span className="avatar small-avatar">{a.name.slice(0, 1)}</span>
           </div>
         </header>
-        <main className="workspace">
-          {children}
-          <footer>
-            图衡 TuHeng <span>以几何理解为本，以作答证据为据。</span>
-          </footer>
-        </main>
+        <main className="workspace">{children}</main>
       </div>
       <nav className="mobile-nav" aria-label="移动端主导航">
         {menu.slice(0, 4).map(([path, label, Icon]) => (
