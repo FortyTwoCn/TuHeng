@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { prisma } from '@tuheng/database';
-import { prepareLogin } from './identity-login';
+import { prepareLogin, verifyIdentity } from './identity-login';
 test('school catalog, teacher class deep link, school question versions and reviewer publication', async ({
   browser,
 }) => {
@@ -51,7 +51,9 @@ test('school catalog, teacher class deep link, school question versions and revi
     await drawer.getByLabel('课程名称').fill('工程制图');
     await drawer.getByLabel('本校课程编号').fill('EG01');
     await drawer.getByRole('button', { name: '保存', exact: true }).click();
-    await schoolPage.getByRole('link', { name: /工程制图.*EG01/ }).click();
+    const courseLink = schoolPage.getByRole('link', { name: /工程制图.*EG01/ });
+    const courseHref = await courseLink.getAttribute('href');
+    await courseLink.click();
     for (const term of ['2026秋', '2027春']) {
       await schoolPage.getByRole('button', { name: '新增开课学期' }).click();
       await drawer.getByLabel('学期', { exact: true }).fill(term);
@@ -150,7 +152,85 @@ test('school catalog, teacher class deep link, school question versions and revi
     ).toEqual([teacher.id]);
     await expect(schoolPage.getByRole('heading', { name: '学生提交', exact: true })).toHaveCount(0);
     expect((await schoolPage.request.get('/school/unknown-management-page')).status()).toBe(404);
+    await schoolPage.goto(courseHref!);
+    await schoolPage.getByRole('button', { name: '编辑课程' }).click();
+    await drawer.getByLabel('课程名称').fill('工程制图基础');
+    await drawer.getByRole('button', { name: '保存' }).click();
+    await expect(
+      schoolPage.getByRole('heading', { name: '工程制图基础', exact: true }),
+    ).toBeVisible();
+    await schoolPage.getByRole('link', { name: '2027春', exact: true }).click();
+    await schoolPage.getByRole('button', { name: '编辑开课' }).click();
+    await drawer.getByLabel('学期', { exact: true }).fill('2027春季');
+    await drawer.getByRole('button', { name: '保存' }).click();
+    await expect(schoolPage.getByRole('heading', { name: /2027春季/ })).toBeVisible();
+    for (const [type, path] of [
+      ['开课', schoolPage.url()],
+      ['课程', courseHref!],
+    ] as const) {
+      await schoolPage.goto(path);
+      for (const action of ['归档', '恢复']) {
+        const label = action + type;
+        await schoolPage.getByRole('button', { name: label, exact: true }).click();
+        await drawer.getByRole('button', { name: '确认' + label, exact: true }).click();
+        await expect(
+          schoolPage.getByRole('button', {
+            name: (action === '归档' ? '恢复' : '归档') + type,
+            exact: true,
+          }),
+        ).toBeVisible();
+      }
+    }
   } finally {
     await Promise.all([schoolPage.close(), teacherPage.close()]);
   }
+});
+
+test('site admin supplements a school administrator and manages its credentials and status in school detail', async ({
+  page,
+}) => {
+  const code = 'FIX-' + randomUUID();
+  const password = process.env.SEED_PASSWORD!;
+  const account = await prepareLogin(page, 'admin');
+  await account.fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await expect(page).toHaveURL('/admin/dashboard');
+  const school = await prisma.school.create({ data: { name: '待配置学校', code } });
+  await page.goto('/admin/schools?q=' + code);
+  await verifyIdentity(page, password);
+  const row = page.locator('.organization-row').filter({ hasText: code });
+  await row.getByRole('button', { name: '查看详情' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('管理员姓名').fill('独立学校管理员');
+  await dialog.getByRole('button', { name: '创建学校管理账号' }).click();
+  await expect(dialog).not.toBeVisible();
+  await row.getByRole('button', { name: '查看详情' }).click();
+  await expect(dialog.getByText(/独立学校管理员.*待改密/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '创建学校管理账号' })).toHaveCount(0);
+  const admin = await prisma.user.findFirstOrThrow({
+    where: { schoolId: school.id, kind: 'SCHOOL_ADMIN' },
+  });
+  await expect(dialog).toContainText(admin.loginId!);
+  for (const op of ['重置临时密码', '停用管理账号', '启用管理账号']) {
+    page.once('dialog', async (alert) => {
+      await alert.accept();
+    });
+    await dialog.getByRole('button', { name: op, exact: true }).click();
+    if (op === '重置临时密码')
+      await expect
+        .poll(
+          async () =>
+            (await prisma.user.findUniqueOrThrow({ where: { id: admin.id } })).credentialVersion,
+        )
+        .toBeGreaterThan(admin.credentialVersion);
+    else
+      await expect(
+        dialog.getByRole('button', {
+          name: op === '停用管理账号' ? '启用管理账号' : '停用管理账号',
+          exact: true,
+        }),
+      ).toBeVisible();
+  }
+  expect(await prisma.user.count({ where: { schoolId: school.id, kind: 'SCHOOL_ADMIN' } })).toBe(1);
 });

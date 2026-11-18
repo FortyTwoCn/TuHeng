@@ -1,5 +1,6 @@
 import { beforeAll, describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { addDrawing, createDocument } from '@tuheng/geometry-core';
 import { prisma, database } from '@tuheng/database';
 import { loadIdentity } from '../../packages/infrastructure/src/identity-auth';
 import { reauthenticate } from '../../packages/infrastructure/src/identity-security';
@@ -34,6 +35,10 @@ import { rosterTemplate } from '../../packages/infrastructure/src/roster-xlsx';
 import { requestFixture } from '../fixtures';
 import {
   createQuestion,
+  saveDraft,
+  submitAnswer,
+  reviewGrade,
+  publishGrade,
   accountRoles,
   createAssignment,
   publishAssignment,
@@ -59,6 +64,7 @@ let root: Actor,
   o2: string,
   c1: string,
   c2: string,
+  otherCourseClass: string,
   studentId: string,
   assignmentId: string;
 async function account(school: string, kind: 'TEACHER' | 'SCHOOL_ADMIN', name: string) {
@@ -104,7 +110,19 @@ describe.sequential('scoped teaching organization and historical assignments', (
         async (term) => (await createOffering(admin, { schoolId, courseId, term })).id,
       ),
     );
-    await createOffering(admin, { schoolId, courseId: another.id, term: '2026秋' });
+    const sameTerm = await createOffering(admin, {
+      schoolId,
+      courseId: another.id,
+      term: '2026秋',
+    });
+    otherCourseClass = (
+      await createClass(peer, {
+        schoolId,
+        offeringId: sameTerm.id,
+        teacherId: peer.id,
+        name: '设计班',
+      })
+    ).id;
     await expect(
       createOffering(admin, { schoolId, courseId, term: '2026秋' }),
     ).rejects.toMatchObject({ status: 409 });
@@ -140,7 +158,9 @@ describe.sequential('scoped teaching organization and historical assignments', (
     const data = { schoolId, name: '林同学', studentNumber: '00037' };
     studentId = (await upsertStudentMembership(t, { ...data, classIds: [c1] })).id;
     const before = await prisma.user.findUniqueOrThrow({ where: { id: studentId } });
-    expect(await upsertStudentMembership(admin, { ...data, classIds: [c2] })).toMatchObject({
+    expect(
+      await upsertStudentMembership(admin, { ...data, classIds: [c2, otherCourseClass] }),
+    ).toMatchObject({
       id: studentId,
       reused: true,
     });
@@ -151,12 +171,14 @@ describe.sequential('scoped teaching organization and historical assignments', (
       updateAccount(t, studentId, { name: '错名', active: false }, ''),
     ).rejects.toMatchObject({ status: 403 });
     expect(await prisma.user.findUnique({ where: { id: studentId } })).toEqual(before);
-    expect(await prisma.enrollment.count({ where: { userId: studentId } })).toBe(2);
+    expect(await prisma.enrollment.count({ where: { userId: studentId } })).toBe(3);
   });
   it('preserves snapshot recipients and co-teachers across removal, handover and ancestor archive; legacy grants stay live', async () => {
     const f = requestFixture();
+    const stem = createDocument('VHW_PROJECTION');
     const v = await createQuestion(database, t, {
       title: '制图题',
+      geometryDocument: stem,
       content: f.question.content,
       type: f.question.type,
       chapter: '第一章',
@@ -173,13 +195,56 @@ describe.sequential('scoped teaching organization and historical assignments', (
       startsAt: new Date(0),
       dueAt: new Date(Date.now() + 86400000),
       allowLate: false,
-      maxAttempts: 1,
+      maxAttempts: 2,
       releaseAnswers: false,
     };
     const ass = await createAssignment(database, t, input);
     const draft = await createAssignment(database, t, { ...input, title: '归档后禁止新发布' });
     assignmentId = ass.id;
     await publishAssignment(database, t, ass.id);
+    const student: Actor = {
+      id: studentId,
+      name: '林同学',
+      kind: 'STUDENT',
+      roles: ['STUDENT'],
+      schoolId,
+    };
+    const item = (await database.list('assignmentItem', { assignmentId: ass.id }))[0];
+    const answer = addDrawing(
+      stem,
+      'segment',
+      'view-0',
+      [
+        { x: 2, y: 3 },
+        { x: 5, y: 8 },
+      ],
+      'student',
+    );
+    await saveDraft(database, student, item.id, [], answer);
+    const submit = () =>
+      submitAnswer(database, student, {
+        itemId: item.id,
+        assetIds: [],
+        geometry: answer,
+        idempotencyKey: randomUUID(),
+      });
+    const originalAttempt = await submit();
+    const review = (attemptId: string) =>
+      reviewGrade(database, t, {
+        attemptId,
+        items: f.rubric.items.map((i) => ({
+          criterionId: i.id,
+          points: i.maxPoints,
+          evidence: '教师逐项确认',
+        })),
+        feedback: '已复核工程图',
+        annotations: [],
+        aiIncorrect: false,
+      });
+    const firstDecision = await review(originalAttempt.id);
+    await publishGrade(database, t, firstDecision.id);
+    const historicalAttempt = await database.get('submissionAttempt', originalAttempt.id);
+    const historicalGrade = await database.get('gradeDecision', firstDecision.id);
     const before = await prisma.assignmentRecipient.findMany({ where: { assignmentId: ass.id } });
     expect(await assignmentDetails(database, admin, ass.id)).toMatchObject({
       manager: true,
@@ -196,7 +261,7 @@ describe.sequential('scoped teaching organization and historical assignments', (
     });
     await updateClass(admin, c1, { teacherId: peer.id }, schoolProof);
     await changeClassMembership(t, c1, studentId, false);
-    expect(await prisma.enrollment.count({ where: { userId: studentId } })).toBe(1);
+    expect(await prisma.enrollment.count({ where: { userId: studentId } })).toBe(2);
     await updateClass(admin, c1, { fromTeacherId: t.id, teacherId: next.id }, schoolProof);
     expect((await classDetail(admin, schoolId, c1)).grants.map((g) => g.userId).sort()).toEqual(
       [peer.id, next.id].sort(),
@@ -229,6 +294,12 @@ describe.sequential('scoped teaching organization and historical assignments', (
       published!,
     );
     await requireAssignmentReviewer(database, t, published!, studentId);
+    const laterAttempt = await submit();
+    expect(laterAttempt.version).toBe(2);
+    const newGrade = await review(laterAttempt.id);
+    await publishGrade(database, t, newGrade.id);
+    expect(await database.get('submissionAttempt', originalAttempt.id)).toEqual(historicalAttempt);
+    expect(await database.get('gradeDecision', firstDecision.id)).toEqual(historicalGrade);
     expect(await prisma.assignment.findUniqueOrThrow({ where: { id: ass.id } })).toEqual(snapshot);
     await updateCourse(admin, { schoolId, courseId, archived: false });
     expect((await classDetail(admin, schoolId, c2)).archived).toBe(true);
