@@ -50,10 +50,12 @@ export function LoginPanel({
     setEmail('');
   }
   const codeMode = mode === 'CODE' || mode === 'RECOVER';
+  const methods =
+    realm === 'STAFF' ? (['ID', 'CODE'] as const) : (['ID', 'EMAIL', 'CODE'] as const);
   return (
     <>
       <div className="identity-tabs login-method-tabs" aria-label="登录方式">
-        {(['ID', 'EMAIL', 'CODE'] as const).map((value) => (
+        {methods.map((value) => (
           <button
             key={value}
             type="button"
@@ -64,7 +66,7 @@ export function LoginPanel({
             {value === 'ID'
               ? realm === 'STUDENT'
                 ? '学号'
-                : '登录 ID'
+                : '账号密码'
               : value === 'EMAIL'
                 ? '邮箱密码'
                 : '邮箱验证码'}
@@ -99,7 +101,7 @@ export function LoginPanel({
                 password: f.get('password'),
               });
               if (!mounted.current) return;
-              changeMethod('EMAIL');
+              changeMethod(realm === 'STAFF' ? 'ID' : 'EMAIL');
               setNotice('密码已更新，请使用新密码登录。');
               return;
             }
@@ -135,7 +137,16 @@ export function LoginPanel({
         {mode === 'ID' ? (
           <label>
             {realm === 'STUDENT' ? '学号' : '登录 ID / 已绑定邮箱'}
-            <input name="identifier" autoComplete="username" required maxLength={254} />
+            <input
+              type="text"
+              name="identifier"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder={realm === 'STAFF' ? '输入登录 ID 或已绑定邮箱' : undefined}
+              required
+              maxLength={254}
+            />
           </label>
         ) : (
           <label>

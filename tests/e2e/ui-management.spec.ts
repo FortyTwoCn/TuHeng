@@ -6,8 +6,8 @@ import { prisma } from '@tuheng/database';
 import { prepareLogin } from './identity-login';
 
 async function loginRoot(page: Page) {
-  await prepareLogin(page, 'admin');
-  await page.getByLabel('已绑定邮箱', { exact: true }).fill('admin@tuheng.local');
+  const identifier = await prepareLogin(page, 'admin');
+  await identifier.fill('admin@tuheng.local');
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/admin/dashboard');
@@ -322,8 +322,8 @@ test('G06: switching schools clears incompatible filters and ignores the previou
   await expect(page.locator('.organization-row')).toHaveCount(0);
   const students = await page.context().browser()!.newPage();
   try {
-    await prepareLogin(students, 'teacher');
-    await students.getByLabel('已绑定邮箱', { exact: true }).fill('teacher@tuheng.local');
+    const teacherIdentifier = await prepareLogin(students, 'teacher');
+    await teacherIdentifier.fill('teacher@tuheng.local');
     await students.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
     await students.getByRole('button', { name: '登录', exact: true }).click();
     await expect(students).toHaveURL('/teacher/dashboard');

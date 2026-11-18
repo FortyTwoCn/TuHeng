@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { choose, settings, closePanels, properties } from './editor-controls';
 import { performanceDocument } from '../geometry-fixtures';
 async function login(page: Page, who = 'teacher') {
-  await prepareLogin(page, who);
-  await page.getByLabel('已绑定邮箱', { exact: true }).fill(`${who}@tuheng.local`);
+  const identifier = await prepareLogin(page, who);
+  await identifier.fill(`${who}@tuheng.local`);
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/${who}/dashboard`));

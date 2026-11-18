@@ -12,7 +12,11 @@ export async function prepareLogin(page: Page, who = 'student', callback?: strin
   await page.goto(
     `/login/${realm.toLowerCase()}${callback ? '?callbackUrl=' + encodeURIComponent(callback) : ''}`,
   );
-  await page.getByRole('button', { name: '邮箱密码', exact: true }).click();
+  if (realm === 'STUDENT')
+    await page.getByRole('button', { name: '邮箱密码', exact: true }).click();
+  return page.getByLabel(realm === 'STAFF' ? '登录 ID / 已绑定邮箱' : '已绑定邮箱', {
+    exact: true,
+  });
 }
 export async function verifyIdentity(scope: Page | Locator, password: string) {
   await scope.getByRole('button', { name: '验证身份', exact: true }).first().click();

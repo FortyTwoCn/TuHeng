@@ -37,8 +37,8 @@ async function api(page: Page, path: string, data: object, realm = 'STAFF') {
   return (await response.json()).data;
 }
 async function rootLogin(page: Page) {
-  await prepareLogin(page, 'admin');
-  await page.getByLabel('已绑定邮箱', { exact: true }).fill('admin@tuheng.local');
+  const identifier = await prepareLogin(page, 'admin');
+  await identifier.fill('admin@tuheng.local');
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/admin/dashboard');
@@ -118,6 +118,37 @@ async function bind(page: Page, email: string) {
   await page.getByRole('button', { name: '验证并绑定', exact: true }).click();
   await expect(page.getByText('✓ 邮箱已验证', { exact: true })).toBeVisible();
 }
+test('password identifiers: staff ID and verified email authenticate through the same entry', async ({
+  browser,
+}) => {
+  for (const value of ['admin', 'admin@tuheng.local']) {
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      const identifier = await prepareLogin(page, 'admin');
+      await expect(page.locator('.login-method-tabs').getByRole('button')).toHaveCount(2);
+      await expect(page.getByRole('button', { name: '账号密码', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await identifier.fill(value);
+      await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
+      await page.getByRole('button', { name: '登录', exact: true }).click();
+      await expect(page).toHaveURL('/admin/dashboard');
+      const response = await page.request.get('/api/identity/status?realm=STAFF');
+      expect(response.status()).toBe(200);
+      expect((await response.json()).data).toMatchObject({
+        id: 'admin',
+        kind: 'SITE_ADMIN',
+        onboarding: false,
+      });
+      expect((await page.request.get('/api/identity/status?realm=STUDENT')).status()).toBe(401);
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 test('identity: real SMTP setup, school and teacher onboarding, one-use delivery, dual sessions and student ID', async ({
   browser,
 }) => {
@@ -533,9 +564,7 @@ test('first admin: password change opens the dashboard without SMTP or email bin
       },
     });
     await prepareLogin(page, 'admin');
-    await page.getByLabel('已绑定邮箱', { exact: true }).fill('admin@tuheng.local');
-    // An unverified email cannot authenticate; root's fixed ID remains available.
-    await page.getByRole('button', { name: '登录 ID', exact: true }).click();
+    // Root's fixed ID remains available without binding an email.
     await page.getByLabel('登录 ID / 已绑定邮箱').fill('admin');
     await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
     await page.getByRole('button', { name: '登录', exact: true }).click();
@@ -593,7 +622,6 @@ test('first admin: password change opens the dashboard without SMTP or email bin
     await expect(page.getByText('邮箱绑定为可选项，可用于邮箱登录和找回密码。')).toBeVisible();
     await page.getByRole('button', { name: '退出当前身份', exact: true }).click();
     await prepareLogin(page, 'admin');
-    await page.getByRole('button', { name: '登录 ID', exact: true }).click();
     await page.getByLabel('登录 ID / 已绑定邮箱').fill('admin');
     await page.getByLabel('密码', { exact: true }).fill(password);
     await page.getByRole('button', { name: '登录', exact: true }).click();
@@ -709,8 +737,11 @@ test('email methods: same verified address stays isolated across domains, codes 
   };
   for (const realm of ['STUDENT', 'STAFF'] as const) {
     await page.goto('/login/' + realm.toLowerCase());
-    await page.getByRole('button', { name: '邮箱密码', exact: true }).tap();
-    await page.getByLabel('已绑定邮箱', { exact: true }).fill(email);
+    if (realm === 'STUDENT')
+      await page.getByRole('button', { name: '邮箱密码', exact: true }).tap();
+    await page
+      .getByLabel(realm === 'STAFF' ? '登录 ID / 已绑定邮箱' : '已绑定邮箱', { exact: true })
+      .fill(email);
     // The password of the other identity cannot log in even when the address is identical.
     await page
       .getByLabel('密码', { exact: true })
@@ -754,7 +785,11 @@ test('email methods: same verified address stays isolated across domains, codes 
   await page.getByLabel('确认新密码', { exact: true }).fill('Recovered-Staff-2026!');
   await page.getByRole('button', { name: '更新密码', exact: true }).tap();
   await expect(page.getByText('密码已更新，请使用新密码登录。')).toBeVisible();
-  await page.getByLabel('已绑定邮箱', { exact: true }).fill(email);
+  await expect(page.getByRole('button', { name: '账号密码', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByLabel('登录 ID / 已绑定邮箱', { exact: true }).fill(email);
   await page.getByLabel('密码', { exact: true }).fill('Recovered-Staff-2026!');
   await page.getByRole('button', { name: '登录', exact: true }).tap();
   await expect(page).toHaveURL('/teacher/dashboard');

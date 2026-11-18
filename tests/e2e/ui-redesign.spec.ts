@@ -15,6 +15,37 @@ test('G01/G02: one login page switches realms and clears entered secrets', async
   await expect(page.getByLabel('密码', { exact: true })).toHaveValue('');
 });
 
+test('G01: staff ID and email share one password entry while codes and recovery stay separate', async ({
+  page,
+}) => {
+  await page.goto('/login?realm=staff');
+  const methods = page.locator('.login-method-tabs');
+  await expect(methods.getByRole('button')).toHaveCount(2);
+  await expect(methods.getByRole('button', { name: '账号密码', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  const identifier = page.getByLabel('登录 ID / 已绑定邮箱', { exact: true });
+  await expect(identifier).toHaveAttribute('type', 'text');
+  await identifier.fill('admin');
+  await expect(identifier).toHaveValue('admin');
+  await identifier.fill('teacher@example.invalid');
+  await page.getByLabel('密码', { exact: true }).fill('local-input-only');
+  await methods.getByRole('button', { name: '邮箱验证码', exact: true }).click();
+  await expect(page.getByLabel('已绑定邮箱', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('六位验证码', { exact: true })).toBeVisible();
+  await methods.getByRole('button', { name: '账号密码', exact: true }).click();
+  await expect(identifier).toHaveValue('');
+  await expect(page.getByLabel('密码', { exact: true })).toHaveValue('');
+  await page.getByRole('button', { name: '忘记密码', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '通过已绑定邮箱找回密码' })).toBeVisible();
+  await page.getByRole('button', { name: '返回登录', exact: true }).click();
+  await expect(methods.getByRole('button', { name: '账号密码', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});
+
 test('G01: legacy entry keeps a safe return path on the unified login route', async ({ page }) => {
   await page.goto('/login/staff?callbackUrl=%2Fgeometry');
   await expect(page).toHaveURL(/\/login\?realm=staff&callbackUrl=%2Fgeometry$/);
@@ -42,7 +73,7 @@ test('G02: changing methods clears secrets; failed code requests do not start a 
   await expect(page.getByRole('button', { name: '获取验证码', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: '登录', exact: true })).toBeDisabled();
   expect(requests).toEqual([{ realm: 'STAFF', purpose: 'LOGIN', email: 'test@tuheng.invalid' }]);
-  await page.getByRole('button', { name: '邮箱密码', exact: true }).click();
+  await page.getByRole('button', { name: '账号密码', exact: true }).click();
   await expect(page.getByLabel('密码', { exact: true })).toHaveValue('');
 });
 
