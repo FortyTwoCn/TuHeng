@@ -2,7 +2,7 @@ import { AudienceSelection, ReviewerAssignment } from '@tuheng/contracts';
 import type { Actor, DataPort, Entities } from './entities';
 import { ensure, audit } from './policy';
 import { requireSchoolScope } from './identity';
-export async function audienceScope(db: DataPort, actor: Actor, schoolId: string) {
+export async function teachingScope(db: DataPort, actor: Actor, schoolId: string) {
   requireSchoolScope(actor, schoolId);
   const school = await db.get('school', schoolId);
   ensure(school?.active, 'SCHOOL_DISABLED', 403);
@@ -19,6 +19,10 @@ export async function audienceScope(db: DataPort, actor: Actor, schoolId: string
     const grants = await db.list('teachingGrant', { userId: actor.id });
     classes = classes.filter((c) => grants.some((g) => g.classId === c.id));
   }
+  return { school, classes };
+}
+export async function audienceScope(db: DataPort, actor: Actor, schoolId: string) {
+  const { school, classes } = await teachingScope(db, actor, schoolId);
   const members = await db.list('enrollment', { classId: { in: classes.map((c) => c.id) } });
   let students = await db.list('user', { schoolId, kind: 'STUDENT', active: true });
   if (actor.kind === 'TEACHER')

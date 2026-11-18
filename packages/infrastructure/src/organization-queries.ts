@@ -121,6 +121,7 @@ export async function people(actor: Actor, schoolId: string, search: Search) {
   const where = {
     schoolId,
     kind,
+    ...(search.open === '1' ? { active: true } : {}),
     ...(actor.kind === 'TEACHER' && kind === 'TEACHER' ? { id: actor.id } : {}),
     ...((actor.kind === 'TEACHER' && kind === 'STUDENT') || search.classId
       ? { enrollments: { some: { classId: search.classId, teachingClass: scopedClass } } }
@@ -143,6 +144,7 @@ export async function people(actor: Actor, schoolId: string, search: Search) {
         name: true,
         kind: true,
         loginId: true,
+        schoolId: true,
         studentNumber: true,
         active: true,
         mustChangePassword: true,

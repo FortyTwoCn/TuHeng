@@ -1,20 +1,18 @@
 'use client';
 import { FormDrawer } from './FormDrawer';
 import { OrganizationSelect } from './OrganizationSelect';
-import type { Offering, OrganizationCommand, OrganizationIdentity } from './organization-types';
+import type { OrganizationCommand, OrganizationIdentity } from './organization-types';
 
 export function OrganizationCreate({
   tab,
   schoolId,
   identity,
-  offerings,
   busy,
   command,
 }: {
   tab: string;
   schoolId: string;
   identity: OrganizationIdentity;
-  offerings: Offering[];
   busy: boolean;
   command: OrganizationCommand;
 }) {
@@ -115,75 +113,5 @@ export function OrganizationCreate({
         )}
       </FormDrawer>
     );
-  if (tab !== 'classes') return null;
-  return (
-    <div className="row-actions">
-      <FormDrawer trigger="新增课程 / 开课学期" title="新增课程 / 开课学期" busy={busy}>
-        {(saved) => (
-          <form
-            className="identity-dialog-form"
-            onSubmit={(e) => submit(e, 'create-course', saved)}
-          >
-            <label>
-              课程名称
-              <input name="title" required maxLength={100} />
-            </label>
-            <label>
-              本校课程编号
-              <input name="code" required maxLength={100} />
-            </label>
-            <label>
-              学期
-              <input name="term" required placeholder="例如 2026 秋季" maxLength={100} />
-            </label>
-            <button className="button primary" disabled={busy}>
-              创建课程与开课实例
-            </button>
-          </form>
-        )}
-      </FormDrawer>
-      <FormDrawer trigger="新增班级" title="新增班级" busy={busy} primary>
-        {(saved) => (
-          <form
-            className="identity-dialog-form"
-            onSubmit={(e) =>
-              submit(e, 'create-class', saved, (data) => ({
-                ...data,
-                ...(teacher ? { teacherId: identity.id } : {}),
-              }))
-            }
-          >
-            <label>
-              班级名称
-              <input name="name" required maxLength={100} />
-            </label>
-            <label>
-              课程 / 学期
-              <select name="offeringId" required>
-                <option value="">请选择</option>
-                {offerings.map((o) => (
-                  <option value={o.id} key={o.id}>
-                    {o.course.title} · {o.term}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {!offerings.length && <p className="muted">请先新增本校课程与开课学期。</p>}
-            {!teacher && (
-              <OrganizationSelect
-                schoolId={schoolId}
-                kind="teachers"
-                name="teacherId"
-                label="负责教师"
-                required
-              />
-            )}
-            <button className="button primary" disabled={busy || !offerings.length}>
-              保存班级
-            </button>
-          </form>
-        )}
-      </FormDrawer>
-    </div>
-  );
+  return null;
 }

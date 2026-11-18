@@ -1,18 +1,23 @@
 import { test, expect, type Page } from '@playwright/test';
 import ExcelJS from 'exceljs';
+import { readFileSync } from 'node:fs';
 import { hash } from 'bcryptjs';
 import { SMTPServer } from 'smtp-server';
 import { prisma } from '@tuheng/database';
 import { prepareLogin, verifyIdentity } from './identity-login';
 import { verifyOnboardedTeaching } from './onboarded-teaching';
 
-const origin = 'http://localhost:3000';
+const origin = process.env.TEST_APP_ORIGIN ?? 'http://localhost:3000';
 const password = 'Browser-Identity-2026!new';
 const mail: string[] = [];
 let smtp: SMTPServer;
+const cert = process.env.TEST_SMTP_CERT,
+  key = process.env.TEST_SMTP_KEY;
+const smtpMode = cert && key ? 'STARTTLS' : 'LOCAL_TEST';
 test.beforeAll(async () => {
   smtp = new SMTPServer({
-    disabledCommands: ['AUTH', 'STARTTLS'],
+    ...(cert && key ? { cert: readFileSync(cert), key: readFileSync(key) } : {}),
+    disabledCommands: cert && key ? ['AUTH'] : ['AUTH', 'STARTTLS'],
     onData(stream, _session, done) {
       let body = '';
       stream.on('data', (c) => (body += c.toString()));
@@ -167,7 +172,7 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
   await root.getByLabel('配置名称').fill('Browser local SMTP ' + Date.now());
   await root.getByLabel('SMTP 主机').fill('127.0.0.1');
   await root.getByLabel('端口', { exact: true }).fill('1026');
-  await root.getByLabel('传输安全').selectOption('LOCAL_TEST');
+  await root.getByLabel('传输安全').selectOption(smtpMode);
   await root.getByLabel('发件邮箱').fill('browser@tuheng.invalid');
   await root.getByRole('button', { name: '保存为新版本', exact: true }).click();
   const v = root.getByRole('region', { name: '已保存版本测试与启用' });
@@ -226,12 +231,7 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
     proof,
   });
   const initial = await credentials(root, school.credentialBatchId, 'SCHOOL_ADMIN', proof);
-  await root.goto('/admin/users?schoolId=' + school.school.id);
-  await root.getByLabel('搜索学校', { exact: true }).fill(school.school.name);
-  await root
-    .getByRole('combobox', { name: '当前操作学校', exact: true })
-    .selectOption(school.school.id);
-  await root.getByRole('button', { name: '凭据交付', exact: true }).click();
+  await root.goto('/admin/delivery?schoolId=' + school.school.id);
   const delivery = root
     .locator('section')
     .filter({ has: root.getByRole('heading', { name: '初始凭据交付', exact: true }) })
@@ -285,10 +285,19 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
   await bind(teacherPage, 'teacher' + tag + '@browser.invalid');
   await teacherPage.getByRole('link', { name: '进入工作空间', exact: true }).click();
   await expect(teacherPage).toHaveURL('/teacher/dashboard');
-  const offering = await api(teacherPage, '/api/organization/create-course', {
+  const courseInput = { schoolId: school.school.id, title: '测试课程', code: 'browser' };
+  expect(
+    (
+      await teacherPage.request.post('/api/organization/create-course', {
+        headers: { Origin: origin },
+        data: courseInput,
+      })
+    ).status(),
+  ).toBe(403);
+  const course = await api(staff, '/api/organization/create-course', courseInput);
+  const offering = await api(staff, '/api/organization/create-offering', {
     schoolId: school.school.id,
-    title: '测试课程',
-    code: 'browser',
+    courseId: course.id,
     term: '2026',
   });
   const cls = await api(teacherPage, '/api/organization/create-class', {
@@ -343,20 +352,14 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
   expect((await studentPage.request.get('/api/identity/status?realm=STUDENT')).status()).toBe(401);
   expect((await studentPage.request.get('/api/identity/status?realm=STAFF')).status()).toBe(200);
   const response = await teacherPage.request.get('/api/organization/accounts?schoolId=school-demo');
-  expect(response.status()).toBe(200); // Server ignores supplied school and fixes the teacher scope.
-  expect(
-    (await response.json()).data.items.every(
-      (u: { schoolId: string }) => u.schoolId === school.school.id,
-    ),
-  ).toBe(true);
+  expect(response.status()).toBe(403);
 
   let importedStudent: { id: string; password: string } | undefined;
   for (const [manager, kind] of [
     [teacherPage, 'TEACHER'],
     [staff, 'SCHOOL'],
   ] as const) {
-    await manager.goto(kind === 'TEACHER' ? '/teacher/classes' : '/school/users');
-    await manager.getByRole('button', { name: 'Excel 导入', exact: true }).click();
+    await manager.goto(kind === 'TEACHER' ? '/teacher/imports' : '/school/imports');
     await manager
       .getByRole('combobox', { name: '课程 / 学期', exact: true })
       .selectOption(offering.id);
@@ -625,7 +628,7 @@ test('first admin: password change opens the dashboard without SMTP or email bin
     await mailPanel.getByLabel('配置名称').fill('Optional backend SMTP');
     await mailPanel.getByLabel('SMTP 主机').fill('127.0.0.1');
     await mailPanel.getByLabel('端口', { exact: true }).fill('1026');
-    await mailPanel.getByLabel('传输安全').selectOption('LOCAL_TEST');
+    await mailPanel.getByLabel('传输安全').selectOption(smtpMode);
     await mailPanel.getByLabel('发件邮箱').fill('install@tuheng.invalid');
     await mailPanel.getByRole('button', { name: '保存为新版本', exact: true }).click();
     const newest = mailPanel.getByRole('region', { name: '已保存版本测试与启用' });
@@ -691,7 +694,7 @@ test('email methods: same verified address stays isolated across domains, codes 
       name: 'Email methods local SMTP',
       host: '127.0.0.1',
       port: 1026,
-      tls: 'LOCAL_TEST',
+      tls: smtpMode,
       username: '',
       fromName: '测试',
       fromEmail: 'email-methods@test.invalid',

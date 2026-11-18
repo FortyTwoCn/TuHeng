@@ -10,8 +10,16 @@ import { SubmissionEditor } from '../components/SubmissionEditor';
 import { DrawingViewer } from '../components/DrawingViewer';
 import { GeometryEditor } from '@tuheng/geometry-editor';
 import { date, Status } from './shared';
-export async function AssignmentDetails({ a, id }: { a: Actor; id: string }) {
-  const detail = await assignmentDetails(database, a, id);
+export async function AssignmentDetails({
+  a,
+  id,
+  selectedSchool,
+}: {
+  a: Actor;
+  id: string;
+  selectedSchool?: string;
+}) {
+  const detail = await assignmentDetails(database, a, id, selectedSchool);
   const { assignment, teacher, manager, items } = detail;
   return (
     <>

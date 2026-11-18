@@ -1,5 +1,4 @@
 import { BatchPublish } from '../components/BatchPublish';
-import { RosterImport } from '../components/AdminForms';
 import Link from 'next/link';
 import { database } from '@tuheng/database';
 import * as domain from '@tuheng/domain';
@@ -122,6 +121,11 @@ export async function TeacherDashboard({ a }: { a: Actor }) {
   );
 }
 export async function QuestionsView({ a, segments }: { a: Actor; segments: string[] }) {
+  domain.ensure(
+    a.kind === 'TEACHER' || a.kind === 'SCHOOL_ADMIN' || a.kind === 'SITE_ADMIN',
+    'FORBIDDEN',
+    403,
+  );
   const area = a.kind === 'SCHOOL_ADMIN' ? 'school' : a.kind === 'SITE_ADMIN' ? 'admin' : 'teacher';
   const knowledge = await database.list('knowledgePoint');
   if (segments[1] === 'new')
@@ -146,7 +150,7 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
           title="编辑题目 · 保存新版本"
           description={`当前版本 v${q.version}。已有作业仍引用原版本。`}
         />
-        <QuestionEditor knowledge={knowledge} initial={q} questionId={q.questionId} />
+        <QuestionEditor area={area} knowledge={knowledge} initial={q} questionId={q.questionId} />
       </>
     );
   }
@@ -226,7 +230,8 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
     </>
   );
 }
-export async function NewAssignment({ a }: { a: Actor }) {
+export async function NewAssignment({ a, selectedSchool }: { a: Actor; selectedSchool?: string }) {
+  domain.ensure(a.kind, 'IDENTITY_REQUIRED', 403);
   return (
     <>
       <PageTitle
@@ -235,8 +240,13 @@ export async function NewAssignment({ a }: { a: Actor }) {
         description="保存草稿后检查题目与发布对象，再正式发布。"
       />
       <AssignmentEditor
-        identity={{ id: a.id, kind: a.kind ?? 'TEACHER', schoolId: a.schoolId }}
-        classes={await domain.visibleClasses(database, a)}
+        identity={{ id: a.id, kind: a.kind, schoolId: a.schoolId }}
+        classes={
+          a.schoolId || selectedSchool
+            ? (await domain.teachingScope(database, a, (a.schoolId || selectedSchool)!)).classes
+            : []
+        }
+        initialSchool={selectedSchool}
         questions={await domain.listQuestions(database, a)}
       />
     </>
@@ -297,88 +307,6 @@ export async function ReviewsView({ a }: { a: Actor }) {
         ) : (
           <Empty title="尚无学生作答" description="发布作业并收到提交后，即可开始复核。" />
         )}
-      </Panel>
-    </>
-  );
-}
-export async function ClassesView({ a, segments }: { a: Actor; segments: string[] }) {
-  const classes = await domain.visibleClasses(database, a);
-  if (!segments[1])
-    return (
-      <>
-        <PageTitle
-          eyebrow="TEACHING CLASSES"
-          title="教学班"
-          description="名单与作答记录均限制在当前授课授权范围。"
-        />
-        {await Promise.all(
-          classes.map(async (c) => (
-            <Panel
-              key={c.id}
-              title={c.name}
-              action={<Link href={`/teacher/classes/${c.id}`}>查看学生名单 →</Link>}
-            >
-              <p className="muted">
-                已选学生 {(await database.list('enrollment', { classId: c.id })).length} 人
-              </p>
-            </Panel>
-          )),
-        )}
-      </>
-    );
-  const c = classes.find((c) => c.id === segments[1]);
-  domain.ensure(c, 'CLASS_FORBIDDEN', 403);
-  const enrollments = await database.list('enrollment', { classId: c.id });
-  const assignments = await domain.listAssignments(database, a);
-  const items = await database.list('assignmentItem', {
-    assignmentId: { in: assignments.filter((v) => v.classId === c.id).map((v) => v.id) },
-  });
-  return (
-    <>
-      <PageTitle
-        eyebrow="CLASS ROSTER"
-        title={c.name}
-        description="查看实际提交与成绩记录。名单选课关系由管理员维护。"
-        action={<ExportButton classId={c.id} />}
-      />
-      {a.roles.includes('TEACHER') && <RosterImport classId={c.id} />}
-      <Panel title={`学生名单 · ${enrollments.length} 人`}>
-        <div className="table-scroll">
-          <table className="score-table">
-            <thead>
-              <tr>
-                <th>学生</th>
-                <th>账号</th>
-                <th>已提交题数</th>
-                <th>正式发布次数</th>
-              </tr>
-            </thead>
-            <tbody>
-              {await Promise.all(
-                enrollments.map(async (e) => {
-                  const u = await database.get('user', e.userId);
-                  const submissions = await database.list('submission', {
-                    userId: e.userId,
-                    itemId: { in: items.map((i) => i.id) },
-                  });
-                  const attempts = await database.list('submissionAttempt', {
-                    submissionId: { in: submissions.map((s) => s.id) },
-                  });
-                  return (
-                    <tr key={e.id}>
-                      <td>{u?.name}</td>
-                      <td>{u?.email}</td>
-                      <td>
-                        {new Set(attempts.map((at) => at.submissionId)).size} / {items.length}
-                      </td>
-                      <td>{attempts.filter((at) => at.publishedDecisionId).length}</td>
-                    </tr>
-                  );
-                }),
-              )}
-            </tbody>
-          </table>
-        </div>
       </Panel>
     </>
   );

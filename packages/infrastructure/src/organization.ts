@@ -21,7 +21,10 @@ export async function nextLoginId(tx: Prisma.TransactionClient, prefix: 'S' | 'T
   const pattern = '^' + prefix + '[0-9]+$';
   const maxima = await tx.$queryRaw<
     { value: number }[]
-  >`SELECT COALESCE(MAX(substring("loginId" from 2)::integer),0)::integer AS value FROM "User" WHERE "loginId" ~ ${pattern}`;
+  >`SELECT COALESCE(MAX(substring(identifier from 2)::integer),0)::integer AS value FROM (
+    SELECT "loginId" AS identifier FROM "User" WHERE "loginId" ~ ${pattern}
+    UNION ALL SELECT code FROM "School" WHERE code ~ ${pattern}
+  ) existing`;
   const baseline = maxima[0].value;
   const rows = await tx.$queryRaw<
     { value: number }[]

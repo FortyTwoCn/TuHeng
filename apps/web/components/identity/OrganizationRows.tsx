@@ -2,7 +2,7 @@
 import { Badge } from '@tuheng/ui';
 import { FormDrawer } from './FormDrawer';
 import { OrganizationSelect } from './OrganizationSelect';
-import type { ClassRow, OrganizationCommand, Person, School } from './organization-types';
+import type { OrganizationCommand, Person, School } from './organization-types';
 const fields = (form: HTMLFormElement) => Object.fromEntries(new FormData(form));
 
 function Identifier({ value }: { value?: string | null }) {
@@ -242,10 +242,59 @@ export function SchoolRow({
               <section className="detail-section">
                 <h3>学校管理账号</h3>
                 {s.administrators.map((a) => (
-                  <p key={a.loginId}>
-                    {a.name} · {a.loginId} · {a.active ? '启用' : '停用'}
-                  </p>
+                  <div key={a.id}>
+                    {a.name} · {a.loginId} · {a.active ? '启用' : '停用'} ·{' '}
+                    {a.mustChangePassword
+                      ? '待改密'
+                      : a.emailVerifiedAt
+                        ? '已完成首次设置'
+                        : '待验证邮箱'}
+                    <button
+                      type="button"
+                      disabled={busy || !s.active || !a.active}
+                      onClick={() => {
+                        if (window.confirm('重置该学校管理员的临时密码？'))
+                          void command('reset-password', { id: a.id, schoolId: s.id });
+                      }}
+                    >
+                      重置临时密码
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || !s.active}
+                      onClick={() => {
+                        if (window.confirm('更改学校管理员启停状态？'))
+                          void command('update-account', {
+                            id: a.id,
+                            schoolId: s.id,
+                            active: !a.active,
+                          });
+                      }}
+                    >
+                      {a.active ? '停用管理账号' : '启用管理账号'}
+                    </button>
+                  </div>
                 ))}
+                {!s.administrators.length && s.active && (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (
+                        await command('create-school-admin', {
+                          schoolId: s.id,
+                          ...fields(e.currentTarget),
+                        })
+                      )
+                        saved();
+                    }}
+                  >
+                    <label>
+                      管理员姓名
+                      <input name="name" required maxLength={100} />
+                    </label>
+                    <button disabled={busy}>创建学校管理账号</button>
+                  </form>
+                )}
                 <button
                   className="button danger"
                   type="button"
@@ -264,102 +313,6 @@ export function SchoolRow({
                   }}
                 >
                   {s.active ? '停用学校' : '启用学校'}
-                </button>
-              </section>
-            </>
-          )}
-        </FormDrawer>
-      </div>
-    </article>
-  );
-}
-
-export function ClassRowView({
-  row: c,
-  schoolId,
-  teacher,
-  busy,
-  command,
-  members,
-}: {
-  row: ClassRow;
-  schoolId: string;
-  teacher: boolean;
-  busy: boolean;
-  command: OrganizationCommand;
-  members: () => void;
-}) {
-  return (
-    <article className="organization-row">
-      <div>
-        <h3>{c.name}</h3>
-        <small>
-          {c.offering.course.title} · {c.offering.term}
-        </small>
-      </div>
-      <div>
-        {c.grants.map((g) => g.user.name).join('、') || '未分配教师'}
-        <small>{c._count.enrollments} 位学生</small>
-      </div>
-      <Badge tone={c.archived ? 'gray' : 'green'}>{c.archived ? '已归档' : '使用中'}</Badge>
-      <div className="row-actions">
-        <button type="button" className="button secondary" onClick={members}>
-          查看学生
-        </button>
-        <FormDrawer title={'班级详情：' + c.name} trigger="查看详情" busy={busy}>
-          {(saved) => (
-            <>
-              <p>
-                {c.offering.course.title} · {c.offering.term} · {c._count.enrollments} 人
-              </p>
-              <p>负责教师：{c.grants.map((g) => g.user.name).join('、') || '未分配'}</p>
-              {!teacher && (
-                <form
-                  className="identity-dialog-form"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (
-                      window.confirm(
-                        '交接“' +
-                          c.name +
-                          '”的负责教师？保留学生与历史作答，已发布作业的复核分工需单独修订。',
-                      ) &&
-                      (await command('update-class', { classId: c.id, ...fields(e.currentTarget) }))
-                    )
-                      saved();
-                  }}
-                >
-                  <OrganizationSelect
-                    schoolId={schoolId}
-                    kind="teachers"
-                    label="新负责教师"
-                    name="teacherId"
-                    required
-                  />
-                  <button className="button primary" disabled={busy}>
-                    确认交接
-                  </button>
-                </form>
-              )}
-              <section className="detail-section">
-                <button
-                  type="button"
-                  className="button danger"
-                  disabled={busy}
-                  onClick={async () => {
-                    if (
-                      window.confirm(
-                        (c.archived ? '恢复' : '归档') +
-                          '“' +
-                          c.name +
-                          '”？历史名单、作答和成绩保留。',
-                      ) &&
-                      (await command('update-class', { classId: c.id, archived: !c.archived }))
-                    )
-                      saved();
-                  }}
-                >
-                  {c.archived ? '恢复班级' : '归档班级'}
                 </button>
               </section>
             </>

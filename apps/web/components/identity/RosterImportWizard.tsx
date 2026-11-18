@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { OrganizationSelect } from './OrganizationSelect';
+import { useEffect, useRef, useState } from 'react';
 import { identityRequest } from './client';
 import { CredentialDelivery } from './CredentialDelivery';
 type Mapping = {
@@ -48,43 +49,64 @@ type Preview = {
 export function RosterImportWizard({
   schoolId,
   teacher = false,
-  offerings,
-  guardRef,
+  initialOffering,
 }: {
-  guardRef?: React.Ref<{ requestLeave: () => boolean }>;
-
   schoolId: string;
   teacher?: boolean;
-  offerings: { id: string; term: string; course: { title: string } }[];
+  initialOffering?: { id: string; name: string };
 }) {
   const columnNames = teacher
     ? ['班级', '学号', '学生姓名']
     : ['教师名', '班级', '学号', '学生姓名'];
   const [customColumns, setCustomColumns] = useState(false),
     [columns, setColumns] = useState<Record<string, number>>({});
-  const [offering, setOffering] = useState(''),
+  const [offering, setOffering] = useState(initialOffering?.id ?? ''),
     [preview, setPreview] = useState<Preview>(),
     [mapping, setMapping] = useState<Mapping>(),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false),
     [page, setPage] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
-  useImperativeHandle(
-    guardRef,
-    () => ({
-      requestLeave: () =>
-        !preview?.analysis || window.confirm('离开将清除本页预检和未确认的映射。确认离开？'),
-    }),
-    [preview],
-  );
   const executing = !!preview && ['QUEUED', 'RUNNING'].includes(preview.status);
   const completed = preview?.status === 'SUCCEEDED';
   const step = completed ? 4 : executing ? 3 : preview ? 2 : offering ? 1 : 0;
   useEffect(() => {
     if (!preview?.analysis) return;
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
     window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
+    const follow = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey ||
+        !(event.target instanceof Element)
+      )
+        return;
+      const link = event.target.closest<HTMLAnchorElement>('a[href]');
+      if (
+        !link ||
+        link.target === '_blank' ||
+        link.hasAttribute('download') ||
+        link.origin !== location.origin ||
+        link.href === location.href
+      )
+        return;
+      if (!window.confirm('离开将清除本页预检和未确认的映射。确认离开？')) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    document.addEventListener('click', follow, true);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      document.removeEventListener('click', follow, true);
+    };
   }, [preview?.analysis]);
   function clearPreflight() {
     setPreview(undefined);
@@ -148,24 +170,19 @@ export function RosterImportWizard({
       <a className="button secondary" href="/api/roster/template">
         下载 Excel 模板
       </a>
-      <label>
-        课程 / 学期
-        <select
-          value={offering}
-          disabled={busy || executing}
-          onChange={(e) => {
-            clearPreflight();
-            setOffering(e.target.value);
-          }}
-        >
-          <option value="">请选择</option>
-          {offerings.map((o) => (
-            <option value={o.id} key={o.id}>
-              {o.course.title} · {o.term}
-            </option>
-          ))}
-        </select>
-      </label>
+      <OrganizationSelect
+        key={schoolId}
+        schoolId={schoolId}
+        kind="offerings"
+        name="offeringId"
+        label="课程 / 学期"
+        initial={initialOffering}
+        disabled={busy || executing}
+        onSelect={(id) => {
+          clearPreflight();
+          setOffering(id);
+        }}
+      />
       <details>
         <summary>列映射（使用非标准列顺序时）</summary>
         <label className="checkbox-label">
@@ -252,6 +269,9 @@ export function RosterImportWizard({
         <p role="status">导入已提交，文件、课程与映射已锁定。离开此页不会停止后台任务。</p>
       )}
       <p role="status">{message}</p>
+      {preview?.status === 'PREVIEW' && preview.errorCode && !preview.analysis && (
+        <p role="alert">当前导入范围已变更，无法继续确认。请检查学校和开课是否启用，再重新预检。</p>
+      )}
       {preview?.errors?.map((e, i) => (
         <p key={i} role="alert">
           第 {e.row} 行 · {e.column}：{e.reason}

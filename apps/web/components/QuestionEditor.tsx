@@ -1,6 +1,7 @@
 'use client';
 import { createId } from '@tuheng/contracts';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { QuestionInput, GeometryDocument, EditorType } from '@tuheng/contracts';
 import { GeometryEditor } from '@tuheng/geometry-editor';
@@ -477,6 +478,9 @@ export function QuestionEditor({
       <button className="button primary" disabled={busy}>
         {busy ? '正在保存…' : selftest ? '保存私人题集' : '保存并确认题目版本'}
       </button>
+      <Link className="button" href={selftest ? '/student/selftests' : '/' + area + '/questions'}>
+        {selftest ? '返回我的自测' : '返回题库'}
+      </Link>
     </form>
   );
 }

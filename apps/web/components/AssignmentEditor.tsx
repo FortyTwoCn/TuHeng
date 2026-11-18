@@ -4,15 +4,18 @@ import { AudiencePicker } from './identity/AudiencePicker';
 import { identityRequest } from './identity/client';
 import type { AudienceSelection, AccountKind, ReviewerAssignment } from '@tuheng/contracts';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { action } from './Actions';
 export function AssignmentEditor({
   classes,
+  initialSchool,
   questions,
   identity,
 }: {
   identity: { id: string; kind: AccountKind; schoolId?: string | null };
   classes: { id: string; name: string }[];
+  initialSchool?: string;
   questions: {
     id: string;
     title: string;
@@ -29,7 +32,7 @@ export function AssignmentEditor({
     [schoolQuery, setSchoolQuery] = useState('');
   const [audience, setAudience] = useState<AudienceSelection>({
     version: 1,
-    schoolId: identity.schoolId ?? '',
+    schoolId: identity.schoolId ?? initialSchool ?? '',
     include: {
       allEligibleInScope: false,
       classIds: classes.length === 1 ? [classes[0].id] : [],
@@ -37,16 +40,34 @@ export function AssignmentEditor({
     },
     exclude: { studentIds: [] },
   });
+  const area =
+    identity.kind === 'TEACHER' ? 'teacher' : identity.kind === 'SCHOOL_ADMIN' ? 'school' : 'admin';
+  const listPath = '/' + area + '/assignments';
+  const schoolQueryParam =
+    identity.kind === 'SITE_ADMIN' && audience.schoolId
+      ? '?schoolId=' + encodeURIComponent(audience.schoolId)
+      : '';
   const [preview, setPreview] = useState<{ count: number; rosterVersion: number }>(),
     [reviewerAssignments, setReviewerAssignments] = useState<ReviewerAssignment[]>([]),
     [reviewerIds, setReviewerIds] = useState<string[]>(
       identity.kind === 'TEACHER' ? [identity.id] : [],
     );
   useEffect(() => {
-    if (identity.kind === 'SITE_ADMIN')
-      identityRequest('/api/organization/schools?q=' + encodeURIComponent(schoolQuery)).then((r) =>
-        setSchools(r.items),
-      );
+    if (identity.kind !== 'SITE_ADMIN') return;
+    const controller = new AbortController();
+    identityRequest(
+      '/api/organization/schools?q=' + encodeURIComponent(schoolQuery),
+      undefined,
+      'STAFF',
+      controller.signal,
+    )
+      .then((r) => {
+        if (!controller.signal.aborted) setSchools(r.items);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err.message);
+      });
+    return () => controller.abort();
   }, [identity.kind, schoolQuery]);
   return (
     <form
@@ -69,9 +90,7 @@ export function AssignmentEditor({
             maxAttempts: Number(f.get('maxAttempts')),
             releaseAnswers: f.get('releaseAnswers') === 'on',
           });
-          router.push(
-            `/${identity.kind === 'TEACHER' ? 'teacher' : identity.kind === 'SCHOOL_ADMIN' ? 'school' : 'admin'}/assignments/${r.id}`,
-          );
+          router.push(listPath + '/' + r.id + schoolQueryParam);
           router.refresh();
         } catch (e) {
           setError((e as Error).message);
@@ -105,11 +124,15 @@ export function AssignmentEditor({
                       include: { allEligibleInScope: false, classIds: [], studentIds: [] },
                       exclude: { studentIds: [] },
                     });
+                    setPreview(undefined);
                     setReviewerIds([]);
                     setReviewerAssignments([]);
                   }}
                 >
                   <option value="">请选择学校</option>
+                  {audience.schoolId && !schools.some((s) => s.id === audience.schoolId) && (
+                    <option value={audience.schoolId}>当前所选学校</option>
+                  )}
                   {schools.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} · {s.code}
@@ -209,6 +232,9 @@ export function AssignmentEditor({
       >
         保存作业草稿
       </button>
+      <Link className="button" href={listPath + schoolQueryParam}>
+        返回作业列表
+      </Link>
     </form>
   );
 }

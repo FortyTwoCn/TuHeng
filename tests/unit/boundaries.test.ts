@@ -3,7 +3,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 const packages = readdirSync('packages');
 const imports = new Map<string, Set<string>>();
 for (const name of packages) {
-  const paths = readdirSync(`packages/${name}/src`).filter((p) => /\.tsx?$/.test(p));
+  const paths = readdirSync(`packages/${name}/src`, { recursive: true, encoding: 'utf8' }).filter(
+    (p) => /\.tsx?$/.test(p),
+  );
   const code = paths.map((p) => readFileSync(`packages/${name}/src/${p}`, 'utf8')).join('\n');
   imports.set(name, new Set([...code.matchAll(/from ['"]@tuheng\/([^'"]+)/g)].map((m) => m[1])));
 }
@@ -13,7 +15,9 @@ it('keeps domain and grading contracts free of framework and infrastructure depe
       expect(
         name === 'domain' ? ['contracts', 'domain', 'geometry-core'] : ['contracts'],
       ).toContain(dependency);
-    const files = readdirSync(`packages/${name}/src`).filter((p) => p.endsWith('.ts'));
+    const files = readdirSync(`packages/${name}/src`, { recursive: true, encoding: 'utf8' }).filter(
+      (p) => /\.tsx?$/.test(p),
+    );
     for (const file of files) {
       const code = readFileSync(`packages/${name}/src/${file}`, 'utf8');
       expect(code).not.toMatch(/from ['"](?:next(?:\/|['"])|react['"]|@prisma|bullmq|ioredis)/);

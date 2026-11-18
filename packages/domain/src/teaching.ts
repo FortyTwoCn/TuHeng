@@ -1,6 +1,6 @@
 import { QuestionInput, Rubric } from '@tuheng/contracts';
 import type { AudienceSelection } from '@tuheng/contracts';
-import { resolveAudience, freezeAssignmentAudience } from './audience';
+import { resolveAudience, freezeAssignmentAudience, teachingScope } from './audience';
 import { requireAssignmentManager } from './policy';
 import type { Actor, DataPort } from './entities';
 import { ensure, requireRole, requireClass, audit } from './policy';
@@ -66,6 +66,17 @@ export async function createQuestion(
     return version;
   });
 }
+export async function disableQuestion(db: DataPort, actor: Actor, questionId: string) {
+  requireRole(actor, 'TEACHER', 'SCHOOL_ADMIN', 'ADMIN');
+  return db.transaction(async (tx) => {
+    const question = await tx.get('question', questionId);
+    ensure(question?.ownerId === actor.id, 'FORBIDDEN', 403);
+    const updated = await tx.update('question', questionId, { active: false });
+    await audit(tx, actor, 'QUESTION_DISABLED', questionId);
+    return updated;
+  });
+}
+
 export async function createAssignment(
   db: DataPort,
   a: Actor,
@@ -94,6 +105,14 @@ export async function createAssignment(
       exclude: { studentIds: [] },
     };
   const resolved = audience ? await resolveAudience(db, a, audience) : null;
+  if (resolved && input.classId) {
+    const { classes } = await teachingScope(db, a, resolved.selection.schoolId);
+    ensure(
+      classes.some((c) => c.id === input.classId),
+      'CLASS_FORBIDDEN',
+      403,
+    );
+  }
   if (!resolved) {
     ensure(input.classId, 'AUDIENCE_REQUIRED');
     await requireClass(db, a, input.classId, true);
@@ -161,7 +180,7 @@ export async function publishAssignment(
     ensure(ass.status === 'DRAFT', 'ALREADY_PUBLISHED');
     ensure((await tx.list('assignmentItem', { assignmentId: id })).length, 'EMPTY_ASSIGNMENT');
     if (ass.audience) await freezeAssignmentAudience(tx, a, ass, rosterVersion);
-    else if (ass.classId) {
+    if (ass.classId) {
       const cls = await tx.get('teachingClass', ass.classId);
       const offering = cls && (await tx.get('courseOffering', cls.offeringId));
       const course = offering && (await tx.get('course', offering.courseId));
@@ -174,22 +193,5 @@ export async function publishAssignment(
     await tx.update('assignment', id, { status: 'PUBLISHED' });
     await audit(tx, a, 'ASSIGNMENT_PUBLISHED', id);
     return { id };
-  });
-}
-export async function importRoster(db: DataPort, a: Actor, classId: string, emails: string[]) {
-  requireRole(a, 'TEACHER');
-  await requireClass(db, a, classId, true);
-  return db.transaction(async (tx) => {
-    let added = 0;
-    for (const email of [...new Set(emails.map((e) => e.trim().toLowerCase()))]) {
-      const user = (await tx.list('user', { email }))[0];
-      ensure(user?.active && user.roles.includes('STUDENT'), 'STUDENT_ACCOUNT_NOT_FOUND');
-      if (!(await tx.list('enrollment', { userId: user.id, classId })).length) {
-        await tx.create('enrollment', { userId: user.id, classId });
-        added++;
-      }
-    }
-    await audit(tx, a, 'ROSTER_IMPORTED', classId, { added });
-    return { added };
   });
 }

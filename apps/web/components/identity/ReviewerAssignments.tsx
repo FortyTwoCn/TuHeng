@@ -26,7 +26,7 @@ export function TeacherPicker({
     let active = true;
     const timer = setTimeout(() => {
       void identityRequest(
-        `/api/organization/accounts?schoolId=${encodeURIComponent(schoolId)}&kind=TEACHER&q=${encodeURIComponent(query)}&page=${page}`,
+        `/api/organization/accounts?schoolId=${encodeURIComponent(schoolId)}&kind=TEACHER&open=1&q=${encodeURIComponent(query)}&page=${page}`,
       )
         .then((r) => {
           if (active) setRows(r);

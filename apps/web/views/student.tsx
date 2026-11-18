@@ -127,12 +127,16 @@ export async function AssignmentList({
   search: Record<string, string | undefined>;
 }) {
   const [all, classes] = await Promise.all([
-    domain.listAssignments(database, a),
-    domain.visibleClasses(database, a),
+    domain.listAssignments(database, a, search.schoolId),
+    area === 'admin' || area === 'school'
+      ? (await domain.teachingScope(database, a, (a.schoolId || search.schoolId)!)).classes
+      : domain.visibleClasses(database, a),
   ]);
   const assignments = all.filter(
     (as) =>
-      (!search.classId || as.classId === search.classId) &&
+      (!search.classId ||
+        as.classId === search.classId ||
+        as.audience?.include.classIds.includes(search.classId)) &&
       (!search.status || as.status === search.status) &&
       (!search.q || as.title.includes(search.q)),
   );
@@ -144,13 +148,19 @@ export async function AssignmentList({
         description="查看题目、提交状态与批改反馈，保留每一次学习记录。"
         action={
           area !== 'student' ? (
-            <Link className="button primary" href="/teacher/assignments/new">
+            <Link
+              className="button primary"
+              href={`/${area}/assignments/new${search.schoolId ? '?schoolId=' + encodeURIComponent(search.schoolId) : ''}`}
+            >
               ＋ 布置作业
             </Link>
           ) : undefined
         }
       />
       <form className="filterbar">
+        {area === 'admin' && search.schoolId && (
+          <input type="hidden" name="schoolId" value={search.schoolId} />
+        )}
         <input aria-label="搜索作业" name="q" placeholder="搜索作业名称" defaultValue={search.q} />
         <select aria-label="按教学班筛选" name="classId" defaultValue={search.classId}>
           <option value="">全部课程 / 教学班</option>
@@ -183,6 +193,7 @@ export async function AssignmentList({
                 key={ass.id}
                 assignment={ass}
                 area={area}
+                schoolId={search.schoolId}
                 className={classes.find((c) => c.id === ass.classId)?.name ?? ''}
                 count={items.length}
                 completed={new Set(attempts.map((at) => at.submissionId)).size}

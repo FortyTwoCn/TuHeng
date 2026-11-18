@@ -9,10 +9,16 @@ export function OrganizationSelect({
   label,
   name,
   required = false,
+  initial,
+  onSelect,
+  disabled = false,
   empty = '请选择',
 }: {
   schoolId: string;
-  kind: 'classes' | 'teachers';
+  kind: 'classes' | 'teachers' | 'offerings';
+  initial?: { id: string; name: string };
+  onSelect?: (id: string) => void;
+  disabled?: boolean;
   label: string;
   name: string;
   required?: boolean;
@@ -24,7 +30,7 @@ export function OrganizationSelect({
   const [items, setItems] = useState<
     { id: string; name: string; loginId?: string; archived?: boolean }[]
   >([]);
-  const [selected, setSelected] = useState<{ id: string; name: string }>(),
+  const [selected, setSelected] = useState<{ id: string; name: string } | undefined>(initial),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -34,18 +40,35 @@ export function OrganizationSelect({
       try {
         const params = new URLSearchParams({
           schoolId,
+          open: '1',
           q: query,
           page: String(page),
           ...(kind === 'teachers' ? { kind: 'TEACHER' } : {}),
         });
         const data = await identityRequest(
-          '/api/organization/' + (kind === 'teachers' ? 'accounts' : 'classes') + '?' + params,
+          '/api/organization/' + (kind === 'teachers' ? 'accounts' : kind) + '?' + params,
           undefined,
           'STAFF',
           abort.signal,
         );
         if (!abort.signal.aborted) {
-          setItems(data.items);
+          const choices: {
+            id: string;
+            name: string;
+            loginId?: string;
+            archived?: boolean;
+            offering?: { term: string; course: { title: string } };
+          }[] = data.items;
+          setItems(
+            choices.map((item) =>
+              item.offering
+                ? {
+                    ...item,
+                    name: [item.name, item.offering.course.title, item.offering.term].join(' · '),
+                  }
+                : item,
+            ),
+          );
           setTotal(data.total);
           setError('');
         }
@@ -79,7 +102,11 @@ export function OrganizationSelect({
           name={name}
           value={selected?.id ?? ''}
           required={required}
-          onChange={(e) => setSelected(items.find((i) => i.id === e.target.value))}
+          disabled={disabled}
+          onChange={(e) => {
+            setSelected(items.find((i) => i.id === e.target.value));
+            onSelect?.(e.target.value);
+          }}
         >
           <option value="">{empty}</option>
           {selected && !items.some((i) => i.id === selected.id) && (

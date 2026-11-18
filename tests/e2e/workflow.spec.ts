@@ -137,7 +137,7 @@ test('A/B/D: teacher publishes, student uploads, teacher reviews, student views 
   });
   for (const command of ['draft', 'submit']) {
     const refused = await other.request.post('/api/actions/' + command, {
-      headers: { Origin: 'http://localhost:3000' },
+      headers: { Origin: process.env.TEST_APP_ORIGIN ?? 'http://localhost:3000' },
       data: { itemId: item.id, assetIds: [excludedAsset.id], idempotencyKey: crypto.randomUUID() },
     });
     expect(refused.status()).toBe(403);
@@ -175,14 +175,15 @@ test('F: admin creates, searches and disables a scoped teacher with generated cr
 }) => {
   await login(page, 'admin');
   await page.goto('/admin/users');
-  await page.getByLabel('搜索学校', { exact: true }).fill('图衡自动化测试学校');
-  await expect(page.getByLabel('当前操作学校')).toContainText('图衡自动化测试学校');
-  await page.getByLabel('当前操作学校').selectOption('school-demo');
+  await page.getByLabel('学校名称或编号').fill('图衡自动化测试学校');
+  await page.getByRole('button', { name: '查询', exact: true }).click();
+  await page.getByRole('link', { name: /图衡自动化测试学校/ }).click();
   await page.getByText('新增教师', { exact: true }).click();
   const name = '[E2E测试]教师-' + Date.now();
   await page.getByLabel('教师姓名', { exact: true }).fill(name);
   await page.getByRole('button', { name: '创建并生成初始凭据' }).click();
-  await page.getByLabel('搜索姓名 / 登录 ID / 学号').fill(name);
+  await page.getByLabel('搜索教师').fill(name);
+  await page.getByRole('button', { name: '查询', exact: true }).click();
   const row = page.locator('.organization-row').filter({ hasText: name });
   await expect(row).toBeVisible();
   await verifyIdentity(page, process.env.SEED_PASSWORD!);

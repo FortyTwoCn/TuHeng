@@ -1,10 +1,10 @@
 import Link from 'next/link';
+import { JobsConsole } from '../components/identity/JobsConsole';
+import { AICenter } from '../components/identity/AICenter';
 import { prisma, database } from '@tuheng/database';
 import { requireRole, type Actor } from '@tuheng/domain';
 import { storageHealth } from '@tuheng/infrastructure';
 import { Panel, PageTitle, Badge } from '@tuheng/ui';
-import { ActionButton } from '../components/Actions';
-import { UserCreate, UserManage, OrganizationForm, ImportUsers } from '../components/AdminForms';
 import { Stat, date } from './shared';
 export async function AdminDashboard({ a }: { a: Actor }) {
   requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
@@ -52,131 +52,6 @@ export async function AdminDashboard({ a }: { a: Actor }) {
     </>
   );
 }
-export async function UsersView({
-  a,
-  search,
-}: {
-  a: Actor;
-  search: Record<string, string | undefined>;
-}) {
-  requireRole(a, 'ADMIN');
-  const users = await prisma.user.findMany({
-    where: {
-      ...(search.q
-        ? {
-            OR: [
-              { email: { contains: search.q, mode: 'insensitive' } },
-              { name: { contains: search.q } },
-            ],
-          }
-        : {}),
-      ...(search.role ? { roles: { has: search.role } } : {}),
-    },
-    select: { id: true, email: true, name: true, active: true, roles: true },
-    take: 100,
-    orderBy: { createdAt: 'desc' },
-  });
-  return (
-    <>
-      <PageTitle
-        eyebrow="IDENTITY & ACCESS"
-        title="用户管理"
-        description="密码仅保存哈希。停用或调整权限后，旧会话立即失效。"
-      />
-      <form className="filterbar">
-        <input
-          name="q"
-          placeholder="搜索姓名或邮箱"
-          aria-label="搜索用户"
-          defaultValue={search.q}
-        />
-        <select name="role" defaultValue={search.role} aria-label="筛选角色">
-          <option value="">全部角色</option>
-          {[
-            'STUDENT',
-            'TEACHER',
-            'TEACHING_ASSISTANT',
-            'COURSE_MANAGER',
-            'ADMIN',
-            'PLATFORM_OPERATOR',
-          ].map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-        <button className="button secondary">搜索</button>
-      </form>
-      <Panel title={`用户列表 · 显示 ${users.length} 条（最多100条）`}>
-        {users.map((u) => (
-          <div className="list-item" key={u.id}>
-            <div className="grow">
-              <strong>
-                {u.name} · {u.email}
-              </strong>
-              <p>{u.roles.join(' · ')}</p>
-              {u.id !== a.id && <UserManage id={u.id} roles={u.roles} />}
-            </div>
-            <Badge tone={u.active ? 'green' : 'gray'}>{u.active ? '已启用' : '已停用'}</Badge>
-            {u.id !== a.id && (
-              <ActionButton
-                name="user-update"
-                data={{ id: u.id, active: !u.active }}
-                confirm={u.active ? '停用后该用户会话立即失效，是否继续？' : undefined}
-              >
-                {u.active ? '停用' : '启用'}
-              </ActionButton>
-            )}
-          </div>
-        ))}
-      </Panel>
-      <UserCreate />
-      <ImportUsers />
-    </>
-  );
-}
-export async function OrganizationView({ a }: { a: Actor }) {
-  requireRole(a, 'ADMIN');
-  const [courses, offerings, classes, users] = await Promise.all([
-    database.list('course'),
-    database.list('courseOffering'),
-    database.list('teachingClass'),
-    prisma.user.findMany({ select: { id: true, name: true } }),
-  ]);
-  return (
-    <>
-      <PageTitle
-        eyebrow="COURSES & ORGANIZATION"
-        title="课程与教学组织"
-        description="课程、学期中的开课实例、教学班、授课授权和选课关系分开维护。"
-      />
-      <div className="two-col">
-        <OrganizationForm courses={courses} offerings={offerings} classes={classes} users={users} />
-        <Panel title="教学组织结构">
-          {courses.map((c) => (
-            <div key={c.id}>
-              <h3>
-                {c.title} <Badge>{c.code}</Badge>
-              </h3>
-              {offerings
-                .filter((o) => o.courseId === c.id)
-                .map((o) => (
-                  <div className="criterion-editor" key={o.id}>
-                    <strong>{o.term}</strong>
-                    {classes
-                      .filter((c) => c.offeringId === o.id)
-                      .map((c) => (
-                        <p key={c.id}>{c.name}</p>
-                      ))}
-                  </div>
-                ))}
-            </div>
-          ))}
-        </Panel>
-      </div>
-    </>
-  );
-}
-import { JobsConsole } from '../components/identity/JobsConsole';
-import { AICenter } from '../components/identity/AICenter';
 export async function ModelsView({
   a,
   search = {},

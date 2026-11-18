@@ -30,12 +30,14 @@ export function Status({ status }: { status: string }) {
 export function AssignmentCard({
   assignment,
   area,
+  schoolId,
   className,
   count,
   completed,
 }: {
   assignment: { id: string; title: string; status: string; startsAt: Date; dueAt: Date };
   area: string;
+  schoolId?: string;
   className: string;
   count?: number;
   completed?: number;
@@ -48,7 +50,11 @@ export function AssignmentCard({
         <span className="muted">{className}</span>
       </div>
       <h3>
-        <Link href={`/${area}/assignments/${assignment.id}`}>{assignment.title}</Link>
+        <Link
+          href={`/${area}/assignments/${assignment.id}${area === 'admin' && schoolId ? '?schoolId=' + encodeURIComponent(schoolId) : ''}`}
+        >
+          {assignment.title}
+        </Link>
       </h3>
       <p>
         开始 {date(assignment.startsAt)} · 截止 {date(assignment.dueAt)}（北京时间）
@@ -62,7 +68,10 @@ export function AssignmentCard({
             {count} 道题目 · 已提交 {completed ?? 0} 题
           </span>
         )}
-        <Link className="button secondary" href={`/${area}/assignments/${assignment.id}`}>
+        <Link
+          className="button secondary"
+          href={`/${area}/assignments/${assignment.id}${area === 'admin' && schoolId ? '?schoolId=' + encodeURIComponent(schoolId) : ''}`}
+        >
           {area === 'teacher' ? '管理作业' : '查看作业'}
           <ArrowUpRight size={13} />
         </Link>

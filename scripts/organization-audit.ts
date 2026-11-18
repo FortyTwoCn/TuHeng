@@ -16,10 +16,11 @@ try {
       (SELECT count(*) FROM "Assignment" WHERE status='PUBLISHED' AND "audienceRevision">0) AS published_snapshots,
       (SELECT count(*) FROM (SELECT "classId" FROM "TeachingGrant" GROUP BY 1 HAVING count(*)>1) g) AS cotaught_classes`);
   const { rows: issues } = await client.query(`
-    WITH catalog AS (SELECT c.id,c."schoolId",s.id AS parent,
+    WITH catalog AS (SELECT c.id,c.code,c."schoolId",s.id AS parent,
       CASE WHEN starts_with(c.code,c."schoolId"||':') THEN substr(c.code,length(c."schoolId")+2) ELSE c.code END AS business
       FROM "Course" c LEFT JOIN "School" s ON s.id=c."schoolId")
     SELECT id,'unresolved-school' AS issue FROM catalog WHERE parent IS NULL
+    UNION ALL SELECT id,'unmatched-prefix' FROM catalog WHERE code ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:' AND NOT starts_with(code, "schoolId"||':')
     UNION ALL SELECT c.id,'ambiguous-code' FROM catalog c WHERE EXISTS
       (SELECT 1 FROM catalog x WHERE x."schoolId"=c."schoolId" AND x.business=c.business AND x.id<>c.id)
     UNION ALL SELECT t.id,'class-school-mismatch' FROM "TeachingClass" t JOIN "CourseOffering" o ON o.id=t."offeringId"

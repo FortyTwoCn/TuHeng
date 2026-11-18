@@ -43,14 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
       }
       case 'question-disable': {
         const p = z.object({ id }).parse(body);
-        domain.requireRole(a, 'TEACHER');
-        const q = await database.get('question', p.id);
-        domain.ensure(q?.ownerId === a.id, 'FORBIDDEN', 403);
-        result = await database.transaction(async (tx) => {
-          const v = await tx.update('question', p.id, { active: false });
-          await domain.audit(tx, a, 'QUESTION_DISABLED', p.id);
-          return v;
-        });
+        result = await domain.disableQuestion(database, a, p.id);
         break;
       }
       case 'assignment': {
@@ -114,11 +107,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
       case 'review':
         result = await domain.reviewGrade(database, a, body);
         break;
-      case 'roster-import': {
-        const p = z.object({ classId: id, emails: z.array(z.email()).min(1).max(200) }).parse(body);
-        result = await domain.importRoster(database, a, p.classId, p.emails);
-        break;
-      }
       case 'grades-publish-batch': {
         const p = z.object({ ids: z.array(id).min(1).max(100) }).parse(body);
         result = await database.transaction(async (tx) => {
@@ -172,31 +160,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
           z.object({ ids: z.array(id).max(100) }).parse(body).ids,
         );
         break;
-      case 'user-create':
-        result = await infra.createUser(
-          a,
-          z
-            .object({
-              email: z.email(),
-              name: title,
-              password: z.string().min(12).max(200),
-              roles: z.array(z.string()).min(1),
-            })
-            .parse(body),
-        );
-        break;
-      case 'user-update': {
-        const p = z
-          .object({
-            id,
-            active: z.boolean().optional(),
-            roles: z.array(z.string()).min(1).optional(),
-            password: z.string().min(12).max(200).optional(),
-          })
-          .parse(body);
-        result = await infra.updateUser(a, p.id, p);
-        break;
-      }
       case 'run-retry': {
         const p = z.object({ id, requestId: z.uuid() }).parse(body);
         await requireRecentAuthentication(a, z.string().parse(body.proof));
@@ -209,9 +172,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
         result = await infra.rerunCurrentConfig(a, p.id, p.requestId);
         break;
       }
-      case 'model-test':
-        result = await infra.testModel(a);
-        break;
       case 'asset-transform': {
         const p = z
           .object({
@@ -226,45 +186,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
           maxDimension: 2400,
           rotate: p.rotate,
           crop: p.crop,
-        });
-        break;
-      }
-      case 'organization': {
-        domain.requireRole(a, 'ADMIN');
-        const p = z
-          .discriminatedUnion('kind', [
-            z.object({ kind: z.literal('course'), code: title, title }),
-            z.object({ kind: z.literal('offering'), courseId: id, term: title }),
-            z.object({ kind: z.literal('class'), offeringId: id, name: title }),
-            z.object({ kind: z.literal('enrollment'), userId: id, classId: id }),
-            z.object({ kind: z.literal('grant'), userId: id, classId: id }),
-          ])
-          .parse(body);
-        result = await database.transaction(async (tx) => {
-          let row;
-          if (p.kind === 'course')
-            row = await tx.create('course', { code: p.code, title: p.title });
-          else if (p.kind === 'offering')
-            row = await tx.create('courseOffering', { courseId: p.courseId, term: p.term });
-          else if (p.kind === 'class')
-            row = await tx.create('teachingClass', { offeringId: p.offeringId, name: p.name });
-          else if (p.kind === 'enrollment')
-            row = await tx.create('enrollment', { userId: p.userId, classId: p.classId });
-          else {
-            const u = await tx.get('user', p.userId);
-            domain.ensure(
-              u &&
-                domain.hasRole(
-                  { id: u.id, name: u.name, roles: u.roles },
-                  'TEACHER',
-                  'TEACHING_ASSISTANT',
-                ),
-              'TEACHER_ROLE_REQUIRED',
-            );
-            row = await tx.create('teachingGrant', { userId: p.userId, classId: p.classId });
-          }
-          await domain.audit(tx, a, 'ORGANIZATION_CREATED', row.id, { kind: p.kind });
-          return row;
         });
         break;
       }

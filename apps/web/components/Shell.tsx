@@ -25,7 +25,8 @@ const menus = {
   ],
   teacher: [
     ['dashboard', '教学工作台', LayoutDashboard],
-    ['classes', '教学班', Users],
+    ['classes', '我的教学班', Users],
+    ['imports', '名单导入与交付', BookOpen],
     ['questions', '题库管理', Layers],
     ['assignments', '作业管理', ClipboardList],
     ['reviews', '批改复核', ScanLine],
@@ -33,8 +34,9 @@ const menus = {
   ],
   school: [
     ['dashboard', '学校概览', LayoutDashboard],
-    ['teachers', '教师', Users],
-    ['classes', '班级与学生', Layers],
+    ['users', '人员管理', Users],
+    ['organization', '课程与开课学期', Layers],
+    ['classes', '教学班及成员', Layers],
     ['questions', '题库', Layers],
     ['assignments', '校级作业', ClipboardList],
     ['imports', '导入与交付', BookOpen],
@@ -42,8 +44,11 @@ const menus = {
   ],
   admin: [
     ['dashboard', '管理概览', LayoutDashboard],
+    ['schools', '学校管理', BookOpen],
     ['users', '用户管理', Users],
     ['organization', '课程与教学组织', Layers],
+    ['classes', '教学班及成员', Users],
+    ['imports', '名单导入与交付', BookOpen],
     ['questions', '题库', Layers],
     ['assignments', '学校作业', ClipboardList],
     ['models', 'AI 中心', Settings2],
@@ -57,14 +62,25 @@ export function Shell({
   a,
   area,
   current,
+  schoolId,
   children,
 }: {
   a: Actor;
   area: 'student' | 'teacher' | 'admin' | 'school';
   current: string;
+  schoolId?: string;
   children: React.ReactNode;
 }) {
   const menu = menus[area];
+  const link = (path: string) =>
+    '/' +
+    area +
+    '/' +
+    path +
+    (schoolId &&
+    ['users', 'organization', 'classes', 'assignments', 'imports', 'delivery'].includes(path)
+      ? '?schoolId=' + encodeURIComponent(schoolId)
+      : '');
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -85,7 +101,7 @@ export function Shell({
         </p>
         <nav aria-label="主导航">
           {menu.map(([path, label, Icon]) => (
-            <Link href={`/${area}/${path}`} className={current === path ? 'active' : ''} key={path}>
+            <Link href={link(path)} className={current === path ? 'active' : ''} key={path}>
               <Icon size={19} />
               <span>{label}</span>
               {current === path && <i />}
@@ -129,7 +145,7 @@ export function Shell({
       </div>
       <nav className="mobile-nav" aria-label="移动端主导航">
         {menu.slice(0, 4).map(([path, label, Icon]) => (
-          <Link className={current === path ? 'active' : ''} href={`/${area}/${path}`} key={path}>
+          <Link className={current === path ? 'active' : ''} href={link(path)} key={path}>
             <Icon size={21} />
             <span>{label}</span>
           </Link>
@@ -139,7 +155,7 @@ export function Shell({
             .slice(4)
             .filter(([path]) => path !== 'security')
             .map(([path, label]) => ({
-              href: `/${area}/${path}`,
+              href: link(path),
               label,
               active: current === path,
             }))}

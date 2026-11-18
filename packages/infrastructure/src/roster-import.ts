@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@tuheng/database';
 import { RosterRow, AccountKind } from '@tuheng/contracts';
-import { accountRoles, ensure, requireSchoolScope, type Actor } from '@tuheng/domain';
+import { accountRoles, DomainError, ensure, requireSchoolScope, type Actor } from '@tuheng/domain';
 import { parseRosterXlsx, RosterColumnMap } from './roster-xlsx';
 import {
   createAccountInTransaction,
@@ -212,13 +212,22 @@ export async function previewRosterImport(
       },
     },
   });
+  const school = await prisma.school.findUniqueOrThrow({ where: { id: input.schoolId } });
+  async function reload(batch: { id: string; status: string; rosterVersion: number }) {
+    if (batch.status === 'PREVIEW' && batch.rosterVersion < school.rosterVersion) {
+      await prisma.rosterImportBatch.updateMany({
+        where: { id: batch.id, status: 'PREVIEW', rosterVersion: batch.rosterVersion },
+        data: { rosterVersion: school.rosterVersion },
+      });
+    }
+    return rosterImportStatus(actor, batch.id);
+  }
   if (
     prior &&
     Scope.parse(prior.scope).offeringId === scope.offeringId &&
     Scope.parse(prior.scope).kind === scope.kind
   )
-    return rosterImportStatus(actor, prior.id);
-  const school = await prisma.school.findUniqueOrThrow({ where: { id: input.schoolId } });
+    return reload(prior);
   const mapping = ImportMapping.parse({ version: 1, teachers: {}, rowGroups: {}, classes: {} });
   const batch = await prisma.rosterImportBatch.upsert({
     where: {
@@ -239,7 +248,7 @@ export async function previewRosterImport(
       rosterVersion: school.rosterVersion,
     },
   });
-  return rosterImportStatus(actor, batch.id);
+  return reload(batch);
 }
 async function ownBatch(actor: Actor, id: string) {
   const batch = await prisma.rosterImportBatch.findUniqueOrThrow({ where: { id } });
@@ -249,16 +258,32 @@ async function ownBatch(actor: Actor, id: string) {
 }
 export async function rosterImportStatus(actor: Actor, id: string) {
   const batch = await ownBatch(actor, id);
-  const analysis =
-    batch.status === 'PREVIEW'
-      ? await analyzeRoster(
-          actor,
-          batch.schoolId,
-          Scope.parse(batch.scope),
-          z.array(RosterRow).parse(batch.rows),
-          ImportMapping.parse(batch.mapping),
-        )
-      : undefined;
+  let analysis: Awaited<ReturnType<typeof analyzeRoster>> | undefined;
+  let errorCode = batch.errorCode;
+  if (batch.status === 'PREVIEW') {
+    try {
+      analysis = await analyzeRoster(
+        actor,
+        batch.schoolId,
+        Scope.parse(batch.scope),
+        z.array(RosterRow).parse(batch.rows),
+        ImportMapping.parse(batch.mapping),
+      );
+    } catch (error) {
+      if (
+        !(error instanceof DomainError) ||
+        ![
+          'CATALOG_ARCHIVED',
+          'SCHOOL_DISABLED',
+          'COURSE_SCOPE_MISMATCH',
+          'IMPORT_TEMPLATE_SCOPE',
+          'FORBIDDEN',
+        ].includes(error.code)
+      )
+        throw error;
+      errorCode = error.code;
+    }
+  }
   return {
     id: batch.id,
     fingerprint: batch.fingerprint,
@@ -266,7 +291,7 @@ export async function rosterImportStatus(actor: Actor, id: string) {
     mapping: batch.mapping,
     rosterVersion: batch.rosterVersion,
     result: batch.result,
-    errorCode: batch.errorCode,
+    errorCode,
     analysis,
   };
 }
@@ -327,7 +352,6 @@ export async function commitRosterImport(
       'IMPORT_PREVIEW_STALE',
       409,
     );
-    await tx.$queryRaw`SELECT id FROM "School" WHERE id=${batch.schoolId} FOR UPDATE`;
     const school = await tx.school.findUniqueOrThrow({ where: { id: batch.schoolId } });
     ensure(school.rosterVersion === batch.rosterVersion, 'IMPORT_PREVIEW_STALE', 409);
     await tx.rosterImportBatch.update({
@@ -563,6 +587,7 @@ export async function executeRosterImport(batchId: string) {
 
 export async function retryRosterImport(actor: Actor, id: string) {
   const batch = await ownBatch(actor, id);
+  await scopeCheck(actor, batch.schoolId, Scope.parse(batch.scope));
   ensure(['RUNNING', 'QUEUED'].includes(batch.status) && batch.errorCode, 'IMPORT_NOT_RETRYABLE');
   const queue = queueFor('roster');
   try {

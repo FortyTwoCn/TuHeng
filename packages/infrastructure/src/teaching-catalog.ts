@@ -10,6 +10,17 @@ export async function lockOrganization(tx: Tx, actor: Actor, schoolId: string) {
     { active: boolean }[]
   >`SELECT active FROM "School" WHERE id=${schoolId} FOR UPDATE`;
   ensure(schools[0]?.active, 'SCHOOL_DISABLED', 403);
+  const owner = await tx.user.findUnique({
+    where: { id: actor.id },
+    select: { active: true, kind: true, schoolId: true },
+  });
+  ensure(
+    owner?.active &&
+      owner.kind === actor.kind &&
+      (owner.kind === 'SITE_ADMIN' || owner.schoolId === schoolId),
+    'ACCOUNT_FORBIDDEN',
+    403,
+  );
 }
 export function courseNumber(code: string, schoolId: string) {
   const prefix = schoolId + ':';
@@ -64,11 +75,11 @@ export function requireOpenOffering(offering: {
 }) {
   ensure(!offering.archived && !offering.course.archived, 'CATALOG_ARCHIVED', 409);
 }
-export function createCourse(
+export async function createCourse(
   actor: Actor,
   input: { schoolId: string; code: string; title: string },
 ) {
-  return catalogWrite(actor, input.schoolId, 'COURSE_CREATED', async (tx) =>
+  const course = await catalogWrite(actor, input.schoolId, 'COURSE_CREATED', async (tx) =>
     tx.course.create({
       data: {
         schoolId: input.schoolId,
@@ -77,12 +88,13 @@ export function createCourse(
       },
     }),
   );
+  return { ...course, code: courseNumber(course.code, input.schoolId) };
 }
-export function updateCourse(
+export async function updateCourse(
   actor: Actor,
   input: { schoolId: string; courseId: string; code?: string; title?: string; archived?: boolean },
 ) {
-  return catalogWrite(actor, input.schoolId, 'COURSE_UPDATED', async (tx) => {
+  const updated = await catalogWrite(actor, input.schoolId, 'COURSE_UPDATED', async (tx) => {
     const course = await getCourse(tx, input.schoolId, input.courseId);
     ensure(
       !course.archived ||
@@ -102,6 +114,7 @@ export function updateCourse(
       },
     });
   });
+  return { ...updated, code: courseNumber(updated.code, input.schoolId) };
 }
 async function checkTerm(tx: Tx, courseId: string, term: string, except?: string) {
   const existing = await tx.courseOffering.findUnique({

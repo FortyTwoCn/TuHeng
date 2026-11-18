@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { actor } from '../../../lib/auth';
-import { OrganizationConsole } from '../../../components/identity/OrganizationConsole';
+import { organizationWorkspace } from '../../../views/organization/workspace';
+import { ChooseSchool } from '../../../views/organization/navigation';
 import { AccountSetup } from '../../../components/identity/AccountSetup';
 import { SystemSettings } from '../../../components/identity/SystemSettings';
 import { Shell } from '../../../components/Shell';
@@ -53,6 +54,7 @@ export default async function Workspace({
   try {
     view = await workspaceView(a, area, segments, search);
   } catch (e) {
+    if (e instanceof DomainError && e.status === 404) notFound();
     if (e instanceof DomainError)
       view = (
         <Panel title="无法访问此内容">
@@ -74,6 +76,7 @@ export default async function Workspace({
     <Shell
       a={a}
       area={area as 'student' | 'teacher' | 'admin' | 'school'}
+      schoolId={area === 'admin' ? search.schoolId : undefined}
       current={section === 'results' ? 'assignments' : section}
     >
       {view}
@@ -98,6 +101,55 @@ async function workspaceView(
           : 'ADMIN',
   );
   const section = segments[0];
+  const expectedKind =
+    area === 'school'
+      ? 'SCHOOL_ADMIN'
+      : area === 'teacher'
+        ? 'TEACHER'
+        : area === 'admin'
+          ? 'SITE_ADMIN'
+          : 'STUDENT';
+  if (a.kind !== expectedKind) throw new DomainError('FORBIDDEN', 403);
+  if (
+    ![
+      'selftests',
+      'errors',
+      'reviews',
+      'results',
+      'classes',
+      'assignments',
+      'questions',
+      'organization',
+      'settings',
+    ].includes(section) &&
+    segments.length > 1
+  )
+    notFound();
+  if (
+    ['reviews', 'results', 'assignments', 'questions', 'settings', 'classes'].includes(section) &&
+    segments.length > 2
+  )
+    notFound();
+  const organizations =
+    area === 'admin'
+      ? ['schools', 'users', 'organization', 'classes', 'imports', 'delivery']
+      : area === 'school'
+        ? [
+            'dashboard',
+            'users',
+            'teachers',
+            'students',
+            'organization',
+            'classes',
+            'imports',
+            'delivery',
+          ]
+        : area === 'teacher'
+          ? ['classes', 'students', 'imports', 'delivery']
+          : [];
+  if (organizations.includes(section)) return organizationWorkspace(a, area, segments, search);
+  if (area === 'admin' && section === 'assignments' && (!search.schoolId || search.choose))
+    return ChooseSchool({ a, path: '/admin/' + segments.join('/'), title: '学校作业', search });
   let view: React.ReactNode;
   if (section === 'security')
     view = <AccountSetup realm={area === 'student' ? 'STUDENT' : 'STAFF'} security />;
@@ -111,23 +163,7 @@ async function workspaceView(
             ? await AssignmentDetails({ a, id: segments[1] })
             : await AssignmentList({ a, area, search });
     else if (section === 'questions') view = await QuestionsView({ a, segments });
-    else
-      view = (
-        <OrganizationConsole
-          identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
-          initial={
-            section === 'teachers'
-              ? 'teachers'
-              : section === 'classes'
-                ? 'classes'
-                : section === 'imports'
-                  ? 'imports'
-                  : section === 'delivery'
-                    ? 'delivery'
-                    : 'students'
-          }
-        />
-      );
+    else notFound();
   } else if (area === 'student') {
     requireRole(a, 'STUDENT');
     if (section === 'dashboard') view = await StudentDashboard({ a });
@@ -152,27 +188,11 @@ async function workspaceView(
             : await AssignmentList({ a, area, search });
     else if (section === 'reviews')
       view = segments[1] ? await ResultView({ a, id: segments[1] }) : await ReviewsView({ a });
-    else if (['classes', 'students', 'imports', 'delivery'].includes(section))
-      view = (
-        <OrganizationConsole
-          identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
-          initial={section}
-        />
-      );
     else if (section === 'analytics') view = await AnalyticsView({ a });
     else notFound();
   } else {
     requireRole(a, 'ADMIN', 'PLATFORM_OPERATOR');
     if (section === 'dashboard') view = await AdminDashboard({ a });
-    else if (['users', 'organization', 'imports', 'delivery'].includes(section))
-      view = (
-        <OrganizationConsole
-          identity={{ id: a.id, kind: a.kind!, schoolId: a.schoolId }}
-          initial={
-            section === 'organization' ? 'schools' : section === 'users' ? 'teachers' : section
-          }
-        />
-      );
     else if (section === 'mail') redirect('/admin/settings/mail');
     else if (section === 'settings' && !segments[1]) redirect('/admin/settings/site');
     else if (section === 'settings' && ['site', 'mail'].includes(segments[1]))
@@ -180,9 +200,9 @@ async function workspaceView(
     else if (section === 'assignments')
       view =
         segments[1] === 'new'
-          ? await NewAssignment({ a })
+          ? await NewAssignment({ a, selectedSchool: search.schoolId })
           : segments[1]
-            ? await AssignmentDetails({ a, id: segments[1] })
+            ? await AssignmentDetails({ a, id: segments[1], selectedSchool: search.schoolId })
             : await AssignmentList({ a, area: 'admin', search });
     else if (section === 'questions') view = await QuestionsView({ a, segments });
     else if (section === 'models') view = await ModelsView({ a, search });

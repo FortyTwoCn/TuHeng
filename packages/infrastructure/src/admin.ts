@@ -1,66 +1,10 @@
-import { hash } from 'bcryptjs';
-import { database, prisma } from '@tuheng/database';
-import { AISnapshot, GradingRequest, Role } from '@tuheng/contracts';
-import {
-  ensure,
-  requireRole,
-  audit,
-  planAIInvocation,
-  gradingJobActions,
-  type Actor,
-} from '@tuheng/domain';
+import { database } from '@tuheng/database';
+import { AISnapshot, GradingRequest } from '@tuheng/contracts';
+import { ensure, audit, planAIInvocation, gradingJobActions, type Actor } from '@tuheng/domain';
 import { dispatchOutbox } from './queue';
 import { aiCenter, requireAIAdmin } from './ai-admin';
 import { jobSnapshotError } from './job-readiness';
 import { readSecret } from './secret-store';
-export async function createUser(
-  a: Actor,
-  input: { email: string; name: string; password: string; roles: string[] },
-) {
-  requireRole(a, 'ADMIN');
-  const roles = input.roles.map((r) => Role.parse(r));
-  ensure(input.password.length >= 12, 'PASSWORD_TOO_SHORT');
-  return database.transaction(async (tx) => {
-    const user = await tx.create('user', {
-      email: input.email.toLowerCase(),
-      name: input.name,
-      passwordHash: await hash(input.password, 12),
-      roles,
-    });
-    await audit(tx, a, 'USER_CREATED', user.id);
-    return { id: user.id };
-  });
-}
-export async function updateUser(
-  a: Actor,
-  id: string,
-  input: { active?: boolean; roles?: string[]; password?: string },
-) {
-  requireRole(a, 'ADMIN');
-  ensure(id !== a.id, 'SELF_MODIFICATION_FORBIDDEN');
-  const roles = input.roles?.map((r) => Role.parse(r));
-  if (input.password) ensure(input.password.length >= 12, 'PASSWORD_TOO_SHORT');
-  return prisma.$transaction(async (tx) => {
-    const u = await tx.user.update({
-      where: { id },
-      data: {
-        ...(input.active !== undefined ? { active: input.active } : {}),
-        ...(roles ? { roles } : {}),
-        ...(input.password ? { passwordHash: await hash(input.password, 12) } : {}),
-        tokenVersion: { increment: 1 },
-      },
-    });
-    await tx.auditLog.create({
-      data: {
-        actorId: a.id,
-        action: 'USER_UPDATED',
-        resourceId: id,
-        details: { active: input.active, roles, passwordReset: !!input.password },
-      },
-    });
-    return { id: u.id };
-  });
-}
 export async function retryRun(a: Actor, id: string, requestId?: string) {
   requireAIAdmin(a);
   const dispatch = await database.transaction(async (tx) => {
@@ -127,10 +71,6 @@ export async function retryRun(a: Actor, id: string, requestId?: string) {
 }
 export async function modelStatus(a: Actor) {
   return aiCenter(a);
-}
-export async function testModel(a: Actor) {
-  requireAIAdmin(a);
-  ensure(false, 'USE_AI_CENTER_EXPLICIT_TEST', 410);
 }
 export async function rerunCurrentConfig(a: Actor, id: string, requestId?: string) {
   requireAIAdmin(a);

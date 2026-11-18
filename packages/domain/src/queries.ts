@@ -27,6 +27,7 @@ export async function listAssignments(db: DataPort, a: Actor, selectedSchoolId?:
     )
   ).filter(
     (v) =>
+      !v.audience &&
       !v.audienceRevision &&
       (v.status === 'PUBLISHED' || hasRole(a, 'TEACHER', 'TEACHING_ASSISTANT')),
   );
@@ -62,9 +63,20 @@ export async function listAssignments(db: DataPort, a: Actor, selectedSchoolId?:
     ).values(),
   ].sort((a, b) => b.dueAt.getTime() - a.dueAt.getTime());
 }
-export async function assignmentDetails(db: DataPort, a: Actor, id: string) {
+export async function assignmentDetails(
+  db: DataPort,
+  a: Actor,
+  id: string,
+  selectedSchool?: string,
+) {
   const assignment = await db.get('assignment', id);
   ensure(assignment, 'NOT_FOUND', 404);
+  if (a.kind === 'SITE_ADMIN' && selectedSchool) {
+    const schoolId =
+      assignment.schoolId ??
+      (assignment.classId ? (await db.get('teachingClass', assignment.classId))?.schoolId : null);
+    ensure(schoolId === selectedSchool, 'NOT_FOUND', 404);
+  }
   const teacher = await isAssignmentReviewer(db, a, assignment);
   const manager =
     (assignment.creatorId === a.id && hasRole(a, 'TEACHER', 'ADMIN', 'SCHOOL_ADMIN')) ||
@@ -108,7 +120,7 @@ export async function assignmentDetails(db: DataPort, a: Actor, id: string) {
         );
         const allowedReference =
           teacher ||
-          manager ||
+          (manager && (await db.get('question', q.questionId))?.ownerId === a.id) ||
           (assignment.releaseAnswers &&
             attempts.some((at) => at.ownerId === a.id && at.publishedDecisionId));
         return {

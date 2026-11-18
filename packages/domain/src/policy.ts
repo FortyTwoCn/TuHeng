@@ -145,6 +145,11 @@ export async function requireAssignmentManager(
   assignment: Entities['assignment'],
 ) {
   if (assignment.audience) {
+    ensure(
+      assignment.schoolId && (await db.get('school', assignment.schoolId))?.active,
+      'SCHOOL_DISABLED',
+      403,
+    );
     ensure(a.kind === 'SITE_ADMIN' || a.schoolId === assignment.schoolId, 'SCHOOL_FORBIDDEN', 403);
     ensure(
       assignment.creatorId === a.id || ['SITE_ADMIN', 'SCHOOL_ADMIN'].includes(a.kind ?? ''),
