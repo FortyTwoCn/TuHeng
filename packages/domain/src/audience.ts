@@ -8,7 +8,13 @@ export async function audienceScope(db: DataPort, actor: Actor, schoolId: string
   ensure(school?.active, 'SCHOOL_DISABLED', 403);
   ensure(['SITE_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'].includes(actor.kind ?? ''), 'FORBIDDEN', 403);
   let classes = await db.list('teachingClass', { schoolId });
-  classes = classes.filter((c) => !c.archived);
+  const courses = await db.list('course', { schoolId, archived: false });
+  const offerings = await db.list('courseOffering', {
+    courseId: { in: courses.map((c) => c.id) },
+    archived: false,
+  });
+  const available = new Set(offerings.map((o) => o.id));
+  classes = classes.filter((c) => !c.archived && available.has(c.offeringId));
   if (actor.kind === 'TEACHER') {
     const grants = await db.list('teachingGrant', { userId: actor.id });
     classes = classes.filter((c) => grants.some((g) => g.classId === c.id));

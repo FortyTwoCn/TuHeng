@@ -55,8 +55,8 @@ export interface Entities {
     inferred: boolean;
     createdAt: Date;
   };
-  course: Row & { title: string; code: string; schoolId?: string | null };
-  courseOffering: Row & { courseId: string; term: string };
+  course: Row & { title: string; code: string; schoolId?: string | null; archived?: boolean };
+  courseOffering: Row & { courseId: string; term: string; archived?: boolean };
   teachingClass: Row & {
     offeringId: string;
     name: string;

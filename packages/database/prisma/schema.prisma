@@ -62,14 +62,18 @@ model Course {
   title     String
   code      String           @unique
   schoolId  String?
+  archived  Boolean          @default(false)
   offerings CourseOffering[]
   questions Question[]
+
+  @@index([schoolId, title])
 }
 
 model CourseOffering {
   id       String          @id @default(uuid())
   courseId String
   term     String
+  archived Boolean         @default(false)
   course   Course          @relation(fields: [courseId], references: [id])
   classes  TeachingClass[]
 

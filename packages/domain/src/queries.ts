@@ -17,7 +17,7 @@ export async function visibleClasses(db: DataPort, a: Actor) {
   const ids = [...new Set([...grants, ...enrollments].map((g) => g.classId))];
   return db.list('teachingClass', { id: { in: ids } });
 }
-export async function listAssignments(db: DataPort, a: Actor) {
+export async function listAssignments(db: DataPort, a: Actor, selectedSchoolId?: string) {
   const classes = await visibleClasses(db, a);
   const legacy = (
     await db.list(
@@ -46,15 +46,32 @@ export async function listAssignments(db: DataPort, a: Actor) {
   const created = hasRole(a, 'TEACHER', 'ADMIN', 'SCHOOL_ADMIN')
     ? await db.list('assignment', { creatorId: a.id })
     : [];
-  return [...new Map([...legacy, ...assigned, ...created].map((v) => [v.id, v])).values()].sort(
-    (a, b) => b.dueAt.getTime() - a.dueAt.getTime(),
-  );
+  const schoolId =
+    a.kind === 'SCHOOL_ADMIN' ? a.schoolId : a.kind === 'SITE_ADMIN' ? selectedSchoolId : undefined;
+  const managed = schoolId
+    ? (await db.list('assignment', { schoolId })).filter((x) => !!x.audience)
+    : [];
+  return [
+    ...new Map(
+      [
+        ...legacy,
+        ...assigned,
+        ...created.filter((x) => !schoolId || x.schoolId === schoolId),
+        ...managed,
+      ].map((v) => [v.id, v]),
+    ).values(),
+  ].sort((a, b) => b.dueAt.getTime() - a.dueAt.getTime());
 }
 export async function assignmentDetails(db: DataPort, a: Actor, id: string) {
   const assignment = await db.get('assignment', id);
   ensure(assignment, 'NOT_FOUND', 404);
   const teacher = await isAssignmentReviewer(db, a, assignment);
-  const manager = assignment.creatorId === a.id && hasRole(a, 'TEACHER', 'ADMIN', 'SCHOOL_ADMIN');
+  const manager =
+    (assignment.creatorId === a.id && hasRole(a, 'TEACHER', 'ADMIN', 'SCHOOL_ADMIN')) ||
+    (!!assignment.audience &&
+      !!assignment.schoolId &&
+      (a.kind === 'SITE_ADMIN' ||
+        (a.kind === 'SCHOOL_ADMIN' && a.schoolId === assignment.schoolId)));
   if (!teacher && !manager) await requireAssignmentRecipient(db, a, assignment);
   if (manager) await requireAssignmentManager(db, a, assignment);
   ensure(
@@ -196,7 +213,7 @@ export async function listReviews(db: DataPort, a: Actor) {
   );
 }
 export async function listQuestions(db: DataPort, a: Actor) {
-  requireRole(a, 'TEACHER');
+  requireRole(a, 'TEACHER', 'SCHOOL_ADMIN', 'ADMIN');
   const qs = await db.list('question', { ownerId: a.id, active: true });
   return db.list(
     'questionVersion',

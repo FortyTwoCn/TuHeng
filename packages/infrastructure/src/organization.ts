@@ -1,3 +1,4 @@
+import { getOffering, lockOrganization, requireOpenOffering } from './teaching-catalog';
 import { hash } from 'bcryptjs';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@tuheng/database';
@@ -41,9 +42,19 @@ export async function requireManagedClass(
   tx: Prisma.TransactionClient = prisma,
   allowArchived = false,
 ) {
-  const cls = await tx.teachingClass.findUnique({ where: { id: classId } });
+  const cls = await tx.teachingClass.findUnique({
+    where: { id: classId },
+    include: { offering: { include: { course: true } } },
+  });
   ensure(cls?.schoolId && (allowArchived || !cls.archived), 'CLASS_UNAVAILABLE', 403);
   requireSchoolScope(actor, cls.schoolId);
+  ensure(cls.offering.course.schoolId === cls.schoolId, 'SCOPE_MISMATCH', 403);
+  ensure(
+    (await tx.school.findUnique({ where: { id: cls.schoolId } }))?.active,
+    'SCHOOL_DISABLED',
+    403,
+  );
+  if (!allowArchived) requireOpenOffering(cls.offering);
   ensure(['SITE_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'].includes(actor.kind ?? ''), 'FORBIDDEN', 403);
   if (actor.kind === 'TEACHER')
     ensure(
@@ -131,6 +142,7 @@ export async function createTeacher(actor: Actor, input: { schoolId: string; nam
   requireIdentityManager(actor, input.schoolId, 'TEACHER');
   await requireActiveSchool(actor, input.schoolId);
   return prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, actor, input.schoolId);
     const batch = await createDeliveryBatch(tx, actor, input.schoolId);
     const user = await createAccountInTransaction(tx, { ...input, kind: 'TEACHER' }, batch.id);
     await tx.school.update({
@@ -148,32 +160,35 @@ export async function createTeacher(actor: Actor, input: { schoolId: string; nam
     return { id: user.id, loginId: user.loginId, credentialBatchId: batch.id };
   });
 }
-export async function createCourseOffering(
+export async function createSchoolAdministrator(
   actor: Actor,
-  input: { schoolId: string; title: string; code: string; term: string },
+  input: { schoolId: string; name: string },
+  proof: string,
 ) {
-  await requireActiveSchool(actor, input.schoolId);
-  ensure(actor.kind !== 'STUDENT', 'FORBIDDEN', 403);
+  ensure(actor.kind === 'SITE_ADMIN', 'FORBIDDEN', 403);
+  await requireRecentAuthentication(actor, proof);
   return prisma.$transaction(async (tx) => {
-    const course = await tx.course.create({
-      data: {
-        schoolId: input.schoolId,
-        title: input.title,
-        code: input.schoolId + ':' + input.code,
-      },
-    });
-    const offering = await tx.courseOffering.create({
-      data: { courseId: course.id, term: input.term },
-    });
+    await lockOrganization(tx, actor, input.schoolId);
+    ensure(
+      !(await tx.user.count({ where: { schoolId: input.schoolId, kind: 'SCHOOL_ADMIN' } })),
+      'SCHOOL_ADMIN_EXISTS',
+      409,
+    );
+    const batch = await createDeliveryBatch(tx, actor, input.schoolId);
+    const user = await createAccountInTransaction(
+      tx,
+      { ...input, kind: 'SCHOOL_ADMIN', loginId: await nextLoginId(tx, 'S') },
+      batch.id,
+    );
     await tx.auditLog.create({
       data: {
         actorId: actor.id,
-        action: 'COURSE_CREATED',
-        resourceId: course.id,
+        action: 'SCHOOL_ADMIN_CREATED',
+        resourceId: user.id,
         details: { schoolId: input.schoolId },
       },
     });
-    return offering;
+    return { id: user.id, loginId: user.loginId, credentialBatchId: batch.id };
   });
 }
 export async function createClass(
@@ -187,11 +202,21 @@ export async function createClass(
     403,
   );
   return prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, actor, input.schoolId);
     const teacher = await tx.user.findUnique({ where: { id: input.teacherId } });
-    const offering = await tx.courseOffering.findUnique({
-      where: { id: input.offeringId },
-      include: { course: true },
-    });
+    const offering = await getOffering(tx, input.schoolId, input.offeringId);
+    requireOpenOffering(offering);
+    ensure(
+      !(await tx.teachingClass.findFirst({
+        where: {
+          offeringId: offering.id,
+          name: input.name,
+          grants: { some: { userId: input.teacherId } },
+        },
+      })),
+      'CLASS_NAME_CONFLICT',
+      409,
+    );
     ensure(
       teacher?.kind === 'TEACHER' &&
         teacher.schoolId === input.schoolId &&
@@ -231,6 +256,7 @@ export async function upsertStudentMembership(
   await requireActiveSchool(actor, input.schoolId);
   ensure(actor.kind !== 'TEACHER' || input.classIds.length, 'CLASS_REQUIRED');
   return prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, actor, input.schoolId);
     for (const id of input.classIds)
       ensure(
         (await requireManagedClass(actor, id, tx)).schoolId === input.schoolId,
@@ -273,19 +299,26 @@ export async function upsertStudentMembership(
     return { id: user.id, credentialBatchId: batchId, reused: !batchId };
   });
 }
-export async function requireManagedAccount(actor: Actor, id: string) {
-  const target = await prisma.user.findUniqueOrThrow({ where: { id } });
+export async function requireManagedAccount(
+  actor: Actor,
+  id: string,
+  tx: Prisma.TransactionClient = prisma,
+  schoolId?: string,
+) {
+  const target = await tx.user.findUniqueOrThrow({ where: { id } });
+  ensure(!schoolId || target.schoolId === schoolId, 'SCOPE_MISMATCH', 403);
   ensure(target.schoolId && target.id !== actor.id, 'ACCOUNT_FORBIDDEN', 403);
   requireIdentityManager(actor, target.schoolId, AccountKind.parse(target.kind));
   if (actor.kind === 'TEACHER')
     ensure(
-      await prisma.enrollment.findFirst({
+      await tx.enrollment.findFirst({
         where: {
           userId: id,
           teachingClass: {
             schoolId: actor.schoolId,
             grants: { some: { userId: actor.id } },
             archived: false,
+            offering: { archived: false, course: { schoolId: actor.schoolId, archived: false } },
           },
         },
       }),
@@ -294,12 +327,20 @@ export async function requireManagedAccount(actor: Actor, id: string) {
     );
   return target;
 }
-export async function resetAccountPassword(actor: Actor, id: string, proof: string) {
-  const target = await requireManagedAccount(actor, id);
+export async function resetAccountPassword(
+  actor: Actor,
+  id: string,
+  proof: string,
+  schoolId?: string,
+) {
+  const initial = await requireManagedAccount(actor, id, prisma, schoolId);
   await requireRecentAuthentication(actor, proof);
   const password = temporaryPassword(),
     expiresAt = new Date(Date.now() + 86400000);
   return prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, actor, initial.schoolId!);
+    const target = await requireManagedAccount(actor, id, tx, schoolId);
+    ensure(target.active, 'ACCOUNT_DISABLED', 403);
     await invalidateCredentials(tx, id);
     const user = await tx.user.update({
       where: { id },
@@ -335,14 +376,17 @@ export async function updateAccount(
   id: string,
   input: { name?: string; studentNumber?: string; active?: boolean },
   proof: string,
+  schoolId?: string,
 ) {
-  const target = await requireManagedAccount(actor, id);
+  ensure(actor.kind === 'SITE_ADMIN' || actor.kind === 'SCHOOL_ADMIN', 'IDENTITY_FORBIDDEN', 403);
+  const target = await requireManagedAccount(actor, id, prisma, schoolId);
   await requireRecentAuthentication(actor, proof);
   ensure(
     input.studentNumber === undefined || target.kind === 'STUDENT',
     'STUDENT_NUMBER_NOT_APPLICABLE',
   );
   await prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, actor, target.schoolId!);
     await tx.user.update({ where: { id }, data: { ...input, tokenVersion: { increment: 1 } } });
     await tx.school.update({
       where: { id: target.schoolId! },
@@ -384,9 +428,17 @@ export async function changeClassMembership(
   joined: boolean,
 ) {
   const cls = await requireManagedClass(actor, classId);
-  const student = await prisma.user.findUnique({ where: { id: studentId } });
-  ensure(student?.kind === 'STUDENT' && student.schoolId === cls.schoolId, 'SCOPE_MISMATCH', 403);
   await prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, actor, cls.schoolId!);
+    await requireManagedClass(actor, classId, tx);
+    const student = await tx.user.findUnique({ where: { id: studentId } });
+    ensure(
+      student?.kind === 'STUDENT' &&
+        student.schoolId === cls.schoolId &&
+        (!joined || student.active),
+      'SCOPE_MISMATCH',
+      403,
+    );
     if (joined)
       await tx.enrollment.upsert({
         where: { userId_classId: { userId: studentId, classId } },
@@ -412,13 +464,37 @@ export async function changeClassMembership(
 export async function updateClass(
   actor: Actor,
   classId: string,
-  input: { archived?: boolean; teacherId?: string },
+  input: { archived?: boolean; teacherId?: string; fromTeacherId?: string; name?: string },
   proof: string,
 ) {
   const cls = await requireManagedClass(actor, classId, prisma, true);
   await requireRecentAuthentication(actor, proof);
   ensure(actor.kind !== 'TEACHER' || !input.teacherId, 'HANDOFF_REQUIRES_SCHOOL_ADMIN', 403);
   await prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, actor, cls.schoolId!);
+    const current = await requireManagedClass(actor, classId, tx, true);
+    requireOpenOffering(current.offering);
+    ensure(
+      !current.archived || (input.archived === false && !input.teacherId && !input.name),
+      'CLASS_ARCHIVED',
+      409,
+    );
+    if (input.name) {
+      const grants = await tx.teachingGrant.findMany({ where: { classId } });
+      ensure(
+        !(await tx.teachingClass.findFirst({
+          where: {
+            id: { not: classId },
+            offeringId: cls.offeringId,
+            name: input.name,
+            grants: { some: { userId: { in: grants.map((g) => g.userId) } } },
+          },
+        })),
+        'CLASS_NAME_CONFLICT',
+        409,
+      );
+      await tx.teachingClass.update({ where: { id: classId }, data: { name: input.name } });
+    }
     if (input.teacherId) {
       const teacher = await tx.user.findUnique({ where: { id: input.teacherId } });
       ensure(
@@ -426,8 +502,30 @@ export async function updateClass(
         'SCOPE_MISMATCH',
         403,
       );
-      await tx.teachingGrant.deleteMany({ where: { classId } });
-      await tx.teachingGrant.create({ data: { userId: input.teacherId, classId } });
+      if (input.fromTeacherId) {
+        ensure(input.fromTeacherId !== input.teacherId, 'HANDOFF_SAME_TEACHER');
+        const removed = await tx.teachingGrant.deleteMany({
+          where: { classId, userId: input.fromTeacherId },
+        });
+        ensure(removed.count === 1, 'GRANT_CHANGED', 409);
+      }
+      ensure(
+        !(await tx.teachingClass.findFirst({
+          where: {
+            offeringId: cls.offeringId,
+            name: current.name,
+            id: { not: classId },
+            grants: { some: { userId: teacher.id } },
+          },
+        })),
+        'CLASS_NAME_CONFLICT',
+        409,
+      );
+      await tx.teachingGrant.upsert({
+        where: { userId_classId: { userId: teacher.id, classId } },
+        create: { userId: teacher.id, classId },
+        update: {},
+      });
     }
     if (input.archived !== undefined)
       await tx.teachingClass.update({ where: { id: classId }, data: { archived: input.archived } });

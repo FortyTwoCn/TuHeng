@@ -295,3 +295,5 @@ export const formatPoints = (p: number | null | undefined) =>
   p == null ? '待判断' : (p / 10).toFixed(1);
 
 export * from './ai';
+
+export { OrganizationCommand } from './teaching-organization';

@@ -1,3 +1,4 @@
+import { getOffering, lockOrganization, requireOpenOffering } from './teaching-catalog';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -41,6 +42,7 @@ async function scopeCheck(actor: Actor, schoolId: string, scope: z.infer<typeof 
     include: { course: true },
   });
   ensure(offering?.course.schoolId === schoolId, 'COURSE_SCOPE_MISMATCH', 403);
+  requireOpenOffering(offering);
 }
 export async function analyzeRoster(
   actor: Actor,
@@ -65,7 +67,12 @@ export async function analyzeRoster(
       select: { id: true, name: true, loginId: true },
     }),
     prisma.teachingClass.findMany({
-      where: { schoolId, offeringId: scope.offeringId, archived: false },
+      where: {
+        schoolId,
+        offeringId: scope.offeringId,
+        archived: false,
+        ...(actor.kind === 'TEACHER' ? { grants: { some: { userId: actor.id } } } : {}),
+      },
       include: { grants: true },
     }),
   ]);
@@ -185,11 +192,35 @@ export async function previewRosterImport(
   await scopeCheck(actor, input.schoolId, scope);
   const parsed = await parseRosterXlsx(input.bytes, input.filename, input.kind, scope.columnMap);
   if (parsed.errors.length) return { errors: parsed.errors };
-  const fingerprint = createHash('sha256')
+  const legacyFingerprint = createHash('sha256')
     .update(input.bytes)
     .update(scope.columnMap ? JSON.stringify(Object.entries(scope.columnMap).sort()) : '')
     .digest('hex');
+  const fingerprint =
+    'v2:' +
+    createHash('sha256')
+      .update(
+        JSON.stringify([actor.id, input.schoolId, scope.offeringId, scope.kind, legacyFingerprint]),
+      )
+      .digest('hex');
   const prior = await prisma.rosterImportBatch.findUnique({
+    where: {
+      creatorId_schoolId_fingerprint: {
+        creatorId: actor.id,
+        schoolId: input.schoolId,
+        fingerprint: legacyFingerprint,
+      },
+    },
+  });
+  if (
+    prior &&
+    Scope.parse(prior.scope).offeringId === scope.offeringId &&
+    Scope.parse(prior.scope).kind === scope.kind
+  )
+    return rosterImportStatus(actor, prior.id);
+  const school = await prisma.school.findUniqueOrThrow({ where: { id: input.schoolId } });
+  const mapping = ImportMapping.parse({ version: 1, teachers: {}, rowGroups: {}, classes: {} });
+  const batch = await prisma.rosterImportBatch.upsert({
     where: {
       creatorId_schoolId_fingerprint: {
         creatorId: actor.id,
@@ -197,20 +228,8 @@ export async function previewRosterImport(
         fingerprint,
       },
     },
-  });
-  if (prior) {
-    ensure(
-      Scope.parse(prior.scope).offeringId === scope.offeringId &&
-        Scope.parse(prior.scope).kind === scope.kind,
-      'IMPORT_SCOPE_CHANGED',
-      409,
-    );
-    return rosterImportStatus(actor, prior.id);
-  }
-  const school = await prisma.school.findUniqueOrThrow({ where: { id: input.schoolId } });
-  const mapping = ImportMapping.parse({ version: 1, teachers: {}, rowGroups: {}, classes: {} });
-  const batch = await prisma.rosterImportBatch.create({
-    data: {
+    update: {},
+    create: {
       creatorId: actor.id,
       schoolId: input.schoolId,
       fingerprint,
@@ -225,7 +244,7 @@ export async function previewRosterImport(
 async function ownBatch(actor: Actor, id: string) {
   const batch = await prisma.rosterImportBatch.findUniqueOrThrow({ where: { id } });
   ensure(batch.creatorId === actor.id, 'IMPORT_FORBIDDEN', 403);
-  await scopeCheck(actor, batch.schoolId, Scope.parse(batch.scope));
+  requireSchoolScope(actor, batch.schoolId);
   return batch;
 }
 export async function rosterImportStatus(actor: Actor, id: string) {
@@ -253,6 +272,7 @@ export async function rosterImportStatus(actor: Actor, id: string) {
 }
 export async function mapRosterImport(actor: Actor, id: string, input: unknown) {
   const batch = await ownBatch(actor, id);
+  await scopeCheck(actor, batch.schoolId, Scope.parse(batch.scope));
   ensure(batch.status === 'PREVIEW', 'IMPORT_ALREADY_STARTED');
   const mapping = ImportMapping.parse(input);
   ensure(
@@ -297,6 +317,8 @@ export async function commitRosterImport(
   ensure(!analysis.errors.length, 'IMPORT_HAS_UNRESOLVED_ERRORS', 409);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "RosterImportBatch" WHERE id=${batch.id} FOR UPDATE`;
+    await lockOrganization(tx, actor, batch.schoolId);
+    requireOpenOffering(await getOffering(tx, batch.schoolId, Scope.parse(batch.scope).offeringId));
     const current = await tx.rosterImportBatch.findUniqueOrThrow({ where: { id: batch.id } });
     if (['QUEUED', 'RUNNING', 'SUCCEEDED'].includes(current.status)) return;
     ensure(
@@ -381,7 +403,7 @@ export async function executeRosterImport(batchId: string) {
           ensure(
             owner.active &&
               !owner.mustChangePassword &&
-              (owner.realm === 'STUDENT' || owner.emailVerifiedAt),
+              (owner.kind === 'SITE_ADMIN' || owner.emailVerifiedAt),
             'IMPORT_OWNER_UNAVAILABLE',
           );
           const actor: Actor = {
@@ -397,11 +419,15 @@ export async function executeRosterImport(batchId: string) {
               (owner.kind === 'TEACHER') === (Scope.parse(batch.scope).kind === 'TEACHER'),
             'IMPORT_SCOPE_CHANGED',
           );
-          const school = await tx.school.findUniqueOrThrow({ where: { id: batch.schoolId } });
-          ensure(school.active, 'SCHOOL_DISABLED');
+          await lockOrganization(tx, actor, batch.schoolId);
           const progress = Progress.parse(batch.result),
             scope = Scope.parse(batch.scope),
             mapping = ImportMapping.parse(batch.mapping);
+          requireOpenOffering(await getOffering(tx, batch.schoolId, scope.offeringId));
+          ensure(
+            (owner.kind === 'TEACHER') === (scope.kind === 'TEACHER'),
+            'IMPORT_TEMPLATE_SCOPE',
+          );
           if (progress.completed >= progress.total) {
             await tx.rosterImportBatch.update({
               where: { id: batchId },
@@ -442,16 +468,26 @@ export async function executeRosterImport(batchId: string) {
             );
             let classId = step.classId ?? progress.classes[step.classKey];
             if (!classId) {
-              classId = (
-                await tx.teachingClass.create({
-                  data: {
-                    schoolId: batch.schoolId,
-                    offeringId: scope.offeringId,
-                    name: step.row.className,
-                    grants: { create: { userId: teacherId } },
-                  },
-                })
-              ).id;
+              const existing = await tx.teachingClass.findFirst({
+                where: {
+                  offeringId: scope.offeringId,
+                  schoolId: batch.schoolId,
+                  name: step.row.className,
+                  grants: { some: { userId: teacherId } },
+                },
+              });
+              classId =
+                existing?.id ??
+                (
+                  await tx.teachingClass.create({
+                    data: {
+                      schoolId: batch.schoolId,
+                      offeringId: scope.offeringId,
+                      name: step.row.className,
+                      grants: { create: { userId: teacherId } },
+                    },
+                  })
+                ).id;
               progress.classes[step.classKey] = classId;
             }
             const cls = await tx.teachingClass.findUniqueOrThrow({
@@ -461,6 +497,7 @@ export async function executeRosterImport(batchId: string) {
             ensure(
               !cls.archived &&
                 cls.schoolId === batch.schoolId &&
+                cls.offeringId === scope.offeringId &&
                 cls.grants.some((g) => g.userId === teacherId) &&
                 (owner.kind !== 'TEACHER' || teacherId === owner.id),
               'IMPORT_CLASS_CHANGED',

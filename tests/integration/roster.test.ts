@@ -9,11 +9,11 @@ import { loadIdentity, changeOwnPassword } from '../../packages/infrastructure/s
 import { reauthenticate } from '../../packages/infrastructure/src/identity-security';
 import {
   createSchoolWithAdmin,
-  createCourseOffering,
   createTeacher,
   createClass,
   resetAccountPassword,
 } from '../../packages/infrastructure/src/organization';
+import { createCourse, createOffering } from '../../packages/infrastructure/src/teaching-catalog';
 import { parseRosterXlsx, rosterTemplate } from '../../packages/infrastructure/src/roster-xlsx';
 import {
   previewRosterImport,
@@ -50,7 +50,11 @@ beforeAll(async () => {
     )
   ).school.id;
   offeringId = (
-    await createCourseOffering(root, { schoolId, title: '几何', code: tag, term: '2026 秋季' })
+    await createOffering(root, {
+      schoolId,
+      courseId: (await createCourse(root, { schoolId, title: '几何', code: tag })).id,
+      term: '2026 秋季',
+    })
   ).id;
 });
 afterAll(async () => {
@@ -258,6 +262,9 @@ describe.sequential('real XLSX, import and credential delivery', () => {
     await expect(createTeacher(actor, { schoolId, name: '越权' })).rejects.toThrow(
       'IDENTITY_FORBIDDEN',
     );
+    await expect(
+      createCourse(actor, { schoolId, title: '权限校验', code: 'denied-' + tag }),
+    ).rejects.toThrow('CATALOG_FORBIDDEN');
     const otherSchool = (
       await createSchoolWithAdmin(
         root,

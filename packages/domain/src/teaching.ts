@@ -161,6 +161,16 @@ export async function publishAssignment(
     ensure(ass.status === 'DRAFT', 'ALREADY_PUBLISHED');
     ensure((await tx.list('assignmentItem', { assignmentId: id })).length, 'EMPTY_ASSIGNMENT');
     if (ass.audience) await freezeAssignmentAudience(tx, a, ass, rosterVersion);
+    else if (ass.classId) {
+      const cls = await tx.get('teachingClass', ass.classId);
+      const offering = cls && (await tx.get('courseOffering', cls.offeringId));
+      const course = offering && (await tx.get('course', offering.courseId));
+      ensure(
+        cls && !cls.archived && !offering?.archived && !course?.archived,
+        'CATALOG_ARCHIVED',
+        409,
+      );
+    }
     await tx.update('assignment', id, { status: 'PUBLISHED' });
     await audit(tx, a, 'ASSIGNMENT_PUBLISHED', id);
     return { id };
