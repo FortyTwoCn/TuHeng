@@ -1,0 +1,93 @@
+{
+  "date": "2026-11-18",
+  "codeHead": "1de6eab786a3671e979784736bfcd3d4fa19f113",
+  "baseline": "7926ab6224e18dc0c19e313d2e638fa7ece488d5",
+  "commands": {
+    "npm run typecheck": {
+      "exitCode": 0
+    },
+    "npm run lint": {
+      "exitCode": 0
+    },
+    "npm test": {
+      "exitCode": 0,
+      "passed": 240,
+      "total": 240
+    },
+    "npm run test:integration": {
+      "exitCode": 0,
+      "passed": 59,
+      "total": 59
+    },
+    "npm run test:e2e": {
+      "exitCode": 0,
+      "passed": 110,
+      "total": 110,
+      "duration": "5.7m"
+    },
+    "npm run build": {
+      "exitCode": 0
+    }
+  },
+  "migration": {
+    "id": "2026111802_catalog_archive",
+    "before": {
+      "summary": {
+        "schools": "1",
+        "courses": "1",
+        "offerings": "1",
+        "classes": "1",
+        "published_legacy": "0",
+        "published_snapshots": "12",
+        "cotaught_classes": "0"
+      },
+      "issues": []
+    },
+    "after": {
+      "summary": {
+        "schools": "1",
+        "courses": "1",
+        "offerings": "1",
+        "classes": "1",
+        "published_legacy": "0",
+        "published_snapshots": "12",
+        "cotaught_classes": "0"
+      },
+      "issues": []
+    }
+  },
+  "mobileConfirmation": {
+    "beforeFixFailures": 3,
+    "afterFixAndKeyboardResizePasses": 6
+  },
+  "viewports": [
+    [
+      360,
+      800
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      768,
+      1024
+    ],
+    [
+      1024,
+      768
+    ],
+    [
+      1366,
+      768
+    ],
+    [
+      1440,
+      900
+    ]
+  ],
+  "browser": "Playwright Chromium",
+  "smtp": "local STARTTLS protocol fixture",
+  "ai": "automated test adapters",
+  "physicalTablet": false
+}

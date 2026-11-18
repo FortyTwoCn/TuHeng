@@ -1,5 +1,7 @@
 # 参考图驱动的界面完善
 
+学校教学组织及对象属性卡于 2026-11-18 更新。现行入口、权限与测试见[学校教学组织与编辑器验收](TEACHING_ORGANIZATION_ACCEPTANCE.md)。
+
 执行基线：2026-11-17，`main@4fc2c06`；工作分支 `codex/ui-concepts-20261117`。输入为用户提供的 `TuHeng_Concepts_Codex_Package.zip`，其 00–08 模块规格同总提示词，不重复实施历史任务书。原有 `apps/web/next-env.d.ts` 开发生成差异保留。
 
 ## 已确认的产品边界

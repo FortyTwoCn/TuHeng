@@ -24,6 +24,10 @@ VHW 与三视图现在采用同一张展开图纸、共享原点和镜头。拖�
 
 ![图衡登录页](docs/images/login.png)
 
+## 学校与教学组织
+
+校管在「课程与开课学期」建课程，再为已有课程追加学期。教师在「我的教学班」选择本校开放的课程和学期建班。学生通过成员关系加入班级，同一个学号可以跨班、跨学期使用。平台管理员进入学校业务前先选学校。具体操作、权限和本轮截图见[业务流程](docs/WORKFLOWS.md)、[权限矩阵](docs/PERMISSIONS.md)和[专项验收](docs/TEACHING_ORGANIZATION_ACCEPTANCE.md)。
+
 ## 本地运行
 
 Node 22+，PostgreSQL、Redis 和 S3 兼容对象存储（可使用现有本地服务或 Docker Compose）。复制 `.env.example` 为 `.env`，设置独立的 AUTH_SECRET、数据库和对象存储配置。

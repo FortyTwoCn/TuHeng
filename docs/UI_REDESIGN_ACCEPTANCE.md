@@ -1,5 +1,7 @@
 # 前端完善验收记录
 
+学校教学组织及对象属性卡于 2026-11-18 更新。现行入口、权限与测试见[学校教学组织与编辑器验收](TEACHING_ORGANIZATION_ACCEPTANCE.md)。
+
 状态：核心功能已实现，自动化与生产模式验证结果如下；外部服务和实机限制单列。基线和设计决策见 [UI_REDESIGN_DECISIONS.md](UI_REDESIGN_DECISIONS.md)。本文件只记录真实执行结果，未覆盖项不得记为通过。
 
 | ID  | 结果与实际证据                                                                                                          |
