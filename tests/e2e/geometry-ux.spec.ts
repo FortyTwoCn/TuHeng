@@ -464,12 +464,33 @@ for (const [width, height] of [
       await input.fill('28');
       await expect(input).toBeFocused();
       await page.screenshot({ path: evidence + '/properties-' + width + '.png' });
-      await choose(page, '确认属性');
+      const confirm = card.getByRole('button', { name: '确认属性', exact: true });
+      if (width === 360) {
+        await confirm.scrollIntoViewIfNeeded();
+        const button = (await confirm.boundingBox())!;
+        const x = button.x + button.width / 2,
+          y = button.y + button.height / 2;
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.evaluate(
+          () =>
+            new Promise<void>((done) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => done())),
+            ),
+        );
+        const releaseWillHit = await confirm.evaluate(
+          (el, pos) => el.contains(document.elementFromPoint(pos.x, pos.y)),
+          { x, y },
+        );
+        await page.mouse.up();
+        expect(releaseWillHit).toBe(true);
+      } else await confirm.click();
+      const saved = await json(page);
       expect(
         length(
           lineGeometry(
-            await json(page),
-            (await json(page)).entities.find((e) => e.kind === 'segment')!,
+            saved,
+            saved.entities.find((e) => e.kind === 'segment')!,
           ).d,
         ),
       ).toBeCloseTo(28);

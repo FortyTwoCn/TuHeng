@@ -79,24 +79,40 @@ export function FloatingInspector({
         return new DOMRect(q.x, q.y, 1, 1);
       },
     };
-    let inputFrame: number | undefined;
-    const update = () => {
-      if (expanded) {
-        if (inputFrame !== undefined) cancelAnimationFrame(inputFrame);
-        inputFrame = requestAnimationFrame(() => {
-          if (!el.isConnected) return;
-          const active = document.activeElement,
-            pane = el.querySelector<HTMLElement>('.geo-card-details');
-          if (!(active instanceof HTMLElement) || !pane?.contains(active)) return;
-          const a = active.getBoundingClientRect(),
-            b = pane.getBoundingClientRect(),
-            actions = pane.querySelector('.geo-form-actions')?.getBoundingClientRect(),
-            bottom = Math.min(b.bottom, actions?.top ?? b.bottom) - 4;
-          if (a.bottom > bottom) pane.scrollTop += a.bottom - bottom;
-          else if (a.top < b.top + 4) pane.scrollTop += a.top - b.top - 4;
+    if (expanded) {
+      const pane = el.querySelector<HTMLElement>('.geo-card-details');
+      if (!pane) return;
+      let frame: number | undefined;
+      const revealField = () => {
+        if (frame !== undefined) cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          const field = document.activeElement;
+          if (
+            !(field instanceof HTMLElement) ||
+            !field.matches('input,select,textarea') ||
+            !pane.contains(field)
+          )
+            return;
+          const bounds = pane.getBoundingClientRect();
+          const actions = pane.querySelector('.geo-form-actions')?.getBoundingClientRect();
+          const bottom = Math.min(bounds.bottom, actions?.top ?? bounds.bottom) - 4;
+          const rect = field.getBoundingClientRect();
+          if (rect.bottom > bottom) pane.scrollTop += rect.bottom - bottom;
+          else if (rect.top < bounds.top + 4) pane.scrollTop += rect.top - bounds.top - 4;
         });
-        return;
-      }
+      };
+      const resize = new ResizeObserver(revealField);
+      resize.observe(pane);
+      window.visualViewport?.addEventListener('resize', revealField);
+      el.addEventListener('focusin', revealField);
+      return () => {
+        resize.disconnect();
+        if (frame !== undefined) cancelAnimationFrame(frame);
+        window.visualViewport?.removeEventListener('resize', revealField);
+        el.removeEventListener('focusin', revealField);
+      };
+    }
+    const update = () => {
       if (frozen.current) return;
       void computePosition(virtual, el, {
         strategy: 'fixed',
@@ -117,11 +133,8 @@ export function FloatingInspector({
     };
     const cleanup = autoUpdate(virtual, el, update);
     window.visualViewport?.addEventListener('resize', update);
-    el.addEventListener('focusin', update);
     return () => {
       cleanup();
-      if (inputFrame !== undefined) cancelAnimationFrame(inputFrame);
-      el.removeEventListener('focusin', update);
       window.visualViewport?.removeEventListener('resize', update);
     };
   }, [doc, key, svg, cameraKey, expanded]);
