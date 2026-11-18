@@ -38,10 +38,17 @@ export function ConnectionTools({
       {connections.flatMap((line) =>
         pointReferences(line)
           .filter((id) => ids.includes(id))
-          .map((id, index) => (
+          .map((id) => (
             <p key={`${line.id}-${id}`}>
               对象 {connections.indexOf(line) + 1} ·{' '}
-              {line.kind === 'segment' ? (index === 0 ? '起点' : '终点') : '圆心'} →{' '}
+              {line.kind === 'segment'
+                ? line.startPoint === id
+                  ? '起点'
+                  : '终点'
+                : line.kind === 'curve'
+                  ? '经过点'
+                  : '圆心'}{' '}
+              →{' '}
               {doc.entities.find((e) => e.id === id)?.kind === 'point'
                 ? (doc.entities.find((e) => e.id === id) as { name: string }).name || '连接点'
                 : '连接点'}{' '}
@@ -58,8 +65,17 @@ export function ConnectionTools({
         .filter((r) => r.targetId === e.id)
         .map((r) => (
           <p key={r.id}>
-            {r.kind} · {resolveReference(doc, r.reference).name} ·{' '}
-            {r.mode === 'BINDING' ? '持续绑定' : '本次定位'} · {r.status ?? '待校验'}
+            {
+              {
+                POINT_ON_REFERENCE: '点落在参考上',
+                THROUGH_POINT: '通过参考点',
+                PARALLEL: '平行',
+                PERPENDICULAR: '垂直',
+              }[r.kind]
+            }{' '}
+            · {resolveReference(doc, r.reference).name} ·{' '}
+            {r.mode === 'BINDING' ? '持续绑定' : '本次定位'} ·{' '}
+            {r.status === 'SATISFIED' ? '已满足' : r.status === 'INVALID' ? '未满足' : '待校验'}
             <button
               type="button"
               disabled={!editable(doc, e, role)}

@@ -15,6 +15,7 @@ import {
   serializeGeometryDocument,
   exportGeometryNarrative,
   loadGeometryDocument,
+  deletionSet,
   deleteEntities,
   copyEntities,
   editorRegistry,
@@ -30,7 +31,7 @@ import {
 } from '@tuheng/geometry-core';
 import { Viewport } from './Viewport';
 import { ToolPicker } from './ToolPicker';
-import { PlaneCreator } from './Inspector';
+import { PlaneCreator } from './PlaneCreator';
 import { RelatedPlaneTools } from './PlaneTools';
 import { ProjectionSettings } from './ProjectionSettings';
 import { RulerControls } from './RulerControls';
@@ -181,7 +182,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       return next;
     };
     const commit = (next: GeometryDocument) => {
-      if (readOnly) return;
+      if (readOnly || next === doc) return;
       try {
         history.current.current = doc;
         const valid = validate(next);
@@ -239,6 +240,10 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           )
         )
           throw Error('选择含只读或有依赖对象，不能删除');
+        const ids = selected.filter((id) => targetFromKey(id).kind === 'entity');
+        const affected = deletionSet(doc, ids, role).size - ids.length;
+        if (affected > 0 && !window.confirm('同时删除依赖所选节点的 ' + affected + ' 个对象？'))
+          return doc;
         let d = doc;
         for (const id of selected) {
           const r = targetFromKey(id);
@@ -252,14 +257,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         select([]);
         return d;
       });
-    const copySelection = () =>
-      perform(() =>
-        copyEntities(
-          doc,
-          selected.filter((id) => targetFromKey(id).kind === 'entity'),
-          role,
-        ),
-      );
+    const copySelection = () => perform(() => copyEntities(doc, selected, role));
     const activeView = doc.views.some((v) => v.id === session.active)
       ? session.active
       : doc.views[0].id;

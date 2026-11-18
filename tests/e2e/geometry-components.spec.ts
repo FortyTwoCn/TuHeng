@@ -185,3 +185,62 @@ test('UX24/26: pending construction cannot overwrite an external document revisi
   await expect(first.getByRole('dialog', { name: '构造与关系' })).toHaveCount(0);
   expect(await page.evaluate(() => window.editorFixture.documents())).toEqual(external);
 });
+
+for (const [w, h] of [
+  [360, 800],
+  [390, 844],
+  [768, 1024],
+  [1024, 768],
+  [1366, 768],
+  [1440, 900],
+]) {
+  test('organization round: editable inspector actions at ' + w + 'x' + h, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await setup(page);
+    const first = page.locator('[data-editor=a]');
+    await first.evaluate((e, width) => {
+      e.setAttribute('style', 'width:' + width + 'px;flex:none');
+    }, w - 16);
+    const svg = first.locator('.geo-view svg');
+    const pos = await at(svg, -42.5, 35);
+    await page.mouse.click(pos.x, pos.y);
+    const card = first.getByRole('dialog', { name: '对象属性' }),
+      heading = card.locator('.geo-card-heading');
+    const expand = card.getByRole('button', { name: '编辑属性', exact: true });
+    if (await expand.isVisible()) await expand.click();
+    const pane = card.locator('.geo-card-details');
+    await pane.evaluate((e) => {
+      e.scrollTop = e.scrollHeight;
+    });
+    for (const label of ['复制', '删除']) {
+      const btn = heading.getByRole('button', { name: label, exact: true });
+      await expect(btn).toBeVisible({ timeout: 2500 });
+      expect(
+        await btn.evaluate((b) => {
+          const r = b.getBoundingClientRect();
+          return (
+            r.height >= 44 &&
+            r.width >= 44 &&
+            b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2))
+          );
+        }),
+      ).toBe(true);
+    }
+    mkdirSync('test-results/teaching-organization', { recursive: true });
+    await page.screenshot({ path: 'test-results/teaching-organization/inspector-' + w + '.png' });
+    const before = await page.evaluate(() => window.editorFixture.documents()[0]!);
+    await heading.getByRole('button', { name: '复制', exact: true }).click();
+    expect(
+      (await page.evaluate(() => window.editorFixture.documents()[0]!)).entities.length,
+    ).toBeGreaterThan(before.entities.length);
+    await first.getByRole('button', { name: '撤销', exact: true }).click();
+    expect((await page.evaluate(() => window.editorFixture.documents()[0]!)).entities).toEqual(
+      before.entities,
+    );
+    if (!(await heading.isVisible())) await page.mouse.click(pos.x, pos.y);
+    await heading.getByRole('button', { name: '删除', exact: true }).click();
+    expect(
+      (await page.evaluate(() => window.editorFixture.documents()[0]!)).entities.length,
+    ).toBeLessThan(before.entities.length);
+  });
+}

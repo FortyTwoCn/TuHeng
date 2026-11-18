@@ -213,14 +213,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px;
+  flex: 0 0 auto;
   margin-bottom: 6px;
 }
+.geo-collapse-details {
+  display: none;
+}
 .geo-card-heading strong {
+  flex: 1;
   font-size: 13px;
 }
 .geo-card-heading button {
-  min-width: 36px;
+  min-height: 44px;
+  min-width: 44px;
 }
 .geo-fields {
   display: grid;
@@ -265,12 +271,19 @@
   width: 310px;
   max-width: calc(100% - 20px);
   max-height: 60vh;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
   background: #fffffff7;
   box-shadow: 0 6px 22px #17212f22;
   padding: 9px;
+}
+.geo-card-details {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .geo-floating-inspector p {
   font-size: 12px;
@@ -461,7 +474,7 @@
     font-size: 12px;
   }
   .geo-view:has(.geo-properties-expanded) {
-    grid-template-rows: 20px minmax(120px, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: 20px minmax(108px, 0.8fr) minmax(0, 1.35fr);
   }
   .geo-properties-expanded {
     position: relative !important;
@@ -479,12 +492,12 @@
     bottom: auto !important;
     right: auto !important;
   }
-  .geo-properties-expanded .geo-card-heading {
+
+  .geo-properties-expanded .geo-compact-summary {
     display: none;
   }
-  .geo-properties-expanded .geo-compact-summary {
-    flex-shrink: 0;
-    min-height: 44px;
+  .geo-properties-expanded .geo-collapse-details {
+    display: inline-block;
   }
   .geo-properties-expanded .geo-card-details {
     display: block;

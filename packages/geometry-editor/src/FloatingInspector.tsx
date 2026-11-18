@@ -9,6 +9,8 @@ import {
   type VirtualElement,
 } from '@floating-ui/dom';
 import {
+  copySelectionEntities,
+  deletionSet,
   targetFromKey,
   targetCapabilities,
   resolveReference,
@@ -20,11 +22,12 @@ import {
   previewTransform,
   transact,
   setLineStyle,
+  availableLineStyles,
 } from '@tuheng/geometry-core';
 import type { GeometryEntity } from '@tuheng/contracts';
-import { PropertyFields, entityNames } from './PropertyFields';
+import { PropertyFields, entityNames, styleLabels } from './PropertyFields';
 import { ConnectionTools } from './ConnectionTools';
-import { commandRegistry } from './commands';
+import { commandRegistry, contextCommandAvailable } from './commands';
 import type { EditorControls } from './types';
 export function FloatingInspector({
   controls: p,
@@ -138,14 +141,45 @@ export function FloatingInspector({
       | 'construct-perpendicular'
       | 'relation-parallel'
       | 'relation-perpendicular',
-  ) => (
-    <button type="button" key={id} onClick={() => p.runCommand(id)}>
-      {commandRegistry.find((c) => c.id === id)!.name}
-    </button>
-  );
+  ) => {
+    const entry = commandRegistry.find((c) => c.id === id)!;
+    return contextCommandAvailable(entry, doc, p.selected, p.role, p.readOnly) ? (
+      <button type="button" key={id} onClick={() => p.runCommand(id)}>
+        {entry.name}
+      </button>
+    ) : null;
+  };
   const eligible = p.selected.filter(
     (id) => targetCapabilities(doc, targetFromKey(id), p.role, p.readOnly).editable,
   );
+  const styles = availableLineStyles(doc, p.selected, p.role),
+    selectedStyles = new Set(
+      doc.entities.filter((e) => p.selected.includes(e.id)).map((e) => e.lineStyle),
+    );
+  function blocked(check: () => unknown) {
+    try {
+      check();
+      return '';
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }
+  const copyReason = p.readOnly
+    ? '当前文档只读'
+    : blocked(() => copySelectionEntities(doc, p.selected, p.role));
+  const deleteReason = p.selected.some(
+    (id) => !targetCapabilities(doc, targetFromKey(id), p.role, p.readOnly).deletable,
+  )
+    ? '所选对象只读或有依赖'
+    : blocked(() =>
+        deletionSet(
+          doc,
+          p.selected.filter((id) => targetFromKey(id).kind === 'entity'),
+          p.role,
+        ),
+      );
+  const canCopy = !copyReason,
+    canDelete = !deleteReason;
   return (
     <div
       ref={node}
@@ -178,6 +212,31 @@ export function FloatingInspector({
               ? entityNames[entity.kind]
               : resolveReference(doc, ref).name}
         </strong>
+        <button
+          type="button"
+          disabled={!canCopy}
+          title={copyReason || '在文档内复制'}
+          onClick={p.copySelection}
+        >
+          复制
+        </button>
+        <button
+          type="button"
+          disabled={!canDelete}
+          title={deleteReason || '删除所选对象'}
+          onClick={p.deleteSelection}
+        >
+          删除
+        </button>
+        {expanded && (
+          <button
+            type="button"
+            className="geo-collapse-details"
+            onClick={() => p.dispatch({ type: 'patch', patch: { panel: null } })}
+          >
+            收起
+          </button>
+        )}
         <button
           type="button"
           aria-label="关闭对象属性"
@@ -311,8 +370,8 @@ export function FloatingInspector({
               共同线型
               <select
                 aria-label="共同线型"
-                value=""
-                disabled={eligible.length !== p.selected.length}
+                value={selectedStyles.size === 1 ? [...selectedStyles][0] : ''}
+                disabled={!styles.length || p.readOnly}
                 onChange={(e) =>
                   run(() =>
                     p.selected.reduce(
@@ -323,15 +382,12 @@ export function FloatingInspector({
                   )
                 }
               >
-                <option value="">
-                  {new Set(
-                    doc.entities.filter((e) => p.selected.includes(e.id)).map((e) => e.lineStyle),
-                  ).size > 1
-                    ? '多个值'
-                    : '选择线型'}
-                </option>
-                <option value="ANSWER_VISIBLE">答案实线</option>
-                <option value="ANSWER_HIDDEN">答案虚线</option>
+                {selectedStyles.size !== 1 && <option value="">多个值</option>}
+                {styles.map((s) => (
+                  <option key={s} value={s}>
+                    {styleLabels[s]}
+                  </option>
+                ))}
               </select>
             </label>
           </>
@@ -359,26 +415,7 @@ export function FloatingInspector({
               新增投影轴
             </button>
           )}
-        <div className="geo-context-actions">
-          {eligible.length === p.selected.length && entity && (
-            <button type="button" onClick={p.copySelection}>
-              复制
-            </button>
-          )}
-          {(entity || axis) && (
-            <button
-              type="button"
-              disabled={
-                !p.selected.every(
-                  (id) => targetCapabilities(doc, targetFromKey(id), p.role, p.readOnly).deletable,
-                )
-              }
-              onClick={p.deleteSelection}
-            >
-              删除
-            </button>
-          )}
-        </div>
+        {(deleteReason || copyReason) && <p>{deleteReason || copyReason}</p>}
         {entity && !p.readOnly && (
           <ConnectionTools
             doc={doc}

@@ -1,7 +1,7 @@
 import { createId } from '@tuheng/contracts';
 import type { GeometryDocument, GeometryEntity, Vec2 } from '@tuheng/contracts';
-import { transact } from './document';
-import { distance, minorArc, point, sub, unit, scale, add, lineGeometry } from './math';
+import { editable, transact } from './document';
+import { distance, minorArc, sub, unit, scale, add, lineGeometry } from './math';
 import { viewTransform } from './sheet';
 import { PenStrokeRecord } from '@tuheng/contracts';
 import { fitStroke, type PenOptions, type PenStrokeStyle } from './pen';
@@ -260,29 +260,28 @@ export function linkProjection(doc: GeometryDocument, ids: string[]) {
     });
   });
 }
-export function setSegment(
+export function availableLineStyles(
   doc: GeometryDocument,
-  id: string,
-  size: number,
-  degrees: number,
+  ids: string[],
   role: 'teacher' | 'student',
-) {
-  const e = doc.entities.find((e) => e.id === id);
-  if (e?.kind !== 'segment') throw new Error('请选择线段');
-  return transact(
-    doc,
-    (d) => {
-      const end = d.entities.find((p) => p.id === e.endPoint);
-      if (end?.kind === 'point') {
-        end.position = add(point(doc, e.startPoint), {
-          x: Math.cos((degrees * Math.PI) / 180) * size,
-          y: Math.sin((degrees * Math.PI) / 180) * size,
-        });
-        end.spatial = null;
-      }
-    },
-    role,
-  );
+): GeometryEntity['lineStyle'][] {
+  if (!ids.length) return [];
+  const entities = ids.map((id) => doc.entities.find((e) => e.id === id));
+  if (entities.some((e) => !e || !editable(doc, e, role))) return [];
+  if (role === 'teacher')
+    return entities.every((e) => e?.lineStyle.startsWith('PROBLEM'))
+      ? ['PROBLEM_VISIBLE', 'PROBLEM_HIDDEN']
+      : [];
+  const styles: GeometryEntity['lineStyle'][] = ['ANSWER_VISIBLE', 'ANSWER_HIDDEN'];
+  if (
+    entities.every(
+      (e) =>
+        e?.kind !== 'plane' &&
+        !(e?.kind === 'segment' && doc.projectionGroups.some((g) => g.entityIds.includes(e.id))),
+    )
+  )
+    styles.push('CONSTRUCTION');
+  return styles;
 }
 export function setLineStyle(
   doc: GeometryDocument,
@@ -290,6 +289,9 @@ export function setLineStyle(
   lineStyle: GeometryEntity['lineStyle'],
   role: 'teacher' | 'student',
 ) {
+  if (!availableLineStyles(doc, [id], role).includes(lineStyle))
+    throw Error('当前对象和角色不允许使用此线型');
+  if (doc.entities.find((e) => e.id === id)?.lineStyle === lineStyle) return doc;
   return transact(
     doc,
     (d) => {

@@ -1,13 +1,8 @@
 'use client';
 import { createId } from '@tuheng/contracts';
 import { useState } from 'react';
-import type { ComponentProps } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
 import { transact, planeFromPoints } from '@tuheng/geometry-core';
-import { PropertyFields } from './PropertyFields';
-export function Inspector(props: ComponentProps<typeof PropertyFields>) {
-  return <PropertyFields {...props} />;
-}
 export function PlaneCreator({
   document: doc,
   viewId,

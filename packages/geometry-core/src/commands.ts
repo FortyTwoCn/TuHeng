@@ -214,6 +214,12 @@ export function applyProperties(
       key !== 'name' &&
       (Number(values[key]) !== Number(current[key]) || !values[key]?.trim()),
   );
+  if (
+    !geometryChanged &&
+    values.style === e.lineStyle &&
+    (e.kind !== 'point' || values.name === current.name)
+  )
+    return doc;
   let next =
     e.kind === 'segment' && geometryChanged
       ? setSegmentParameters(
@@ -237,7 +243,7 @@ export function applyProperties(
                 throw Error('坐标受绑定控制，请先解除绑定');
               target.position = { x: number('u'), y: number('v') };
               target.name = values.name;
-              target.spatial = null;
+              if (geometryChanged) target.spatial = null;
             }
             if (target.kind === 'line' && geometryChanged) {
               if (d.referenceRelations?.some((r) => r.targetId === id && r.mode === 'BINDING'))

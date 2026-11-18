@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
 import {
+  availableLineStyles,
   propertyValues,
   applyProperties,
   editable,
@@ -11,6 +12,13 @@ import {
   unbindReferences,
   bindToReference,
 } from '@tuheng/geometry-core';
+export const styleLabels = {
+  ANSWER_VISIBLE: '答案实线',
+  ANSWER_HIDDEN: '答案虚线',
+  CONSTRUCTION: '辅助线',
+  PROBLEM_VISIBLE: '题干实线',
+  PROBLEM_HIDDEN: '题干虚线',
+};
 export const entityNames = {
   point: '点',
   segment: '线段',
@@ -49,6 +57,7 @@ export function PropertyFields({
     setError('');
   }
   if (!e) return null;
+  const styles = availableLineStyles(doc, [e.id], role);
   const locked = readOnly || !editable(doc, e, role);
   const reset = () => {
     setValues(propertyValues(doc, e));
@@ -140,14 +149,7 @@ export function PropertyFields({
             {field('v', '锚点 v (mm)')}
           </>
         )}
-        {(e.kind === 'circle' || e.kind === 'arc') && (
-          <>
-            {field('radius', '半径 (mm)')}
-            {field('u', '圆心 u (mm)')}
-            {field('v', '圆心 v (mm)')}
-            <span>直径 {(e.radius * 2).toFixed(2)} mm</span>
-          </>
-        )}
+        {(e.kind === 'circle' || e.kind === 'arc') && <>{field('radius', '半径 (mm)')}</>}
         {e.kind === 'arc' && (
           <>
             {field('startAngle', '起始角 (°)')}
@@ -181,28 +183,45 @@ export function PropertyFields({
           <select
             aria-label="线型"
             value={values.style ?? e.lineStyle}
-            disabled={locked}
+            disabled={locked || !styles.length}
             onChange={(event) => setValues((v) => ({ ...v, style: event.target.value }))}
           >
-            {(role === 'teacher'
-              ? ['PROBLEM_VISIBLE', 'PROBLEM_HIDDEN', 'CONSTRUCTION']
-              : ['ANSWER_VISIBLE', 'ANSWER_HIDDEN', 'CONSTRUCTION']
-            ).map((style) => (
+            {styles.map((style) => (
               <option key={style} value={style}>
-                {
-                  {
-                    ANSWER_VISIBLE: '答案实线',
-                    ANSWER_HIDDEN: '答案虚线',
-                    CONSTRUCTION: '辅助线',
-                    PROBLEM_VISIBLE: '题干实线',
-                    PROBLEM_HIDDEN: '题干虚线',
-                  }[style]
-                }
+                {styleLabels[style]}
               </option>
             ))}
+            {!styles.includes(e.lineStyle) && (
+              <option value={e.lineStyle}>{styleLabels[e.lineStyle]}</option>
+            )}
           </select>
         </label>
       </div>
+      {(e.kind === 'circle' || e.kind === 'arc' || e.kind === 'segment') && (
+        <details>
+          <summary>更多属性</summary>
+          <div className="geo-fields">
+            {e.kind === 'segment' ? (
+              <>
+                <span>
+                  起点 u / v　{lineGeometry(doc, e).a.x.toFixed(2)} /{' '}
+                  {lineGeometry(doc, e).a.y.toFixed(2)} mm
+                </span>
+                <span>
+                  终点 u / v　{(lineGeometry(doc, e).a.x + lineGeometry(doc, e).d.x).toFixed(2)} /{' '}
+                  {(lineGeometry(doc, e).a.y + lineGeometry(doc, e).d.y).toFixed(2)} mm
+                </span>
+              </>
+            ) : (
+              <>
+                {field('u', '圆心 u (mm)')}
+                {field('v', '圆心 v (mm)')}
+                <span>直径 {(e.radius * 2).toFixed(2)} mm</span>
+              </>
+            )}
+          </div>
+        </details>
+      )}
       {error && <p role="alert">{error}</p>}
       {!locked && (
         <div className="geo-form-actions">

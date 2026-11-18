@@ -3,6 +3,10 @@ import { GeometryDocument } from '@tuheng/contracts';
 import { readFileSync, readdirSync } from 'node:fs';
 import { performanceDocument } from '../geometry-fixtures';
 import {
+  availableLineStyles,
+  applyProperties,
+  propertyValues,
+  copyEntities,
   confirmSnap,
   clipLine,
   intersectsBox,
@@ -52,6 +56,69 @@ describe('versioned geometry kernel', () => {
     const duplicateAxes = createDocument('VHW_PROJECTION');
     duplicateAxes.views[0].mapping = ['x', 'x'];
     expect(GeometryDocument.safeParse(duplicateAxes).success).toBe(false);
+  });
+  it('keeps teacher and student selections on permissible layers and treats unchanged properties as a no-op', () => {
+    const empty = createDocument('ISOMETRIC'),
+      view = empty.views[0].id;
+    const doc = addDrawing(
+      empty,
+      'segment',
+      view,
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 2 },
+      ],
+      'teacher',
+    );
+    const ids = doc.entities.map((e) => e.id);
+    expect(availableLineStyles(doc, ids, 'teacher')).toEqual(['PROBLEM_VISIBLE', 'PROBLEM_HIDDEN']);
+    expect(availableLineStyles(doc, ids, 'student')).toEqual([]);
+    expect(() => setLineStyle(doc, ids.at(-1)!, 'ANSWER_HIDDEN', 'teacher')).toThrow();
+    const e = doc.entities.at(-1)!;
+    expect(applyProperties(doc, e.id, propertyValues(doc, e), 'teacher')).toBe(doc);
+    const styled = ids.reduce((d, id) => setLineStyle(d, id, 'PROBLEM_HIDDEN', 'teacher'), doc);
+    expect(
+      styled.entities.every(
+        (e) => e.lineStyle === 'PROBLEM_HIDDEN' && e.layerId === doc.entities[0].layerId,
+      ),
+    ).toBe(true);
+    const history = new DocumentHistory(doc);
+    history.commit(styled);
+    expect(history.undo()).toEqual(doc);
+  });
+  it('copies shared geometry once and remaps both segment references together', () => {
+    const base = createDocument('ISOMETRIC'),
+      view = base.views[0].id;
+    const one = addDrawing(
+      base,
+      'segment',
+      view,
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 2 },
+      ],
+      'student',
+    );
+    const first = one.entities.find((e) => e.kind === 'segment')!;
+    const doc = addDrawing(
+      one,
+      'segment',
+      view,
+      [
+        { x: 10, y: 2 },
+        { x: 20, y: 8 },
+      ],
+      'student',
+      undefined,
+      [first.endPoint],
+    );
+    const ids = doc.entities.filter((e) => e.kind === 'segment').map((e) => e.id);
+    const copied = copyEntities(doc, ids, 'student'),
+      added = copied.entities.filter((e) => !doc.entities.some((o) => o.id === e.id));
+    expect(added.filter((e) => e.kind === 'point')).toHaveLength(3);
+    const segments = added.filter((e) => e.kind === 'segment');
+    expect(segments[0].endPoint).toBe(segments[1].startPoint);
+    expect(GeometryDocument.safeParse(copied).success).toBe(true);
   });
   it('changes line semantics while preserving IDs and renders complete signed arcs', () => {
     const doc = addDrawing(

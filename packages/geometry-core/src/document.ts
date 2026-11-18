@@ -146,7 +146,7 @@ export function moveEntities(
     role,
   );
 }
-export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
+export function deletionSet(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
   if (doc.auxiliarySystems?.some((a) => ids.includes(a.referenceEntityId ?? '')))
     throw new Error('参考线被换面轴依赖，请先处理该轴');
   const removed = new Set(ids);
@@ -159,6 +159,22 @@ export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teac
         added = true;
       }
   }
+  if (
+    doc.auxiliarySystems?.some((a) => removed.has(a.referenceEntityId ?? '')) ||
+    doc.entities.some(
+      (e) =>
+        !removed.has(e.id) &&
+        ((e.kind === 'line' && removed.has(e.referenceEntityId ?? '')) ||
+          (e.kind === 'plane' && removed.has(e.referencePlaneId ?? ''))),
+    ) ||
+    doc.constraints.some(
+      (c) =>
+        c.mode === 'BINDING' &&
+        !removed.has(c.entityIds[0]) &&
+        c.entityIds.some((id) => removed.has(id)),
+    )
+  )
+    throw Error('仍有对象依赖该参考，请先处理绑定');
   if (doc.entities.some((e) => removed.has(e.id) && !editable(doc, e, role)))
     throw new Error('题干对象只读');
   if (
@@ -170,18 +186,14 @@ export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teac
     )
   )
     throw new Error('参考对象被关系依赖，请先解除关系');
+  return removed;
+}
+export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
+  const removed = deletionSet(doc, ids, role);
   return transact(
     doc,
     (d) => {
-      d.entities = d.entities
-        .filter((e) => !removed.has(e.id))
-        .map((e) =>
-          e.kind === 'line' && e.referenceEntityId && removed.has(e.referenceEntityId)
-            ? { ...e, referenceEntityId: null }
-            : e.kind === 'plane' && e.referencePlaneId && removed.has(e.referencePlaneId)
-              ? { ...e, referencePlaneId: null, relation: 'ARBITRARY' }
-              : e,
-        );
+      d.entities = d.entities.filter((e) => !removed.has(e.id));
       d.constraints = d.constraints.filter((r) => r.entityIds.every((id) => !removed.has(id)));
       if (d.referenceRelations)
         d.referenceRelations = d.referenceRelations.filter((r) => !removed.has(r.targetId));
@@ -192,10 +204,24 @@ export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teac
     role,
   );
 }
-export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
+export function copySelectionEntities(
+  doc: GeometryDocument,
+  ids: string[],
+  role: 'teacher' | 'student',
+) {
+  if (ids.some((id) => !doc.entities.some((e) => e.id === id))) throw Error('所选参考对象不能复制');
   const targets = new Set(ids);
   for (const e of doc.entities.filter((e) => targets.has(e.id)))
     for (const id of pointReferences(e)) targets.add(id);
+  if (
+    doc.constraints.some(
+      (c) =>
+        c.mode === 'BINDING' &&
+        targets.has(c.entityIds[0]) &&
+        !c.entityIds.every((id) => targets.has(id)),
+    )
+  )
+    throw Error('复制涉及外部绑定，请先处理绑定');
   const selected = doc.entities.filter((e) => targets.has(e.id));
   if (selected.some((e) => !editable(doc, e, role))) throw new Error('请仅复制可编辑对象');
   if (
@@ -207,6 +233,10 @@ export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teache
     )
   )
     throw Error('复制涉及外部绑定，请先解除绑定或同时选中参考对象');
+  return selected;
+}
+export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
+  const selected = copySelectionEntities(doc, ids, role);
   const mapping = new Map(selected.map((e) => [e.id, createId()]));
   const next = transact(
     doc,

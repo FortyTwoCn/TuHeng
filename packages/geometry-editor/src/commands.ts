@@ -1,4 +1,5 @@
 import type { GeometryDocument } from '@tuheng/contracts';
+import { editable, resolveReference, targetFromKey } from '@tuheng/geometry-core';
 import type { Tool } from './types';
 export type CommandId =
   | Tool
@@ -113,6 +114,41 @@ export function commandUnavailable(
   if (readOnly && entry.requiresEdit) return '当前文档只读';
   if (entry.id === 'new-axis' && editorType !== 'VHW_PROJECTION' && editorType !== 'THREE_VIEW')
     return '换面轴用于 VHW 或三视图展开图';
+}
+export function contextCommandAvailable(
+  entry: CommandEntry,
+  doc: GeometryDocument,
+  selected: string[],
+  role: 'student' | 'teacher',
+  readOnly: boolean,
+) {
+  if (commandUnavailable(entry, readOnly, doc.editorType)) return false;
+  if (entry.appliesTo === 'any') return true;
+  const ref = targetFromKey(selected[0] ?? '');
+  if (
+    !selected.length ||
+    (ref.kind === 'entity' &&
+      !doc.entities.some(
+        (e) => e.id === ref.entityId && (e.kind === 'segment' || e.kind === 'line'),
+      )) ||
+    ref.kind === 'origin'
+  )
+    return false;
+  if (entry.appliesTo === 'line-reference') return selected.length === 1;
+  const target = doc.entities.find((e) => e.id === selected[1]);
+  if (
+    selected.length !== 2 ||
+    !target ||
+    !['line', 'segment'].includes(target.kind) ||
+    !editable(doc, target, role)
+  )
+    return false;
+  const r = resolveReference(doc, ref);
+  return (
+    !r.viewId ||
+    r.viewId === target.viewId ||
+    (ref.kind === 'entity' && doc.entities.find((e) => e.id === ref.entityId)?.scope === 'SHEET')
+  );
 }
 export function textEntry(target: EventTarget | null) {
   return (
