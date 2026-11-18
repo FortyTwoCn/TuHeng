@@ -283,10 +283,16 @@ export function FloatingInspector({
             {axis ? (
               <>
                 <p>
-                  方向 {angle(axis.tangent).toFixed(1)}° · 保留{' '}
+                  {
+                    { FREE: '普通投影轴', PARALLEL: '平行投影轴', PERPENDICULAR: '垂直投影轴' }[
+                      axis.method
+                    ]
+                  }{' '}
+                  · 方向 {angle(axis.tangent).toFixed(1)}° · 保留{' '}
                   {doc.views.find((v) => v.id === axis.retainedViewId)?.name} · 替换{' '}
                   {doc.views.find((v) => v.id === axis.replacedViewId)?.name} · 新面{' '}
-                  {doc.views.find((v) => v.id === axis.newViewId)?.name} · 展开侧 {axis.side}
+                  {doc.views.find((v) => v.id === axis.newViewId)?.name} · 沿轴正向的
+                  {axis.side === 1 ? '左侧展开' : '右侧展开'}
                 </p>
                 <label>
                   轴名称
