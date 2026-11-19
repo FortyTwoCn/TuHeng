@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { SiteFooter } from '../components/SiteFooter';
 import './globals.css';
 import '../components/identity/organization.css';
+import '../components/organization/workspace.css';
 import '../components/identity/configuration.css';
 import '../components/identity/jobs.css';
 export const metadata: Metadata = {

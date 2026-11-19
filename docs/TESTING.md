@@ -24,3 +24,7 @@ Playwright：真实 Auth.js 登录，学生上传、教师发布/复核、管理
 运行 `npm run typecheck`、`npm run lint`、`npm test`、`npm run test:integration`、`npm run test:e2e`、`npm run build`。开工前及迁移后可用 `npx tsx scripts/organization-audit.ts` 比对组织、旧作业和异常记录数量。浏览器模拟、真实硬件及外部服务应分别记录。
 
 本轮六种尺寸的截图、真实业务回归与迁移盘点见[教学组织专项验收](TEACHING_ORGANIZATION_ACCEPTANCE.md)。
+
+`organization-layout.spec.ts` 覆盖搜索控件尺寸与对齐、实际课程深链接、清除筛选后的学校范围、教师/学生页签、手机抽屉取消、触控模拟、六种尺寸的横向溢出、导入范围与模板下载。与 `school-teaching.spec.ts`、`identity-ai.spec.ts`、`ui-management.spec.ts` 一起验证创建、修改、导入和凭据交付的实际闭环。参考图、真实页面前后截图及本轮执行结果见 [2026-11-19 教学管理界面验收](ORGANIZATION_UI_ACCEPTANCE_20261119.md)。
+
+学校选择用例另覆盖整卡触控进入、启停状态、真实人员数量展示、用户 / 班级入口的目标范围、无结果和清除筛选；停用学校使用隔离测试记录，不改变已有学校状态。

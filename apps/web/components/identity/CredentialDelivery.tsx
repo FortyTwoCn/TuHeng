@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { identityRequest, IdentityRequestError } from './client';
 import type { SchoolCredentialCard } from '../../../../packages/infrastructure/src/credential-delivery';
 import { Reauthentication, type ReauthenticationHandle } from './Reauthentication';
+import { RefreshCw, Download } from 'lucide-react';
 export function CredentialDelivery({
   schoolId,
   batchId,
@@ -123,10 +124,23 @@ export function CredentialDelivery({
     }
   }
   return (
-    <section className="identity-panel">
-      <h2>初始凭据交付</h2>
-      <button type="button" disabled={loading || busy} onClick={() => { setLoading(true); setRevision(v => v + 1); }}>刷新交付状态</button>
-      <p>
+    <section className="identity-panel delivery-console">
+      <header className="org-section-heading">
+        <h2>初始凭据交付</h2>
+        <button
+          className="button secondary"
+          type="button"
+          disabled={loading || busy}
+          onClick={() => {
+            setLoading(true);
+            setRevision((v) => v + 1);
+          }}
+        >
+          <RefreshCw size={16} aria-hidden="true" />
+          刷新交付状态
+        </button>
+      </header>
+      <p className="delivery-note">
         导出窗口 24 小时；临时密码 7
         天有效。用户改密或再次重置后，旧凭据立即失效。数量为最近查询结果，下载时会再次校验。
       </p>
@@ -154,11 +168,27 @@ export function CredentialDelivery({
       {loading && <p role="status">正在读取交付状态…</p>}
       {!loading && !batches.length && <p>暂无凭据交付批次。</p>}
       {batches.map((b) => (
-        <article key={b.id} className="identity-panel">
+        <article key={b.id} className="delivery-batch">
+          <header className="delivery-batch-heading">
+            <h3>
+              {new Date(b.createdAt).toLocaleString('zh-CN', {
+                timeZone: 'Asia/Shanghai',
+                hour12: false,
+              })}{' '}
+              创建
+            </h3>
+            <span className={'org-status' + (b.expired ? ' is-archived' : '')}>
+              {b.expired ? '交付已过期' : '交付窗口开放'}
+            </span>
+          </header>
           <p>
-            {new Date(b.createdAt).toLocaleString()} · {b.expired ? '交付已过期' : '交付窗口开放'}
+            导出截止：
+            {new Date(b.expiresAt).toLocaleString('zh-CN', {
+              timeZone: 'Asia/Shanghai',
+              hour12: false,
+            })}
+            （北京时间）
           </p>
-          <p>导出截止：{new Date(b.expiresAt).toLocaleString()}</p>
           <div className="credential-kinds">
             {b.kinds
               .filter((k) => k.total > 0 && (k.kind !== 'SCHOOL_ADMIN' || siteAdmin))
@@ -171,9 +201,11 @@ export function CredentialDelivery({
                     {' · '}可交付 {k.available} · 失效 {k.unavailable}
                   </p>
                   <button
+                    className="button secondary"
                     disabled={busy || !k.available || b.expired}
                     onClick={() => download(b.id, k.kind)}
                   >
+                    <Download size={15} aria-hidden="true" />
                     {k.kind === 'TEACHER'
                       ? '下载教师初始凭据'
                       : k.kind === 'STUDENT'
@@ -187,7 +219,13 @@ export function CredentialDelivery({
         </article>
       ))}
       <div className="choice-pagination">
-        <button disabled={loading || !page} onClick={() => { setLoading(true); setPage((v) => v - 1); }}>
+        <button
+          disabled={loading || !page}
+          onClick={() => {
+            setLoading(true);
+            setPage((v) => v - 1);
+          }}
+        >
           上一页批次
         </button>
         <span>
@@ -195,7 +233,10 @@ export function CredentialDelivery({
         </span>
         <button
           disabled={loading || (page + 1) * 10 >= total}
-          onClick={() => { setLoading(true); setPage((v) => v + 1); }}
+          onClick={() => {
+            setLoading(true);
+            setPage((v) => v + 1);
+          }}
         >
           下一页批次
         </button>

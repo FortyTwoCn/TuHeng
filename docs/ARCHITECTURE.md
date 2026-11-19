@@ -29,3 +29,5 @@ packages/ui: 通用可访问展示组件。
 | 作图属性浮卡                                                     | `FloatingInspector`、`PropertyFields`、`geometry-core`                     | 输入草稿和面板布局属于会话，几何事务写入文档历史             |
 
 路由按身份分派到业务页面。通用表单和抽屉发送类型化命令，服务端解析契约，基础设施负责带学校锁的组织写入、凭据和审计。教学查询经领域端口执行。归档过滤只用于有效组织和新发布；已发布作答继续按快照与时间窗处理。架构边界测试递归检查核心包的源码目录。
+
+教学管理的视觉组件集中在 `apps/web/components/organization/OrganizationPresentation.tsx`，只接收已授权的记录、链接和操作，不计算业务权限。`workspace.css` 由 `.organization-workspace` 限定样式范围；课程、开课、教学班继续由原有业务视图查询，创建与修改继续通过 `OrganizationCommands` 和原有领域命令。人员详情、名单导入、凭据交付复用原组件和接口。桌面以分栏列表展示，手机切换为带明确进入入口的记录卡；筛选和学校范围仍保存在 URL 中。设计与验收见 [教学管理界面优化](ORGANIZATION_UI_ACCEPTANCE_20261119.md)。

@@ -148,7 +148,7 @@ export function CommandForm({
     <FormDrawer trigger={label} title={label} busy={busy} primary={primary}>
       {(done) => (
         <form
-          className="identity-dialog-form"
+          className="identity-dialog-form org-command-form"
           onSubmit={async (e) => {
             e.preventDefault();
             const values = Object.fromEntries(new FormData(e.currentTarget));
@@ -158,9 +158,14 @@ export function CommandForm({
         >
           {children}
           {confirm && <p>{confirm}</p>}
-          <button className="button primary" disabled={busy}>
-            {confirm ? '确认' + label : '保存'}
-          </button>
+          <div className="dialog-actions">
+            <button type="button" className="button secondary" disabled={busy} onClick={done}>
+              取消
+            </button>
+            <button className="button primary" disabled={busy}>
+              {busy ? '正在保存…' : confirm ? '确认' + label : '保存'}
+            </button>
+          </div>
         </form>
       )}
     </FormDrawer>

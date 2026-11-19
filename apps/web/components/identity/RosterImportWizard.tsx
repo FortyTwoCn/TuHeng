@@ -3,6 +3,7 @@ import { OrganizationSelect } from './OrganizationSelect';
 import { useEffect, useRef, useState } from 'react';
 import { identityRequest } from './client';
 import { CredentialDelivery } from './CredentialDelivery';
+import { Download, FileSpreadsheet, UploadCloud } from 'lucide-react';
 type Mapping = {
   version: number;
   teachers: Record<string, { teacherId?: string; createName?: string; confirmed: boolean }>;
@@ -152,8 +153,11 @@ export function RosterImportWizard({
   const groups = [...new Set(preview?.analysis?.plan.map((p) => p.group) ?? [])],
     classKeys = [...new Set(preview?.analysis?.plan.map((p) => p.classKey) ?? [])];
   return (
-    <section className="identity-panel">
-      <h2>{teacher ? '教师三列' : '学校四列'} Excel 导入</h2>
+    <section className="identity-panel roster-wizard">
+      <div className="org-section-heading">
+        <h2>{teacher ? '教师三列' : '学校四列'} Excel 导入</h2>
+        <FileSpreadsheet size={22} aria-hidden="true" />
+      </div>
       <ol className="import-steps" aria-label="导入进度">
         {['模板与范围', '上传文件', '检查与映射', '执行导入', '结果与凭据'].map((label, index) => (
           <li
@@ -166,105 +170,128 @@ export function RosterImportWizard({
           </li>
         ))}
       </ol>
-      <p>学号使用文本格式，保留前导零。预检不会创建账号；确认后由后台执行导入。</p>
-      <a className="button secondary" href="/api/roster/template">
-        下载 Excel 模板
-      </a>
-      <OrganizationSelect
-        key={schoolId}
-        schoolId={schoolId}
-        kind="offerings"
-        name="offeringId"
-        label="课程 / 学期"
-        initial={initialOffering}
-        disabled={busy || executing}
-        onSelect={(id) => {
-          clearPreflight();
-          setOffering(id);
-        }}
-      />
-      <details>
-        <summary>列映射（使用非标准列顺序时）</summary>
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={customColumns}
+      <div className="roster-setup">
+        <div className="roster-scope">
+          <h3>1. 选择导入范围</h3>
+          <OrganizationSelect
+            key={schoolId}
+            schoolId={schoolId}
+            kind="offerings"
+            name="offeringId"
+            label="课程 / 学期"
+            initial={initialOffering}
             disabled={busy || executing}
-            onChange={(e) => {
+            onSelect={(id) => {
               clearPreflight();
-              setCustomColumns(e.target.checked);
+              setOffering(id);
             }}
           />
-          手动指定列位置
-        </label>
-        {customColumns &&
-          columnNames.map((name, i) => (
-            <label key={name}>
-              {name}所在列（A=1）
+          <div className="roster-template">
+            <p>
+              <strong>模板列：{columnNames.join('、')}</strong>
+              <br />
+              学号请使用文本格式，保留前导零。
+            </p>
+            <a className="button secondary" href="/api/roster/template">
+              <Download size={16} aria-hidden="true" />
+              下载 Excel 模板
+            </a>
+          </div>
+          <details>
+            <summary>列映射（使用非标准列顺序时）</summary>
+            <label className="checkbox-label">
               <input
-                type="number"
-                min={1}
-                max={8}
-                value={columns[name] ?? i + 1}
+                type="checkbox"
+                checked={customColumns}
                 disabled={busy || executing}
                 onChange={(e) => {
                   clearPreflight();
-                  setColumns((c) => ({ ...c, [name]: Number(e.target.value) }));
+                  setCustomColumns(e.target.checked);
                 }}
               />
+              手动指定列位置
             </label>
-          ))}
-        <p>第一行为列名，第二行开始读取数据。改变映射后重新上传预检。</p>
-      </details>
-      <label>
-        上传 XLSX（最多 5 MB、5000 行）
-        <input
-          type="file"
-          ref={fileInput}
-          accept=".xlsx"
-          disabled={busy || executing || !offering}
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (!f) return;
-            setPreview(undefined);
-            setMapping(undefined);
-            setPage(0);
-            setBusy(true);
-            setMessage('');
-            try {
-              const params = new URLSearchParams({
-                schoolId,
-                offeringId: offering,
-                filename: f.name,
-              });
-              if (customColumns)
-                params.set(
-                  'columns',
-                  JSON.stringify(
-                    Object.fromEntries(columnNames.map((h, i) => [h, columns[h] ?? i + 1])),
-                  ),
-                );
-              const response = await fetch('/api/roster/preview?' + params, {
-                method: 'POST',
-                headers: {
-                  'Content-Type':
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                },
-                body: f,
-              });
-              const r = await response.json();
-              if (!response.ok) throw new Error(r.error);
-              setPreview(r.data);
-              setMapping(r.data.mapping);
-              setPage(0);
-            } catch (e) {
-              setMessage((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-      </label>
+            {customColumns &&
+              columnNames.map((name, i) => (
+                <label key={name}>
+                  {name}所在列（A=1）
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={columns[name] ?? i + 1}
+                    disabled={busy || executing}
+                    onChange={(e) => {
+                      clearPreflight();
+                      setColumns((c) => ({ ...c, [name]: Number(e.target.value) }));
+                    }}
+                  />
+                </label>
+              ))}
+            <p>第一行为列名，第二行开始读取数据。改变映射后重新上传预检。</p>
+          </details>
+        </div>
+        <div className="roster-upload">
+          <UploadCloud size={32} aria-hidden="true" />
+          <h3>2. 上传学生名单</h3>
+          <p>
+            {offering
+              ? '选择文件后自动预检，检查教师、班级和学生的匹配结果后再确认导入。'
+              : '请先选择课程与学期，再上传该开课安排的名单。'}
+          </p>
+          <p>预检不会创建账号。教师和学生初始凭据在导入完成后分别领取。</p>
+          <label>
+            上传 XLSX（最多 5 MB、5000 行）
+            <input
+              type="file"
+              aria-label="上传 XLSX（最多 5 MB、5000 行）"
+              ref={fileInput}
+              accept=".xlsx"
+              disabled={busy || executing || !offering}
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                setPreview(undefined);
+                setMapping(undefined);
+                setPage(0);
+                setBusy(true);
+                setMessage('');
+                try {
+                  const params = new URLSearchParams({
+                    schoolId,
+                    offeringId: offering,
+                    filename: f.name,
+                  });
+                  if (customColumns)
+                    params.set(
+                      'columns',
+                      JSON.stringify(
+                        Object.fromEntries(columnNames.map((h, i) => [h, columns[h] ?? i + 1])),
+                      ),
+                    );
+                  const response = await fetch('/api/roster/preview?' + params, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type':
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    },
+                    body: f,
+                  });
+                  const r = await response.json();
+                  if (!response.ok) throw new Error(r.error);
+                  setPreview(r.data);
+                  setMapping(r.data.mapping);
+                  setPage(0);
+                } catch (e) {
+                  setMessage((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          </label>
+        </div>
+      </div>
       {executing && (
         <p role="status">导入已提交，文件、课程与映射已锁定。离开此页不会停止后台任务。</p>
       )}

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Actor } from '@tuheng/domain';
-import { PageTitle, Panel } from '@tuheng/ui';
+import { PageTitle } from '@tuheng/ui';
 import {
   courseList,
   courseDetail,
@@ -14,6 +14,15 @@ import {
 import { CommandForm } from '../../components/organization/OrganizationCommands';
 import { OrganizationSelect } from '../../components/identity/OrganizationSelect';
 import { href, Pagination, SearchForm, type Params } from './navigation';
+import {
+  OrganizationPanel,
+  OrganizationRecord,
+  OrganizationStages,
+  OrganizationHint,
+  OrganizationEmpty,
+  RecordHeading,
+} from '../../components/organization/OrganizationPresentation';
+import { Users, GraduationCap, ChevronRight } from 'lucide-react';
 type Props = { a: Actor; schoolId: string; area: string; search: Params; segments: string[] };
 function Field({ label, name, value }: { label: string; name: string; value?: string }) {
   return (
@@ -105,24 +114,36 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
             </CommandForm>
           }
         />
-        <Panel>
+        <OrganizationStages stage="courses" />
+        <OrganizationPanel title="课程列表" count={list.total}>
           <SearchForm path={base} search={search} label="搜索课程、编号或学期" />
+          <RecordHeading title="课程 / 编号" context="开课记录" />
           {list.items.map((c) => (
-            <Link className="list-item" href={href(base + '/' + c.id, scope)} key={c.id}>
-              <strong>{c.title}</strong> {c.code} · {c._count.offerings} 次开课{' '}
-              {c.archived ? ' · 已归档' : ''}
-            </Link>
+            <OrganizationRecord
+              key={c.id}
+              href={href(base + '/' + c.id, scope)}
+              kind="course"
+              title={c.title}
+              subtitle={c.code}
+              context={<>{c._count.offerings} 次开课</>}
+              archived={c.archived}
+              action="查看开课学期"
+            />
           ))}
-          {!list.total && <p>暂无匹配课程。</p>}
+          {!list.total && <OrganizationEmpty>暂无匹配课程。</OrganizationEmpty>}
           <Pagination path={base} search={search} {...list} />
-        </Panel>
+        </OrganizationPanel>
+        <OrganizationHint>
+          先建立课程，再为课程新增开课学期。每次开课可建立多个教学班。
+        </OrganizationHint>
       </>
     );
   }
   const course = await courseDetail(a, schoolId, courseId);
   const crumbs = (
-    <nav className="row-actions" aria-label="教学组织路径">
-      <Link href={href(base, scope)}>课程列表</Link> ›{' '}
+    <nav className="org-breadcrumb" aria-label="教学组织路径">
+      <Link href={href(base, scope)}>课程列表</Link>
+      <ChevronRight size={14} aria-hidden="true" />
       <Link href={href(coursePath, scope)}>{course.title}</Link>
     </nav>
   );
@@ -134,46 +155,54 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
         <PageTitle
           title={course.title}
           description={'课程编号 ' + course.code + (course.archived ? ' · 已归档' : '')}
-        />
-        <div className="row-actions">
-          {!course.archived && (
-            <>
-              <CommandForm
-                label="新增开课学期"
-                operation="create-offering"
-                primary
+          action={
+            <div className="row-actions org-heading-actions">
+              {!course.archived && (
+                <>
+                  <CommandForm
+                    label="新增开课学期"
+                    operation="create-offering"
+                    primary
+                    data={{ courseId }}
+                  >
+                    <Field label="学期" name="term" />
+                  </CommandForm>
+                  <CommandForm label="编辑课程" operation="update-course" data={{ courseId }}>
+                    <Field name="title" label="课程名称" value={course.title} />
+                    <Field name="code" label="本校课程编号" value={course.code} />
+                  </CommandForm>
+                </>
+              )}
+              <Archive
+                type="课程"
+                operation="update-course"
                 data={{ courseId }}
-              >
-                <Field label="学期" name="term" />
-              </CommandForm>
-              <CommandForm label="编辑课程" operation="update-course" data={{ courseId }}>
-                <Field name="title" label="课程名称" value={course.title} />
-                <Field name="code" label="本校课程编号" value={course.code} />
-              </CommandForm>
-            </>
-          )}
-          <Archive
-            type="课程"
-            operation="update-course"
-            data={{ courseId }}
-            archived={course.archived}
-          />
-        </div>
-        <Panel title="开课学期">
+                archived={course.archived}
+              />
+            </div>
+          }
+        />
+        <OrganizationStages stage="offerings" coursesHref={href(base, scope)} />
+        <OrganizationPanel title="开课学期" count={list.total}>
           <SearchForm path={coursePath} search={search} label="搜索学期" />
+          <RecordHeading title="学期" context="所属课程" />
           {list.items.map((o) => (
-            <Link
-              className="list-item"
+            <OrganizationRecord
               key={o.id}
               href={href(coursePath + '/offerings/' + o.id, scope)}
-            >
-              {o.term}
-              {o.archived ? ' · 已归档' : ''}
-            </Link>
+              kind="offering"
+              title={o.term}
+              context={course.title}
+              archived={o.archived || course.archived}
+              action="查看教学班"
+            />
           ))}
-          {!list.total && <p>暂无开课记录。</p>}
+          {!list.total && <OrganizationEmpty>暂无开课记录。</OrganizationEmpty>}
           <Pagination path={coursePath} search={search} {...list} />
-        </Panel>
+        </OrganizationPanel>
+        <OrganizationHint>
+          同一课程可在多个学期开课。新学期新增开课记录，历史班级和作业继续保留。
+        </OrganizationHint>
       </>
     );
   }
@@ -186,30 +215,40 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
         description={
           course.archived ? '所属课程已归档' : offering.archived ? '本次开课已归档' : '开课详情'
         }
-      />
-      <div className="row-actions">
-        {!course.archived && (
-          <>
-            {!offering.archived && (
+        action={
+          <div className="row-actions org-heading-actions">
+            {!course.archived && (
               <>
-                <NewClass a={a} schoolId={schoolId} offeringId={offeringId} />
-                <CommandForm label="编辑开课" operation="update-offering" data={{ offeringId }}>
-                  <Field name="term" label="学期" value={offering.term} />
-                </CommandForm>
-                <Link href={href('/' + area + '/imports', { schoolId, offeringId })}>
-                  导入本期开课名单
-                </Link>
+                {!offering.archived && (
+                  <>
+                    <NewClass a={a} schoolId={schoolId} offeringId={offeringId} />
+                    <CommandForm label="编辑开课" operation="update-offering" data={{ offeringId }}>
+                      <Field name="term" label="学期" value={offering.term} />
+                    </CommandForm>
+                    <Link
+                      className="button secondary"
+                      href={href('/' + area + '/imports', { schoolId, offeringId })}
+                    >
+                      导入本期开课名单
+                    </Link>
+                  </>
+                )}
+                <Archive
+                  type="开课"
+                  operation="update-offering"
+                  data={{ offeringId }}
+                  archived={offering.archived}
+                />
               </>
             )}
-            <Archive
-              type="开课"
-              operation="update-offering"
-              data={{ offeringId }}
-              archived={offering.archived}
-            />
-          </>
-        )}
-      </div>
+          </div>
+        }
+      />
+      <OrganizationStages
+        stage="classes"
+        coursesHref={href(base, scope)}
+        offeringsHref={href(coursePath, scope)}
+      />
       {await ClassRows({
         a,
         schoolId,
@@ -238,27 +277,29 @@ async function ClassRows({
 }) {
   const list = await classList(a, schoolId, { ...search, offeringId });
   return (
-    <Panel title="教学班列表">
+    <OrganizationPanel title="教学班列表" count={list.total}>
       <SearchForm path={path} search={search} label="搜索班级、课程或学期" />
+      <RecordHeading title="教学班 / 课程" context="授课教师 / 成员" />
       {list.items.map((c) => (
-        <Link
-          className="list-item"
+        <OrganizationRecord
           href={href('/' + area + '/classes/' + c.id, { schoolId })}
           key={c.id}
-        >
-          <span>
-            <strong>{c.name}</strong>
-            <small>
-              {c.offering.course.title} · {c.offering.term} ·{' '}
-              {c.grants.map((g) => g.user.name).join('、')} · {c._count.enrollments} 位学生
-              {c.archived || c.offering.archived || c.offering.course.archived ? ' · 已归档' : ''}
-            </small>
-          </span>
-        </Link>
+          kind="class"
+          title={c.name}
+          subtitle={c.offering.course.title + ' · ' + c.offering.term}
+          context={
+            <>
+              <span>{c.grants.map((g) => g.user.name).join('、') || '暂无授课教师'}</span>
+              <small>{c._count.enrollments} 位学生</small>
+            </>
+          }
+          archived={c.archived || c.offering.archived || c.offering.course.archived}
+          action="查看班级"
+        />
       ))}
-      {!list.total && <p>暂无匹配教学班。</p>}
+      {!list.total && <OrganizationEmpty>暂无匹配教学班。</OrganizationEmpty>}
       <Pagination path={path} search={search} {...list} />
-    </Panel>
+    </OrganizationPanel>
   );
 }
 export async function Classes({ a, schoolId, area, search, segments }: Props) {
@@ -283,25 +324,34 @@ export async function Classes({ a, schoolId, area, search, segments }: Props) {
     manager = a.kind !== 'TEACHER';
   return (
     <>
-      <nav className="row-actions">
+      <nav className="org-breadcrumb" aria-label="教学组织路径">
         <Link href={href(path, { schoolId })}>教学班列表</Link>
         {manager && (
-          <Link
-            href={href(
-              '/' + area + '/organization/' + c.offering.courseId + '/offerings/' + c.offeringId,
-              { schoolId },
-            )}
-          >
-            {c.offering.course.title} · {c.offering.term}
-          </Link>
+          <>
+            <ChevronRight size={14} aria-hidden="true" />
+            <Link
+              href={href(
+                '/' + area + '/organization/' + c.offering.courseId + '/offerings/' + c.offeringId,
+                { schoolId },
+              )}
+            >
+              {c.offering.course.title} · {c.offering.term}
+            </Link>
+          </>
         )}
       </nav>
       <PageTitle
         title={c.name}
         description={c.offering.course.title + ' · ' + c.offering.term + (open ? '' : ' · 已归档')}
       />
-      <Panel title="班级管理">
-        <p>授课教师　{c.grants.map((g) => g.user.name).join('、')}</p>
+      <section className="org-class-management" aria-label="班级管理">
+        <div className="org-teachers">
+          <GraduationCap size={21} aria-hidden="true" />
+          <div>
+            <small>授课教师</small>
+            <strong>{c.grants.map((g) => g.user.name).join('、') || '暂无授课教师'}</strong>
+          </div>
+        </div>
         <div className="row-actions">
           {open && (
             <>
@@ -343,7 +393,10 @@ export async function Classes({ a, schoolId, area, search, segments }: Props) {
                 <Field label="学号" name="studentNumber" />
                 <Field label="学生姓名" name="name" />
               </CommandForm>
-              <Link href={href('/' + area + '/imports', { schoolId, offeringId: c.offeringId })}>
+              <Link
+                className="button secondary"
+                href={href('/' + area + '/imports', { schoolId, offeringId: c.offeringId })}
+              >
                 导入成员
               </Link>
             </>
@@ -357,12 +410,24 @@ export async function Classes({ a, schoolId, area, search, segments }: Props) {
             />
           )}
         </div>
-      </Panel>
-      <Panel title="班级成员">
+      </section>
+      <OrganizationPanel title="班级成员" count={list.total}>
         <SearchForm path={path + '/' + classId} search={search} label="搜索学生" />
+        <div className="org-member-heading" aria-hidden="true">
+          <span>学生 / 学号</span>
+          <span>成员操作</span>
+        </div>
         {list.items.map((s) => (
-          <article className="list-item" key={s.id}>
-            <strong>{s.name}</strong> {s.studentNumber}
+          <article className="org-member" key={s.id}>
+            <div className="org-record-title">
+              <span className="org-record-icon">
+                <Users size={20} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>{s.name}</strong>
+                <small>{s.studentNumber}</small>
+              </span>
+            </div>
             <div className="row-actions">
               {open && (
                 <>
@@ -383,9 +448,12 @@ export async function Classes({ a, schoolId, area, search, segments }: Props) {
             </div>
           </article>
         ))}
-        {!list.total && <p>暂无匹配学生。</p>}
+        {!list.total && <OrganizationEmpty>暂无匹配学生。</OrganizationEmpty>}
         <Pagination path={path + '/' + classId} search={search} {...list} />
-      </Panel>
+      </OrganizationPanel>
+      <OrganizationHint>
+        移出本班只解除当前成员关系，保留学生账号、其他班级及历史作业。
+      </OrganizationHint>
     </>
   );
 }

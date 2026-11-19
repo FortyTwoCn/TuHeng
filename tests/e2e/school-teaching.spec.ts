@@ -58,10 +58,12 @@ test('school catalog, teacher class deep link, school question versions and revi
       await schoolPage.getByRole('button', { name: '新增开课学期' }).click();
       await drawer.getByLabel('学期', { exact: true }).fill(term);
       await drawer.getByRole('button', { name: '保存', exact: true }).click();
-      await expect(schoolPage.getByRole('link', { name: term, exact: true })).toBeVisible();
+      await expect(
+        schoolPage.getByRole('link', { name: new RegExp('^' + term + ' .*查看教学班') }),
+      ).toBeVisible();
     }
     await schoolPage.screenshot({ path: evidence + '/school-catalog.png' });
-    await schoolPage.getByRole('link', { name: '2026秋', exact: true }).click();
+    await schoolPage.getByRole('link', { name: /^2026秋 .*查看教学班/ }).click();
     await expect(schoolPage).toHaveURL((url) => /\/offerings\/[\w-]+$/.test(url.pathname));
     const offeringId = new URL(schoolPage.url()).pathname.split('/').at(-1)!;
     await teacherPage.goto('/teacher/classes');
@@ -159,7 +161,7 @@ test('school catalog, teacher class deep link, school question versions and revi
     await expect(
       schoolPage.getByRole('heading', { name: '工程制图基础', exact: true }),
     ).toBeVisible();
-    await schoolPage.getByRole('link', { name: '2027春', exact: true }).click();
+    await schoolPage.getByRole('link', { name: /^2027春 .*查看教学班/ }).click();
     await schoolPage.getByRole('button', { name: '编辑开课' }).click();
     await drawer.getByLabel('学期', { exact: true }).fill('2027春季');
     await drawer.getByRole('button', { name: '保存' }).click();

@@ -32,7 +32,7 @@ export function OrganizationSelect({
   >([]);
   const [selected, setSelected] = useState<{ id: string; name: string } | undefined>(initial),
     [error, setError] = useState(''),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(true);
   useEffect(() => {
     const abort = new AbortController();
     const timer = setTimeout(async () => {
@@ -89,6 +89,8 @@ export function OrganizationSelect({
         搜索{label}
         <input
           type="search"
+          placeholder={'按名称查找' + label}
+          disabled={disabled}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -122,17 +124,25 @@ export function OrganizationSelect({
         </select>
       </label>
       <div className="choice-pagination">
-        <button type="button" disabled={!page || loading} onClick={() => setPage((p) => p - 1)}>
-          上一页选项
-        </button>
+        {(page > 0 || total > 20) && (
+          <button
+            type="button"
+            disabled={disabled || !page || loading}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            上一页选项
+          </button>
+        )}
         <small>{loading ? '正在查询…' : total + ' 个匹配结果'}</small>
-        <button
-          type="button"
-          disabled={(page + 1) * 20 >= total || loading}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          下一页选项
-        </button>
+        {(page > 0 || total > 20) && (
+          <button
+            type="button"
+            disabled={disabled || (page + 1) * 20 >= total || loading}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            下一页选项
+          </button>
+        )}
       </div>
       {error && (
         <p role="alert" className="field-error">

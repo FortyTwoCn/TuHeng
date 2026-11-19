@@ -12,6 +12,12 @@ import {
   SchoolActions,
 } from '../../components/organization/OrganizationCommands';
 import { Pagination, SearchForm, href, type Params } from './navigation';
+import {
+  OrganizationPanel,
+  OrganizationEmpty,
+  OrganizationHint,
+} from '../../components/organization/OrganizationPresentation';
+import { GraduationCap, Users } from 'lucide-react';
 export async function Schools({ a, path, search }: { a: Actor; path: string; search: Params }) {
   const list = await searchSchools(a, search);
   return (
@@ -51,18 +57,20 @@ export async function People({
         description="维护本校账号身份、状态和班级关系。"
         action={<CreateAccount tab={kind === 'TEACHER' ? 'teachers' : 'students'} />}
       />
-      <Panel>
-        <nav className="row-actions">
+      <OrganizationPanel title="学校人员" count={list.total}>
+        <nav className="org-person-tabs" aria-label="人员类型">
           <Link
             aria-current={kind === 'TEACHER' ? 'page' : undefined}
             href={href(path, { schoolId, kind: 'TEACHER' })}
           >
+            <GraduationCap size={18} aria-hidden="true" />
             教师
           </Link>
           <Link
             aria-current={kind === 'STUDENT' ? 'page' : undefined}
             href={href(path, { schoolId, kind: 'STUDENT' })}
           >
+            <Users size={18} aria-hidden="true" />
             学生
           </Link>
         </nav>
@@ -71,12 +79,21 @@ export async function People({
           search={{ ...search, kind }}
           label={'搜索' + (kind === 'TEACHER' ? '教师' : '学生')}
         />
+        <div className="org-person-heading" aria-hidden="true">
+          <span>姓名 / 登录 ID</span>
+          <span>教学班</span>
+          <span>账号状态</span>
+          <span>操作</span>
+        </div>
         {list.items.map((p) => (
           <PersonActions key={p.id} person={p} />
         ))}
-        {!list.total && <p>暂无匹配账号。</p>}
+        {!list.total && <OrganizationEmpty>暂无匹配账号。</OrganizationEmpty>}
         <Pagination path={path} search={{ ...search, kind }} {...list} />
-      </Panel>
+      </OrganizationPanel>
+      <OrganizationHint>
+        这里维护学校级账号资料。班级成员的加入、移出和授课安排请前往教学班详情。
+      </OrganizationHint>
     </>
   );
 }
