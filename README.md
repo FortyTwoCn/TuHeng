@@ -1,54 +1,96 @@
 # 图衡 TuHeng
 
-<img src="apps/web/public/brand/tuheng-logo.svg" alt="图衡几何图标" width="96" height="96" />
+<img src="apps/web/public/brand/tuheng-logo.svg" alt="图衡" width="88" height="88" />
 
-四类账号（站点管理员、学校、教师、学生）、学生/教师管理双认证域；支持学校四列/教师三列 XLSX 导入、限时凭据交付、按人冻结的作业名单、后台 AI 供应商/模型/模块规则及 SMTP。实现和验证见[身份与 AI 重构](docs/IDENTITY_AI_REFACTOR.md)。
+面向工程图学教学的作图、作业与反馈平台。学生使用几何编辑器或图片作答，AI 提供分析建议，教师复核并发布正式成绩。
 
-工程图学教学闭环。Next.js + TypeScript 模块化单体，独立 Node Worker 与可替换视觉评分核心。
+基于 Next.js、TypeScript 和 PostgreSQL，使用独立 Node.js Worker、Redis 与 S3 兼容对象存储。
 
-几何编辑器支持 VHW、三视图、正等轴测和斜二等轴。登录后访问 `/geometry` 独立作图，或在教师建题时选择几何作答方式。升级需执行 `npm install`、`npm run db:generate`、`npm run db:migrate`。使用与契约见 [几何编辑器架构](docs/GEOMETRY_EDITOR_ARCHITECTURE.md)。
+[开始运行](#本地运行) · [操作指南](docs/WORKFLOWS.md) · [文档目录](docs/README.md) · [部署与排障](docs/OPERATIONS.md)
 
-VHW 与三视图现在采用同一张展开图纸、共享原点和镜头。拖动就地显示长度/角度，点可吸附到基准轴/原点/换面轴；默认选择支持 Window/Crossing 框选，对象附近可精确编辑。平行/垂直构造和方向关系共用内核，端点合并真实引用，电子笔拟合与原笔迹恢复保留。新增参考关系使用 2.1，插值曲线使用 2.2，兼容 v1/2.0/2.1 与历史任务。交互、权限、截图/JSON 及设备验证范围见 [UX v2 验收](docs/GEOMETRY_EDITOR_UX_V2.md)。
+## 当前功能
 
-## 几何编辑与教学流程
+| 模块       | 能力                                                                                                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 账号与学校 | 网站管理员、学校管理员、教师、学生四类账号；学生与管理端隔离登录；管理端支持登录 ID 或已验证邮箱共用输入框。建校自动创建首位校管，可追加多位，至少保留一位启用的校管。 |
+| 教学组织   | 学校 → 课程 → 开课学期 → 教学班；同课程跨学期、同学生多班、联合授课与明确交接。课程、开课、班级可分别归档。                                                            |
+| 名单与凭据 | 学校四列、教师三列 Excel 导入；预览、确认、逐行处理与重试；复用已有学生账号；教师和学生初始凭据分别限时下载。                                                          |
+| 作业与反馈 | 题目及细则版本、接收人发布快照、草稿与正式提交、评分任务、教师复核、成绩发布与申诉；保留自测和错题本。                                                                 |
+| 几何编辑   | VHW 面投影、三视图、正等轴测、斜二等轴共用内核；统一展开图、自动识别投影面、实时拖动与尺寸、框选、就地属性、轴吸附、真实合点、换面轴、曲线和电子笔拟合。               |
+| 后台配置   | AI 供应商、模型及模块调用规则，OpenAI Chat Completions / Anthropic Messages 适配；SMTP 版本管理、网站备案信息、任务诊断和审计。                                        |
 
-- 四种编辑器共用版本化 `GeometryDocument` 和运行时校验，提供点、实/虚线段、无限辅助线、圆/圆弧、过点曲线、新投影轴与换面、端点连接、投影关联、属性编辑和撤销恢复。
-- 「线工具 → 曲线」（手机「绘图 → 曲线」）：先选两端点，依次标记经过点，再点任一端点并确认；附近直线/轴交点自动吸附。
-- 电子笔直接采集轨迹，松手自动拟合直线、圆、圆弧或平滑开放曲线；曲线靠近交点自动定位，支持取消吸附、恢复原笔迹及三种线型。失败保留笔迹；支持虚拟直尺、触控平移和缩放。
-- 教师题目保存冻结版本；学生可保存几何草稿、提交独立作答快照，通过现有队列和评分核心进入教师复核。图片作答继续保留。
-- 支持 JSON、中文关系描述和 SVG 导出。照片识别导入属于下一轮，未来仍使用同一文档接口。
+照片识别转几何 JSON、OCR、DWG/DXF、三维实体建模和协同编辑尚未实现。已有图片上传与图片作答可以继续使用。
 
-文档：[架构与组件](docs/GEOMETRY_EDITOR_ARCHITECTURE.md) · [数据契约](docs/GEOMETRY_EDITOR_SCHEMA.md) · [交互说明](docs/GEOMETRY_EDITOR_INTERACTION.md) · [评分接入](docs/GEOMETRY_EDITOR_AI_EXPORT.md) · [四份 JSON 示例](docs/geometry-examples) · [交付与验证记录](docs/DELIVERY.md)。
+## 界面预览
 
-品牌图标统一使用几何 SVG。登录页以 H 水平底面、V/W 竖直面构成投影装饰，桌面端放大至左侧面板右下角，由右侧登录区域遮去部分边缘；手机端保留紧凑布局。
+以下为实际开发页面截图，数据为测试数据。
 
-![图衡登录页](docs/images/login.png)
+![课程与开课学期管理](docs/images/organization-ui-20261119/after-course-detail-desktop.png)
 
-## 学校与教学组织
+<details>
+<summary>学校选择与手机界面</summary>
 
-校管在「课程与开课学期」建课程，再为已有课程追加学期。教师在「我的教学班」选择本校开放的课程和学期建班。学生通过成员关系加入班级，同一个学号可以跨班、跨学期使用。平台管理员进入学校业务前先选学校。具体操作、权限和本轮截图见[业务流程](docs/WORKFLOWS.md)、[权限矩阵](docs/PERMISSIONS.md)和[专项验收](docs/TEACHING_ORGANIZATION_ACCEPTANCE.md)。
+![选择当前管理学校](docs/images/organization-ui-20261119/after-school-picker-desktop.png)
+
+<img src="docs/images/organization-ui-20261119/after-courses-mobile.png" alt="手机课程列表" width="320" />
+<img src="docs/images/organization-ui-20261119/after-school-picker-mobile.png" alt="手机学校选择" width="320" />
+
+</details>
 
 ## 本地运行
 
-Node 22+，PostgreSQL、Redis 和 S3 兼容对象存储（可使用现有本地服务或 Docker Compose）。复制 `.env.example` 为 `.env`，设置独立的 AUTH_SECRET、数据库和对象存储配置。
+需要 Node.js 22+、npm、PostgreSQL、Redis 和私有 S3 兼容存储。依赖版本以 [package-lock.json](package-lock.json) 为准。已有 PostgreSQL、Redis 或外部 S3 时可直接配置使用；**有可用 S3 桶就不需要另装 RustFS**。
 
-```sh
-npm ci
-docker compose up -d
-npm run db:generate
-npm run db:migrate
-npm run identity:secrets -- --initialize
-npm run identity:bootstrap -- --output .runtime/admin-delivery.txt
-npm run dev
-# 另一个终端
-npm run worker
-```
+1. 安装依赖，并将 [.env.example](.env.example) 复制为 `.env`。
 
-访问 http://localhost:3000/login/staff，使用固定 ID `admin` 和本地受限交付文件中的临时密码。管理员首次改密后直接进入后台，无需配置 SMTP 或绑定邮箱。邮件服务在后台“系统设置 → 邮件服务”中配置，管理员可在“账号安全”自愿绑定邮箱；学校和教师仍须首次改密并验证邮箱，启用这些账号前应配置邮件服务。不存在公开注册或固定初始密码。已有数据库先执行[迁移说明](docs/IDENTITY_AI_REFACTOR.md)，不要重复 bootstrap 或重建库。
+   ```sh
+   npm ci
+   ```
 
-平板通过局域网访问时，在 `.env` 增加 `APP_ALLOWED_ORIGINS=http://本机局域网IP:3000`，重启 `npm run dev`，在平板打开该地址。`NEXTAUTH_URL=http://localhost:3000` 可保留供本机使用；多个受信任地址用逗号分隔，必须包含协议和端口，不使用通配符。IP 变化后需更新配置。开发资源、登录跳转和保存接口共用这些应用地址；操作与排查见 [局域网开发与平板访问](docs/OPERATIONS.md#局域网开发与平板访问)。
+2. 在 `.env` 配置数据库、Redis、S3，以及独立随机的 `AUTH_SECRET`。S3 桶应设为私有，并允许应用读取桶状态和读写业务对象。示例凭据仅用于本地 Compose。
 
-未配置视觉 API 时仍能提交、人工复核与发布，任务明确显示配置阻塞；不会生成模拟分。管理员在 AI 中心配置供应商、模型和模块规则后，在任务页面明确选择原快照重试或当前配置新建运行；没有原快照的任务只能新建运行。真实调用不会使用测试 Mock。
+   尚未安装依赖服务时，可使用仓库的 [compose.yaml](compose.yaml)：
+
+   ```sh
+   docker compose up -d
+   ```
+
+   Compose 中名为 `minio` 的服务实际运行 RustFS。首次启动后创建与 `S3_BUCKET` 一致的私有桶；已有服务时跳过 Compose，避免端口冲突。
+
+3. 为新安装初始化数据库和管理员。
+
+   ```sh
+   npm run db:generate
+   npm run db:migrate
+   npm run identity:secrets -- --initialize
+   npm run identity:bootstrap -- --output .runtime/admin-delivery.txt
+   ```
+
+   管理员登录 ID 固定为 `admin`，随机临时密码写入本机受限文件，不存在公开默认密码。交付后删除该文件。已有数据库更新请按[升级与迁移说明](docs/OPERATIONS.md#升级现有实例)操作，勿重复初始化账号。
+
+4. 分别在两个终端启动网页与任务进程。
+
+   ```sh
+   npm run dev
+   ```
+
+   ```sh
+   npm run worker
+   ```
+
+访问 [管理端登录](http://localhost:3000/login/staff) 或 [学生登录](http://localhost:3000/login/student)。管理员首次改密后可直接进入后台，邮箱绑定为可选；学校管理员与教师还须验证绑定邮箱，因此启用师生流程前应在后台配置 SMTP。
+
+平板通过局域网访问时，在 `.env` 中设置 `APP_ALLOWED_ORIGINS=http://本机局域网IP:3000` 并重启网页服务。详见[局域网与登录排障](docs/OPERATIONS.md#局域网开发与平板访问)。
+
+没有真实模型凭据也可运行编辑器、提交和人工复核。未配置的 AI 任务会明确阻塞，不会产生模拟成绩；配置方法见 [AI 与邮件服务](docs/AI_CONFIGURATION.md)。
+
+## 从建校到教学
+
+网站管理员建校并交付校管账号 → 校管建立课程及开课学期 → 校管安排教师，或教师在本校可用开课下建立自己的教学班 → 导入/关联学生 → 出题与发布作业 → 学生作答 → 教师复核并发布成绩。
+
+用户管理维护学校级账号身份；教学组织维护课程、开课和班级关系。退班不会停用学生账号，换学期不会重建学生密码。学校范围、资源授权和正式复核权限分别校验，详见[权限矩阵](docs/PERMISSIONS.md)和[完整操作路径](docs/WORKFLOWS.md)。
+
+## 开发与验证
 
 ```sh
 npm run typecheck
@@ -59,9 +101,6 @@ npm run build
 npm run test:e2e
 ```
 
-架构与权限见 docs/。当前账号、组织与 AI 重构的逐项完成情况、测试、迁移和限制见 [验收报告](docs/IDENTITY_AI_ACCEPTANCE.md)；docs/DELIVERY.md 保留早期交付历史。
+集成与浏览器测试必须使用隔离的数据库、Redis 队列和对象存储桶，不能直接连接业务实例。测试环境准备、关键用例和实际验证范围见 [TESTING](docs/TESTING.md)。
 
-在管理员 AI 中心维护版本化配置，无需改 .env 或重启 Web/Worker。旧任务沿用旧配置，可在管理页选择“使用当前配置新建运行”。详见 [运行与恢复](docs/OPERATIONS.md)。
-
-Playwright 首次使用先 `npx playwright install chromium`；已有系统 Chromium 时可用 `PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e`。集成测试使用隔离数据库、私有测试桶与独立队列。仅自动化测试库可显式设置 `SEED_TEST_ACCOUNTS=1` 和自定义 `SEED_PASSWORD` 后执行 `npm run db:seed`，生成的四个测试账号不可用于部署。身份浏览器用例还需将本地 SMTP `127.0.0.1:1026` 加入测试服务的出口白名单，并运行同一测试库/队列的真实 Worker；详见[测试记录](docs/IDENTITY_AI_ACCEPTANCE.md)。
-前端布局和真实交互验收见 [界面设计决策](docs/UI_REDESIGN_DECISIONS.md) 与 [界面验收记录](docs/UI_REDESIGN_ACCEPTANCE.md)。统一登录页、人员详情抽屉、编辑器工具组、AI 中心列表、任务诊断和邮件版本管理共用现有业务用例。
+模块职责见 [ARCHITECTURE](docs/ARCHITECTURE.md)，数据迁移见 [DATABASE](docs/DATABASE.md)，几何操作与 JSON 兼容见[编辑器指南](docs/GEOMETRY_EDITOR_INTERACTION.md)和[几何契约](docs/GEOMETRY_EDITOR_SCHEMA.md)。贡献修改前请阅读 [AGENTS.md](AGENTS.md)。

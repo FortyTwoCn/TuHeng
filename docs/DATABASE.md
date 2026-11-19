@@ -1,23 +1,72 @@
-# 数据与版本
+# 数据、版本与迁移
 
-学校以 School 为根。User.schoolId 记录人员归属。Course 属于学校，CourseOffering 以 (courseId, term) 唯一，TeachingClass 持有 offeringId。Enrollment 以 (userId, classId) 关联学生，TeachingGrant 以同样的组合关联教师。学期名称可以在不同课程重复。同校学号保留前导零，跨班和跨学期复用同一 User。
+[返回文档目录](README.md)
 
-一个学校可关联多个 `kind=SCHOOL_ADMIN` 的 User，不需要新表或额外唯一索引。建校、首个管理账号、加密临时凭据和审计在同一事务写入。创建后至少保留一个 `active=true` 的校管；首次改密/邮箱验证是独立状态，不影响此数量统计。追加账号、启停校管和启停学校均先锁定同一 School 行，再重新检查账号与范围；并发停用不能让有效校管数量变成零。启用历史学校前也检查至少一个启用校管。历史缺失账号通过原有补建入口修复，不猜测身份、不转换现有教师。此次无需数据库结构迁移，原账号、课程、作答与成绩引用保持不变。
+实际模型见 [schema.prisma](../packages/database/prisma/schema.prisma)，历史 SQL 见 [migrations](../packages/database/prisma/migrations/)。当前文档更新不增加数据库迁移，不修改账号、历史作答或正式成绩。
 
-课程编号沿用现存全局索引，新记录按本校标识加业务编号保存。列表、详情和写入回执仅去掉与本校精确匹配的前缀。按业务编号查重时兼顾本校无前缀旧值。迁移 2026111802_catalog_archive 为课程及开课各增加默认 false 的 archived 字段，并增加学校课程查询索引。所有主键、外键和历史版本保持原值。scripts/organization-audit.ts 以只读事务列出归属缺失、前缀异常、业务编号冲突和班级归属不一致的记录。
+## 学校与教学组织
 
-有效归档状态由课程、开课和教学班三个字段共同决定。课程归档时保留子级原状态。恢复时仅解除该级归档。新学期另建开课及班级，旧班继续指向原开课。
+| 模型 / 关系      | 含义与约束                                                               |
+| ---------------- | ------------------------------------------------------------------------ |
+| `School`         | 学校范围与启停状态。                                                     |
+| `User.schoolId`  | 人员的学校归属；四类身份由 `kind` 表达，学生/管理认证域由 `realm` 表达。 |
+| `Course`         | 学校的课程主数据；编号仍沿用全局唯一存储索引。                           |
+| `CourseOffering` | 课程的一次开课，`(courseId, term)` 唯一。                                |
+| `TeachingClass`  | 属于一个开课的教学班，保留原 `offeringId`。                              |
+| `Enrollment`     | 学生与班级关系，`(userId, classId)` 唯一。                               |
+| `TeachingGrant`  | 教师与班级授权，同一教师可多班、同一班可多教师。                         |
 
-发布名单和复核人保存在 AssignmentRecipient，独立于当前选课和授课关系。audienceRevision 为零的旧发布记录继续按原关系授权。学校盘点、交接和回滚均需区分这两类记录。
+同校学号唯一并保留前导零，跨班和跨学期复用原 User。学校可关联多位 `SCHOOL_ADMIN`，不设每校一个账号的唯一索引。建校、首位校管、凭据和审计原子写入；追加/启停校管、恢复学校时锁定学校行，至少保留一位启用校管。
 
-名单导入仍用 RosterImportBatch。v2 指纹对操作者、学校、开课、模板及文件内容与列映射共同取摘要。相同范围和文件返回原批次。命中旧指纹时另核对开课与模板，再沿用已有的逐行进度。重新上传相同文件可在未执行的批次刷新预检版本，过期的确认请求会被拒绝。
+课程新记录存为 `schoolId:业务编号`。页面只去掉与所属学校精确匹配的前缀，查询兼容本校无前缀旧记录。没有批量去前缀、推测归属或改写历史主键；异常由盘点工具报告。
 
-Question 指向不可变 QuestionVersion；版本内 reference/rubric JSON 为同一原子快照，有独立版本号、确认标志和 Zod 校验，避免发布时版本错配。关联 KnowledgePoint 以 ID 数组快照保留。AssignmentItem 外键绑定具体版本，发布后不可编辑。
+Course、CourseOffering、TeachingClass 各自保存 `archived`。有效状态组合父级与自身状态计算，不批量修改子级；新学期创建新开课与新班，不把旧班挪到新学期。
 
-Submission（学生/作业题唯一）→ SubmissionAttempt（递增版本、幂等 key）→ SubmissionAsset（顺序与原图引用）。GradingRun → GradingSuggestion 与 GradeDecision（追加 revision）。发布只更新正式 decision 指针，不覆盖旧记录；AI 无权更新该指针。
+## 名单、凭据与发布快照
 
-SelfTestFolder → SelfTestSet → SelfTestItem 引用 QuestionVersion。自测作答复用 SubmissionAttempt，其 assignment submission 可空；归属 ownerId 始终明确。ErrorBookEntry 引用原 attempt/question，不复制题目。ReviewAttempt 关联原错题与新作答。KnowledgeEvidence 以 decision/knowledge 唯一约束，长期汇总仅使用正式教师发布或明确标识的自测建议。
+`RosterImportBatch` 保留文件信息、预检版本、范围、状态和逐行进度。v2 指纹包含操作者、学校、开课、模板、内容及列映射；同文件跨开课可独立导入，同范围重试复用批次。旧指纹命中时还核对开课与模板，继续读取旧进度。
 
-StoredAsset 私有对象 key、owner、purpose，授权经业务引用检查。BackgroundJob 与 OutboxEvent 在提交事务创建。AuditLog 追加写；旧 ModelConfigurationVersion 保留供历史读取；当前 AI Gateway 的供应商版本引用受保护的凭据，业务通过任务绑定选择模型。
+`CredentialDeliveryBatch` / `CredentialDeliveryItem` 引用加密初始凭据和账号凭据版本；`CredentialDownload` 保存短时单次票据。改密或重置使旧凭据失效，不提供永久明文查询。
 
-索引与 FK 见 packages/database/prisma/migrations。项目通过 npm run db:migrate 事务应用未执行的 SQL 并核对历史校验和。JSON 字段在应用边界 Zod 校验，不将 provider 原始响应当作业务 schema。
+新发布作业的接收人、来源班级、每人复核教师保存在 `AssignmentRecipient`，与当前选课/授课关系分离。已有快照不随退班、交接或归档重算。`audienceRevision=0` 的旧作业保留实时授权兼容路径，盘点、交接和恢复时必须单独说明影响。
+
+## 教学、评分与文件版本
+
+| 数据链                                             | 保留方式                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| Question → QuestionVersion                         | 题干、参考答案、细则、确认标志和知识点形成版本快照。          |
+| Assignment → AssignmentItem                        | 绑定具体题目版本；发布后不改写该版本。                        |
+| Submission → SubmissionAttempt → SubmissionAsset   | 提交幂等键、递增作答版本、附件顺序和私有原图引用。            |
+| GradingRun → GradingSuggestion                     | 固定请求、模型/提示词/策略版本；重试与新运行分开。            |
+| GradeDecision                                      | 追加教师决定，正式发布更新指针，旧决定继续保留；AI 无权发布。 |
+| SelfTestFolder / Set / Item                        | 私有自测复用题目版本与作答，不变成正式成绩。                  |
+| ErrorBookEntry / ReviewAttempt / KnowledgeEvidence | 引用原作答与回练，按证据来源统计；移出错题采用归档。          |
+| StoredAsset                                        | 私有对象 key、owner、用途、原图与派生 `parentId` 链。         |
+| BackgroundJob / OutboxEvent / AuditLog             | 提交事务、可靠投递和追加审计。                                |
+
+几何文档保存在已有 JSONB 及版本字段中。v1、2.0、2.1、2.2 继续读取；新编辑副本才升级，历史正式数据不回填。详见[几何契约](GEOMETRY_EDITOR_SCHEMA.md)。
+
+AIProviderVersion、AIModelVersion、AITaskBindingVersion 和 AIInvocation 记录配置及调用快照；旧 ModelConfigurationVersion 保留用于历史读取。SMTPConfigurationVersion、SiteConfigurationVersion 追加配置版本。SecretRecord 密文需要对应部署主密钥才能恢复。
+
+## 迁移与回退
+
+`npm run db:migrate` 使用 [scripts/migrate.ts](../scripts/migrate.ts) 执行受审查 SQL，通过 advisory lock、事务、名称与 SHA-256 校验防止重复执行或历史脚本被改写。记录表为 `_tuheng_migrations`，不与 `_prisma_migrations` 混用。
+
+目前迁移依次涵盖：初始模型、几何作答、身份/AI 扩展、AI 尝试、接收人通知、验证会话版本、管理员可选邮箱、站点设置、课程与开课归档。多校管和本次文档整理不需要新表。
+
+- 升级先备份，再安装依赖、生成客户端、运行迁移并重启服务，见[运行指南](OPERATIONS.md#升级现有实例)。
+- 需要结构变更时新增迁移目录，可用 Prisma diff 辅助生成 SQL，人工审查后执行；不编辑已应用 SQL、不 reset。
+- `.gitattributes` 将迁移固定为 LF。runner 只兼容旧 Windows 库的 CRLF 校验差异，不放行其他 SQL 内容变更、不重写旧 checksum。
+- 代码回退前核对旧版本是否理解新字段和数据。优先前向修复；如必须恢复备份，应同时恢复匹配的数据库、对象存储与主密钥，并单独处理备份后新增业务数据。
+
+## 旧身份与模型迁移
+
+这部分仅用于早期版本实例，不是每次部署都要执行的步骤。
+
+1. 备份数据库、私有对象与主密钥，执行 `npx tsx scripts/identity-audit.ts` 和 `npx tsx scripts/organization-audit.ts` 只读盘点。
+2. 明确准备学校、账号与班级映射 JSON。`npm run identity:migrate -- --mapping 文件` 默认预检，审核后加 `--apply`。
+3. 工具保留 User.id、题目、作答和正式成绩。迁移旧名单时使用切换时成员与既有提交者形成推断名单并标记 `inferred`，不能宣称还原原发布时间的名册。
+4. `--development-template --output .runtime/mapping.json` 仅为开发数据生成明确标记的映射，不用于推测真实学校归属。
+5. 旧模型配置通过 `npm run ai:import-legacy -- --legacy-id 配置ID --protocol OPENAI_CHAT_COMPLETIONS --confirm-import` 显式导入。需要图片能力时明确加 `--images`。工具只读取选定旧记录的环境密钥，加密审计并防重；新配置保持停用、不覆盖已有绑定、不发模型请求，之后在后台审查启用。
+
+组织盘点报告无学校归属、错误前缀、业务编号冲突、班级学校不一致，以及有/无发布快照作业数量。无法确认归属的记录保留待修复，不能猜测学校或删除记录。对无原快照的旧 AI 任务，只能明确使用当前配置新建运行。

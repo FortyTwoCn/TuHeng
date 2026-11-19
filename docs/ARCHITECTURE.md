@@ -1,33 +1,57 @@
-# 模块化单体
+# 系统架构
 
-apps/web: Next.js App Router、Auth.js credentials、React 响应式页面、薄 API。
-apps/worker: 独立 Node.js 进程，outbox 调度与 BullMQ 消费。
-packages/contracts: Zod 版本化输入输出与批注；无基础设施依赖。
-packages/domain: 纯规则、权限端口与应用用例；无 Prisma / Next / 队列依赖。
-packages/grading-core: 分阶段策略、版本提示词、确定性结果校验；只依赖 contracts。
-packages/ai-providers: OpenAI Chat Completions、Anthropic Messages 协议适配与仅测试 Mock。
-packages/image-pipeline: Sharp 保守处理、人工变换、变换记录。
-packages/database: Prisma schema、迁移、统一工作单元适配器。
-packages/infrastructure: 组合应用服务、对象存储、队列、运行持久化与任务恢复。
-packages/ui: 通用可访问展示组件。
+[返回文档目录](README.md)
 
-依赖方向：Web/Worker → infrastructure → domain / grading-core + adapters → contracts。基础设施通过端口注入核心。单库事务保证提交、run、job、outbox 同时落地。队列仅传 run ID；数据库为权威状态。通过条件租约与确定 jobId 幂等执行，过期任务可恢复。
+图衡采用模块化单体：Next.js Web 负责页面与薄 API，独立 Node.js Worker 负责名单导入、任务投递和评分处理。数据库是业务状态的权威来源；Redis 和对象存储分别承担队列/限额与私有文件。
 
-默认本地部署；不使用 Sites 托管，因为本项目明确要求 Node Worker、Sharp、PostgreSQL 与 Redis。独立运行预算保留给正式作业与自测。生产反向代理应限流、限制请求体、TLS、私网依赖与集中日志。
+## 模块边界
 
-## 教学管理调用链
+| 目录                       | 职责                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `apps/web`                 | App Router、双域登录、响应式业务页面、请求解析和错误反馈。                   |
+| `apps/worker`              | outbox 调度、BullMQ 消费、租约恢复、导入与评分任务。                         |
+| `packages/contracts`       | Zod 输入输出、身份/AI/几何/评分契约及版本兼容。                              |
+| `packages/domain`          | 角色与资源权限、教学、作答、接收人、成绩、自测等规则和用例端口。             |
+| `packages/grading-core`    | 评分阶段、提示词版本、证据与结果归一化；只依赖契约。                         |
+| `packages/geometry-core`   | 坐标、投影、拓扑、约束、笔迹拟合、命令、分析与导出。                         |
+| `packages/geometry-editor` | 共享 React 编辑器、工具会话、预览、手势、浮层与属性草稿。                    |
+| `packages/ai-providers`    | OpenAI Chat Completions / Anthropic Messages 协议适配；Mock 仅测试显式注入。 |
+| `packages/image-pipeline`  | Sharp 图片处理、人工变换及记录。                                             |
+| `packages/database`        | Prisma schema、历史 SQL 迁移、工作单元与 pg 适配。                           |
+| `packages/infrastructure`  | 事务编排、组织服务、私有资产、队列、AI Gateway、邮件和密钥存储。             |
+| `packages/ui`              | 通用展示及可访问交互组件。                                                   |
 
-| 入口                                                             | 页面与命令                                                                 | 核心记录和归属                                               |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `/admin/schools`                                                 | `views/organization/people.tsx` 与 `organization.ts`，校管创建、重置和启停 | School 与本校独立 SCHOOL_ADMIN，近期验证、事务审计、限时凭据 |
-| `/{admin,school}/users`                                          | 人员查询、身份与状态修改                                                   | User.schoolId，学生全校身份由管理账号维护                    |
-| `/school/dashboard`                                              | `schoolOverview` 实时统计活跃人员、有效课程、开课和班级                    | 会话中的学校                                                 |
-| `/{admin,school}/organization/{courseId}/offerings/{offeringId}` | `catalog.tsx`、`teaching-catalog.ts`，分别创建、编辑、归档课程和开课       | School → Course → CourseOffering                             |
-| `/{teacher,school,admin}/classes/{id}`                           | `classDetail`、`createClass`、`updateClass`、成员命令                      | TeachingClass、TeachingGrant、Enrollment                     |
-| `/{area}/imports` 与 `/{area}/delivery`                          | `RosterImportWizard`、`roster-import.ts` 与名单 Worker                     | 批次绑定操作者、学校和开课，凭据逐行原子写入                 |
-| `/{area}/questions`、`/{area}/assignments`                       | `domain/teaching.ts`、`queries.ts` 和 `audience.ts`                        | 题目所有者、版本、作业元数据、发布接收人和复核授权分别检查   |
-| 作图属性浮卡                                                     | `FloatingInspector`、`PropertyFields`、`geometry-core`                     | 输入草稿和面板布局属于会话，几何事务写入文档历史             |
+调用方向为 Web / Worker → infrastructure / adapters → domain / grading-core → contracts；geometry-editor → geometry-core → contracts。核心通过端口获得持久化或外部服务，不依赖 Next、React、Prisma 或 BullMQ。架构测试递归扫描核心源码，防止子目录绕过边界。
 
-路由按身份分派到业务页面。通用表单和抽屉发送类型化命令，服务端解析契约，基础设施负责带学校锁的组织写入、凭据和审计。教学查询经领域端口执行。归档过滤只用于有效组织和新发布；已发布作答继续按快照与时间窗处理。架构边界测试递归检查核心包的源码目录。
+## 主要调用链
 
-教学管理的视觉组件集中在 `apps/web/components/organization/OrganizationPresentation.tsx`，只接收已授权的记录、链接和操作，不计算业务权限。`workspace.css` 由 `.organization-workspace` 限定样式范围；课程、开课、教学班继续由原有业务视图查询，创建与修改继续通过 `OrganizationCommands` 和原有领域命令。人员详情、名单导入、凭据交付复用原组件和接口。桌面以分栏列表展示，手机切换为带明确进入入口的记录卡；筛选和学校范围仍保存在 URL 中。设计与验收见 [教学管理界面优化](ORGANIZATION_UI_ACCEPTANCE_20261119.md)。
+| 入口                                       | 页面 / 交互                                | 业务实现与数据                                                          |
+| ------------------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------- |
+| `/admin/schools`                           | `views/organization/people.tsx`            | `organization.ts`：School、独立校管、限时凭据和审计。                   |
+| `/{admin,school}/users`                    | 人员页、详情抽屉                           | `organization-queries.ts` / `organization.ts`：学校身份与账号状态。     |
+| `/school/dashboard`                        | 真实学校概览                               | 会话学校范围内人员、有效课程、开课与班级统计。                          |
+| `/{admin,school}/organization` 及详情      | `views/organization/catalog.tsx`           | `teaching-catalog.ts`：Course → CourseOffering → TeachingClass。        |
+| `/{admin,school,teacher}/classes/{id}`     | 指定班级详情、成员和授课操作               | 学校能力或 TeachingGrant；Enrollment 与授课变更。                       |
+| `/{area}/imports`、`/{area}/delivery`      | `RosterImportWizard`、`CredentialDelivery` | 导入批次、逐行事务、凭据版本及下载票据。                                |
+| `/{area}/questions`、`/{area}/assignments` | 建题、作业、接收人选择                     | `domain/teaching.ts`、`queries.ts`、`audience.ts`。                     |
+| `/geometry` 与教学编辑器                   | `GeometryEditor`                           | 同一几何契约与命令；独立作图本地导出，教学页经既有草稿/提交用例保存。   |
+| `/admin/models`、`/admin/jobs`             | AI 配置与任务诊断                          | `ai-admin.ts`、`ai-gateway.ts`、`grading-jobs.ts`；版本快照与任务幂等。 |
+| `/admin/settings/{site,mail}`              | 网站信息与邮件版本                         | domain 配置校验、事务审计、SMTP 和 SecretStore。                        |
+
+业务容器按人员、教学组织、学校概览、导入等职责分开。`OrganizationPresentation.tsx` 只渲染已授权的记录、链接和操作，`OrganizationCommands` 发起规范命令；`.organization-workspace` 限定布局样式，不影响编辑器。URL 保留学校、筛选和分页，路由未知或资源不存在时返回相应错误，不回落到任意列表。
+
+## 提交与任务一致性
+
+一次正式提交在同一数据库事务中保存不可变 attempt、run、BackgroundJob 和 OutboxEvent。队列只传运行 ID，使用确定 jobId 和条件租约避免重复执行。Redis 故障不会丢失已保存作答；调度器重投未完成 outbox，恢复过期租约并补偿缺失队列任务。
+
+Worker 读取运行快照、准备证据，通过 AI Gateway 按 `taskKey` 调用 Provider，评分核心验证结果后保存建议。教师的 GradeDecision 及发布指针使用独立授权和事务，AI 不能写入正式成绩。
+
+## 认证、配置与数据边界
+
+- STAFF / STUDENT 独立认证域；四类账号不通过追加旧角色获得跨后台权限。
+- 学校归属、课程父子关系、授课授权、作业管理、复核和私有资源分别检查。
+- 凭据加密保存；主密钥在部署配置中，页面/API 不暴露已存密钥。
+- 图像文件保持私有，派生资源保留 `parentId` 链；业务读取先授权。
+- 模型配置、题目、作答、评分和站点配置保留版本；新增迁移不覆盖历史 SQL。
+
+具体规则见[权限](PERMISSIONS.md)、[数据](DATABASE.md)、[评分](GRADING_ARCHITECTURE.md)与[编辑器架构](GEOMETRY_EDITOR_ARCHITECTURE.md)。

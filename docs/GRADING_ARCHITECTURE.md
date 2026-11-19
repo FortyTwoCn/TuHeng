@@ -1,13 +1,58 @@
-# 批改契约 v1
+# 评分与几何证据
 
-GradingRequest 固定题目、答案、rubric、模型配置、strategy 与 prompt 版本，包含资源引用，不包含学生姓名。图像适配器按引用加载私有数据，转 data URL 只存在调用内存中。
+[返回文档目录](README.md) · [后台 AI 配置](AI_CONFIGURATION.md)
 
-阶段接口：ImagePreprocessing → QuestionAnalysis → ReferenceAnalysis → RubricResolution → SubmissionAnalysis → GradingEvaluation → ResultValidation → GradingReport。首版分析/评价合并一次视觉请求，阶段保留明确类型边界；不声称独立几何检测能力。
+AI 输出是建议，教师通过独立的 GradeDecision 确认并发布正式成绩。图像、几何作答、自测和回练共用现有评分内核、Provider 与任务流程，不在编辑器或业务页面直接调用模型。
 
-Provider 只返回未知数据与调用统计；core 通过 Zod、ID 完整性、分数范围、证据、重复关联错误及总分验证生成稳定业务结果。未知项 null，总分不能确定时 null。未确认答案、低质量、不确定/缺证据均 requiresReview。所有正式作业必须教师复核。
+## 请求与执行
 
-提示词在 packages/grading-core/src/prompts.ts 代码版本管理；Worker 使用 run 创建时快照。升级新增版本，不原地修改旧版本。替换模型实现只需实现 VisionProvider；替换算法实现 GradingEngine，不改 UI。
+`GradingRequest` 使用 `contractVersion: 1`，固定题目、答案、细则、证据引用、模型配置、策略及提示词版本，不把学生姓名作为评分输入。图像适配器在获授权后读取私有资源，调用需要的数据 URL 仅存在请求内存中。
 
-原始响应与规范化建议分开持久化，仅教师授权范围可查看规范化建议；不将原始响应暴露给学生。运行 Mock 必须 NODE_ENV=test 且显式注入，生产缺 key 返回 BLOCKED_CONFIG，不编造分数。
+```text
+不可变作答 → 运行快照 → outbox / 队列 → Worker
+                                      ↓
+                        AI Gateway（按 taskKey）
+                                      ↓
+                       Provider 返回未知模型数据
+                                      ↓
+                      grading-core 校验与归一化
+                                      ↓
+                         AI 建议 → 教师复核发布
+```
 
-几何批注采用归一化处理图坐标，记录 assetVersion；无法验证定位时不生成批注。模型自报 confidence 不当作准确率。
+核心保留图片准备、题目/参考分析、细则处理、作答分析、评价、验证和报告的阶段边界；当前部分分析与评价合并在一次模型请求中，不因此宣称具备独立几何识别服务。
+
+正式作业使用 `grading.assignment`，私有自测使用 `grading.selftest`。Gateway 解析版本化供应商、模型、绑定与凭据，执行能力、参数、预算和并发检查；协议代码集中于 `packages/ai-providers`。
+
+## 结果校验与成绩
+
+- Provider 返回未知数据与调用统计，核心通过 Schema、ID 完整性、分数范围、证据、重复关联错误和总分一致性校验生成业务结果。
+- 分数以十分之一分整数存储。不能判断的项为 `null`，总分不能确定时也保留 `null`，不能换成零分。
+- 参考答案未确认、图像质量不足、证据缺失或模型不确定时要求复核；所有正式作业仍由教师确认。
+- 原始响应与规范化建议分开保存，不向学生暴露原始响应；日志不记录完整模型响应或原始图片。
+- 批注校验 assetVersion、对象/关系引用与定位；无法验证的定位不作为有效批注。模型自报 confidence 不等于准确率。
+- 追加新运行或重试不会改写历史建议、旧教师决定和已发布正式成绩。更正成绩通过新的教师决定及发布事务完成。
+
+Mock 仅自动化测试显式注入。真实运行无密钥/配置时明确阻塞，不编造评分。
+
+## 几何证据与兼容
+
+`exportGeometryBundle` 使用公共几何模块生成冻结题干、实际作答、派生关系和中文叙述，随提交保存到运行请求。至少有有效图片或非空几何答案，仅有题干不算已作答。
+
+| 证据版本                                 | 提示词版本              |
+| ---------------------------------------- | ----------------------- |
+| 图片作答                                 | `geometry-review/1.0.0` |
+| GeometryDocument 1.0                     | `geometry-review/1.1.0` |
+| GeometryDocument 2.0：统一展开图与换面轴 | `geometry-review/1.2.0` |
+| GeometryDocument 2.1：类型化参考关系     | `geometry-review/1.3.0` |
+| GeometryDocument 2.2：插值曲线           | `geometry-review/1.4.0` |
+
+旧请求保留原提示词与配置，新的证据版本需要通过运行时兼容校验。提示词在 `packages/grading-core/src/prompts.ts` 中管理，不覆盖旧提示词来改变历史任务的评分依据。
+
+叙述区分局部/图纸坐标、换面轴、真实几何关系、用户声明和无效绑定。分析重新计算关系状态，但不执行交互绑定来移动学生答案。存在 `PARALLEL` 或 `SATISFIED` 标签不自动证明实际正确。
+
+曲线依据有序 `pointIds` 和实际坐标导出，原始 samples 与最终几何分别保留。轴相关交点使用类型化 POSITION 引用，并校验实际满足情况，不宣称持续绑定。HUD、选中框和菜单不属于评分证据。
+
+## 验证边界
+
+单元和集成测试覆盖协议、校验、版本兼容、任务幂等与教师成绩保护。协议替身不能证明真实模型识图或几何评分准确率。真实服务验收需要管理员配置有效服务，以授权样本运行，再由具备分派权限的教师复核。未进行的真实模型、SMTP 送达和硬件测试必须单独说明，见[测试指南](TESTING.md)。

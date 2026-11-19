@@ -1,5 +1,7 @@
 # GeometryDocument v2.2 与兼容
 
+[返回文档目录](README.md) · [运行时契约源码](../packages/contracts/src/geometry.ts)
+
 基本编辑文档使用 `tuheng.geometry/2.0.0`；首次写入类型化参考关系时升级为 `tuheng.geometry/2.1.0`，首次创建插值曲线升级为 `tuheng.geometry/2.2.0`。各版本的 units 为 `mm`，coordinateSystem 为 `VIEW_LOCAL_WITH_SHEET_TRANSFORM`。`geometry-v1.ts` 保留 `tuheng.geometry/1.0.0` 原契约；`loadGeometryDocument` 和序列化不迁移历史记录，编辑器及新的编辑事务显式调用 `upgradeGeometryDocument`。
 
 ## 局部坐标 → 图纸坐标
@@ -63,15 +65,15 @@ type GeometryTargetRef =
 }
 ```
 
-样本通过独立运行时 Schema 后，使用现有 addPenStroke 应用到当前选定框架。合成测试样本在 `geometry-examples/v2/stroke-circle.json`，明确不代表真实设备采集；真实设备可输出相同格式，不需要照片识别服务。
+样本通过独立运行时 Schema 后，使用现有 addPenStroke 应用到当前操作框架。合成测试样本在 `geometry-examples/v2/stroke-circle.json`，明确不代表真实设备采集；真实设备可输出相同格式，不需要照片识别服务。
 
-## 斜二等轴默认值与电子笔线型修复（2026-11-15）
+## 轴测默认值与电子笔线型
 
-新建 OBLIQUE_DIMETRIC 文档的 depthAngle 为 -135°、depthScale 为 0.5：图纸 x 向右、z 向上、y 向左下。角度基于图纸 x 正向逆时针，非屏幕 y 向下坐标。历史文件的显式角度（包括原默认 45°）读取和重存时保留，既有题干和学生历史快照不回填。参考 [清华大学出版社轴测图样章，第 5 章，印刷页 120](https://www.tup.tsinghua.edu.cn/upload/books/yz/103003-01.pdf) 的轴间角和缩短系数。
+新建 OBLIQUE_DIMETRIC 文档的 depthAngle 为 -135°、depthScale 为 0.5：图纸 x 向右、z 向上、y 向左下。角度基于图纸 x 正向逆时针，非屏幕 y 向下坐标。历史文件的显式角度（包括原默认 45°）读取和重存时保留，既有题干和学生历史快照不回填。默认参数由 `geometry-core/projections.ts` 创建，显式历史参数按原值保留。
 
 电子笔会话线型不成为新 JSON 字段；使用既有 lineStyle、layerId 与实体 kind 表达结果。辅助直线保存为 line(anchor, direction)，方向归一化，不能通过拉长 segment 假装无限。line 也保留既有 samples、sampling 字段；恢复后 polyline 继承线型与采样证据。未增加契约版本、数据库迁移或第二套笔迹格式。
 
-## 2.2 插值曲线（2026-11-16）
+## 2.2 插值曲线
 
 `curve` 保存有序 `pointIds`（3–128 个同投影面的点）及 `interpolation: CUBIC_HERMITE`。首末点是端点，其间为按作图顺序排列的经过点；每段穿过相邻两点，点不是贝塞尔控制柄。弦长参数定义 dt[i]=|P[i+1]-P[i]|，端点切向为单侧差商，内部切向为 (P[i+1]-P[i-1])/(dt[i-1]+dt[i])；每段按 dt 缩放切向。渲染及 SVG 使用精确三次路径，命中与框选使用自适应细分（默认 0.02mm 容差、最多 10 层）。
 
@@ -82,3 +84,9 @@ type GeometryTargetRef =
 同视图实体交点沿用 INTERSECTION 约束；涉及基准轴、新轴或跨视图 SHEET 辅助线时，在经过点上记录两条 POINT_ON_REFERENCE / POSITION 类型化关系，并分别校验实际满足情况。不会把轴 ID 塞入实体数组，也不默认持续绑定参考对象。
 
 v1、2.0、2.1 可继续加载、导出及读取历史。只有新编辑副本在创建曲线时升级到 2.2；新曲线不能标记为旧版本，写入参考关系不会将 2.2 降级。既有 JSONB 可承载，无数据库 DDL 或历史数据回填。完整示例：[点选曲线](geometry-examples/curves/manual.json)、[电子笔交点吸附](geometry-examples/curves/pen.json)。
+
+## 示例文件的用途
+
+`geometry-examples/` 根目录的四份 JSON 是旧版兼容输入；`v2/standard-sheet.json`、`v2/axes.json`、`ux-v2/merged.json`、`curves/` 和 `pen-direction/` 中的文档用于核对正式实体与引用。`v2/stroke-circle.json` 是独立笔迹样本，需要走笔迹导入入口。
+
+`verification.json`、`performance.json` 等记录是测试结果，不是可直接导入的 GeometryDocument。历史截图与样本不代表当前版本或真实硬件的全量验收。

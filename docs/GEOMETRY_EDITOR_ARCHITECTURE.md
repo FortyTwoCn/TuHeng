@@ -1,5 +1,7 @@
 # 几何编辑器架构
 
+[返回文档目录](README.md)
+
 四种编辑器继续共用 contracts → geometry-core → geometry-editor。domain 在现有题目、草稿、正式提交事务中校验几何文档，grading-core 复用原队列、Provider 和教师复核。没有照片识别服务、第二套评分流程或独立编辑器项目。
 
 ## 统一展开图
@@ -33,7 +35,7 @@ A=(30,20,40) 的纸面位置为 V=(-30,40)、H=(-30,-20)、W=(20,40)。学生实
 
 `preview.ts` 只更新受影响点及必要依赖，不在每次 move 做完整 Zod、分析/自然语言导出或 JSON.stringify。`primitive-preview.ts` 让显示的吸附几何和最终提交共用计算结果。完整验证在提交边界，一次操作一条历史。OperationRecovery 用原始结果与自动调整结果替换当前命令；新编辑使旧恢复入口失效。
 
-`commands.ts`（editor）为工具栏和对象卡提供统一有类型注册表与可用性原因。`EditorToolbar` 处理 roving focus；快捷键限定当前编辑器并避开文本输入。`FloatingInspector` 与 Inspector 都复用 PropertyFields，不复制属性命令。单一 `@floating-ui/dom`（MIT）处理 SVG 虚拟锚点及尺寸/滚动更新，关闭清理订阅。
+`commands.ts`（editor）为工具栏和对象卡提供统一有类型注册表与可用性原因。`EditorToolbar` 处理 roving focus；快捷键限定当前编辑器并避开文本输入。`FloatingInspector` 的紧凑摘要与展开属性共用 `PropertyFields`，不复制属性命令。单一 `@floating-ui/dom`（MIT）处理 SVG 虚拟锚点及尺寸/滚动更新，关闭清理订阅。
 
 CSS 使用容器宽度和剩余高度布局；手机摘要保留在对象旁，详细属性抽屉占用内部网格空间。文件、图层、显示和吸附细项按需展开，不重新引入三套独立画板。
 
@@ -49,9 +51,9 @@ CSS 使用容器宽度和剩余高度布局；手机摘要保留在对象旁，�
 
 `GeometryEditor` 仍支持 value/onChange、defaultValue、role、readOnly、problemDocument、highlightedEntityIds。ref 提供 getDocument、exportJSON、exportNarrative、undo、redo、fitToContent。非法加载保留当前文档并反馈错误；外部 value 变化不能被旧拖动覆盖。SVG 导出整张展开图，与当前镜头无关，不含选中柄或吸附候选。
 
-照片识别导入留待下一轮，届时仍通过同一 GeometryDocument 校验入口；本轮不调用识别模型。已有图片作答保持兼容。
+照片识别导入留待下一轮，届时仍通过同一 GeometryDocument 校验入口；当前不调用识别模型。已有图片作答保持兼容。
 
-当前交互、权限矩阵、实测与证据见 [UX v2 验收报告](GEOMETRY_EDITOR_UX_V2.md)；上一轮投影/笔迹修复历史见 [专项报告](GEOMETRY_EDITOR_REPAIR.md)。
+操作步骤见[交互指南](GEOMETRY_EDITOR_INTERACTION.md)，实际测试与硬件验证边界见[测试指南](TESTING.md)。
 
 ## 曲线复用与扩展边界
 
