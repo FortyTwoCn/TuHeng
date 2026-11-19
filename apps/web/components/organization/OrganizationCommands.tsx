@@ -95,7 +95,21 @@ export function OrganizationCommands({
   }
   return (
     <Context.Provider value={{ command, busy, identity, schoolId }}>
-      <FormFeedback.Provider value={{ error, clear: () => setError('') }}>
+      <FormFeedback.Provider
+        value={{
+          error,
+          clear: () => {
+            setError('');
+            setMessage('');
+            setDelivery('');
+          },
+          notice: message ? (
+            <p role="status">
+              {message} {delivery && <Link href={delivery}>领取初始凭据</Link>}
+            </p>
+          ) : undefined,
+        }}
+      >
         {children}
         {error && (
           <p role="alert" className="field-error">

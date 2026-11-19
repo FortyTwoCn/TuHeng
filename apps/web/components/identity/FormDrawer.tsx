@@ -2,7 +2,11 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog';
 
-export const FormFeedback = createContext({ error: '', clear: () => {} });
+export const FormFeedback = createContext<{
+  error: string;
+  clear: () => void;
+  notice?: ReactNode;
+}>({ error: '', clear: () => {} });
 
 /** A single editing form owns its draft; reference/secondary operations use their own drawer. */
 export function FormDrawer({
@@ -11,11 +15,13 @@ export function FormDrawer({
   children,
   busy = false,
   primary = false,
+  className,
 }: {
   title: string;
   trigger: string;
   busy?: boolean;
   primary?: boolean;
+  className?: string;
   children: (saved: () => void) => ReactNode;
 }) {
   const feedback = useContext(FormFeedback);
@@ -58,6 +64,7 @@ export function FormDrawer({
         open={open}
         title={title}
         drawer
+        className={className}
         busy={busy}
         onClose={() => (dirty ? setConfirm(true) : close())}
       >

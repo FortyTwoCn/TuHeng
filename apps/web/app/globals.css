@@ -1389,6 +1389,10 @@ progress {
   background: transparent;
   box-shadow: none;
 }
+/* SecretInput provides its own accessible visibility control. */
+.secret-input input::-ms-reveal {
+  display: none;
+}
 .secret-input:focus-within {
   outline: 2px solid var(--teal);
   outline-offset: 2px;

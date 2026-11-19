@@ -1,5 +1,6 @@
 'use client';
 import { Badge } from '@tuheng/ui';
+import { SchoolDetails } from '../organization/SchoolDetails';
 import { FormDrawer } from './FormDrawer';
 import { OrganizationSelect } from './OrganizationSelect';
 import type { OrganizationCommand, Person, School } from './organization-types';
@@ -217,116 +218,13 @@ export function SchoolRow({
         >
           管理该学校
         </button>
-        <FormDrawer title={'学校详情：' + s.name} trigger="查看详情" busy={busy}>
-          {(saved) => (
-            <>
-              <p>
-                学校编号：{s.code} · {s._count.users} 个账号
-              </p>
-              <form
-                className="identity-dialog-form"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (await command('rename-school', { ...fields(e.currentTarget), id: s.id }))
-                    saved();
-                }}
-              >
-                <label>
-                  学校名称
-                  <input name="name" defaultValue={s.name} required maxLength={100} />
-                </label>
-                <button className="button primary" disabled={busy}>
-                  保存名称
-                </button>
-              </form>
-              <section className="detail-section">
-                <h3>学校管理账号</h3>
-                <p className="muted">可创建多个独立管理账号，必须至少保留一个启用的管理员。</p>
-                {s.administrators.map((a) => (
-                  <div key={a.id} data-school-administrator={a.id}>
-                    {a.name} · {a.loginId} · {a.active ? '启用' : '停用'} ·{' '}
-                    {a.mustChangePassword
-                      ? '待改密'
-                      : a.emailVerifiedAt
-                        ? '已完成首次设置'
-                        : '待验证邮箱'}
-                    <button
-                      type="button"
-                      disabled={busy || !s.active || !a.active}
-                      onClick={() => {
-                        if (window.confirm('重置该学校管理员的临时密码？'))
-                          void command('reset-password', { id: a.id, schoolId: s.id });
-                      }}
-                    >
-                      重置临时密码
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || (a.active && !a.canDeactivate)}
-                      title={
-                        a.active && !a.canDeactivate ? '必须至少保留一个启用的管理员' : undefined
-                      }
-                      onClick={() => {
-                        if (window.confirm('更改学校管理员启停状态？'))
-                          void command('update-account', {
-                            id: a.id,
-                            schoolId: s.id,
-                            active: !a.active,
-                          });
-                      }}
-                    >
-                      {a.active ? '停用管理账号' : '启用管理账号'}
-                    </button>
-                    {a.active && !a.canDeactivate && (
-                      <p className="muted">
-                        最后一个启用的管理员；创建或启用其他管理员后才能停用。
-                      </p>
-                    )}
-                  </div>
-                ))}
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (
-                      await command('create-school-admin', {
-                        schoolId: s.id,
-                        ...fields(e.currentTarget),
-                      })
-                    )
-                      saved();
-                  }}
-                >
-                  <label>
-                    管理员姓名
-                    <input name="name" required maxLength={100} />
-                  </label>
-                  <button disabled={busy}>创建学校管理账号</button>
-                </form>
-                {!s.active && !s.canActivate && (
-                  <p className="muted">请先创建或启用一个管理员，再启用学校。</p>
-                )}
-                <button
-                  className="button danger"
-                  type="button"
-                  disabled={busy || (!s.active && !s.canActivate)}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        '此操作影响“' +
-                          s.name +
-                          '”的 ' +
-                          s._count.users +
-                          ' 个账号及后台任务；数据保留。确认继续？',
-                      )
-                    )
-                      void command('set-school-active', { id: s.id, active: !s.active });
-                  }}
-                >
-                  {s.active ? '停用学校' : '启用学校'}
-                </button>
-              </section>
-            </>
-          )}
+        <FormDrawer
+          title="学校详情"
+          trigger="查看详情"
+          busy={busy}
+          className="school-detail-drawer"
+        >
+          {(saved) => <SchoolDetails school={s} busy={busy} command={command} saved={saved} />}
         </FormDrawer>
       </div>
     </article>

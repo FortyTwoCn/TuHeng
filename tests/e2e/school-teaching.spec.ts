@@ -188,103 +188,130 @@ test('school catalog, teacher class deep link, school question versions and revi
   }
 });
 
-test('site admin adds multiple administrators and cannot disable the last enabled account in the UI or API', async ({
-  page,
-}) => {
-  const code = 'FIX-' + randomUUID();
-  const password = process.env.SEED_PASSWORD!;
-  const account = await prepareLogin(page, 'admin');
-  await account.fill('admin');
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL('/admin/dashboard');
-  const school = await prisma.school.create({ data: { name: '待配置学校', code } });
-  await page.goto('/admin/schools?q=' + code);
-  await verifyIdentity(page, password);
-  const row = page.locator('.organization-row').filter({ hasText: code });
-  await row.getByRole('button', { name: '查看详情' }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('管理员姓名').fill('独立学校管理员');
-  await dialog.getByRole('button', { name: '创建学校管理账号' }).click();
-  await expect(dialog).not.toBeVisible();
-  await row.getByRole('button', { name: '查看详情' }).click();
-  await expect(dialog.getByText(/独立学校管理员.*待改密/)).toBeVisible();
-  await expect(dialog.getByRole('button', { name: '创建学校管理账号' })).toBeEnabled();
-  const admin = await prisma.user.findFirstOrThrow({
-    where: { schoolId: school.id, kind: 'SCHOOL_ADMIN' },
-  });
-  await expect(dialog).toContainText(admin.loginId!);
-  const first = dialog.locator(`[data-school-administrator="${admin.id}"]`);
-  await expect(first.getByRole('button', { name: '停用管理账号', exact: true })).toBeDisabled();
-  const origin = process.env.TEST_APP_ORIGIN ?? 'http://localhost:3000';
-  const reauth = await page.request.post('/api/identity/reauthenticate', {
-    headers: { Origin: origin },
-    data: { realm: 'STAFF', password },
-  });
-  expect(reauth.status()).toBe(200);
-  const {
-    data: { proof },
-  } = await reauth.json();
-  const denied = await page.request.post('/api/organization/update-account', {
-    headers: { Origin: origin, 'x-tuheng-realm': 'STAFF' },
-    data: { id: admin.id, schoolId: school.id, active: false, proof },
-  });
-  expect(denied.status()).toBe(409);
-  expect(await denied.json()).toEqual({ error: 'LAST_ACTIVE_SCHOOL_ADMIN' });
-  await dialog.getByLabel('管理员姓名', { exact: true }).fill('第二位学校管理员');
-  await dialog.getByRole('button', { name: '创建学校管理账号' }).click();
-  await expect(dialog).not.toBeVisible();
-  await row.getByRole('button', { name: '查看详情' }).click();
-  await expect(dialog.getByText(/第二位学校管理员.*待改密/)).toBeVisible();
-  const second = await prisma.user.findFirstOrThrow({
-    where: { schoolId: school.id, kind: 'SCHOOL_ADMIN', id: { not: admin.id } },
-  });
-  expect(second.loginId).not.toBe(admin.loginId);
-  const secondCard = dialog.locator(`[data-school-administrator="${second.id}"]`);
-  await expect(first.getByRole('button', { name: '停用管理账号', exact: true })).toBeEnabled();
-  for (const op of ['重置临时密码', '停用管理账号', '启用管理账号']) {
-    page.once('dialog', async (alert) => {
-      await alert.accept();
-    });
-    await first.getByRole('button', { name: op, exact: true }).click();
-    if (op === '重置临时密码')
-      await expect
-        .poll(
-          async () =>
-            (await prisma.user.findUniqueOrThrow({ where: { id: admin.id } })).credentialVersion,
-        )
-        .toBeGreaterThan(admin.credentialVersion);
-    else
-      await expect(
-        first.getByRole('button', {
-          name: op === '停用管理账号' ? '启用管理账号' : '停用管理账号',
-          exact: true,
-        }),
-      ).toBeVisible();
-    if (op === '停用管理账号')
-      await expect(
-        secondCard.getByRole('button', { name: '停用管理账号', exact: true }),
-      ).toBeDisabled();
-  }
-  for (const width of [1366, 768, 390]) {
-    await page.setViewportSize({ width, height: width === 768 ? 1024 : 844 });
-    await dialog.getByRole('button', { name: '创建学校管理账号' }).scrollIntoViewIfNeeded();
+test.describe('school details on touch-capable screens', () => {
+  test.use({ hasTouch: true });
+  test('site admin adds multiple administrators and cannot disable the last enabled account in the UI or API', async ({
+    page,
+  }) => {
+    const code = 'FIX-' + randomUUID();
+    const password = process.env.SEED_PASSWORD!;
+    const account = await prepareLogin(page, 'admin');
+    await account.fill('admin');
+    await page.getByLabel('密码', { exact: true }).fill(password);
+    await page.getByRole('button', { name: '登录', exact: true }).click();
+    await expect(page).toHaveURL('/admin/dashboard');
+    const school = await prisma.school.create({ data: { name: '待配置学校', code } });
+    await page.goto('/admin/schools?q=' + code);
+    await verifyIdentity(page, password);
+    const row = page.locator('.organization-row').filter({ hasText: code });
+    await row.getByRole('button', { name: '查看详情' }).click();
+    const dialog = page.getByRole('dialog', { name: '学校详情', exact: true });
+    await dialog.getByLabel('管理员姓名').fill('独立学校管理员');
+    await dialog.getByRole('button', { name: '创建学校管理账号' }).click();
+    await expect(dialog).not.toBeVisible();
+    await row.getByRole('button', { name: '查看详情' }).click();
+    await expect(dialog.getByText(/独立学校管理员.*待改密/)).toBeVisible();
     await expect(dialog.getByRole('button', { name: '创建学校管理账号' })).toBeEnabled();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true,
-    );
-    await page.screenshot({
-      path: `.runtime/school-administrators/multiple-${width}.png`,
-      fullPage: true,
+    const admin = await prisma.user.findFirstOrThrow({
+      where: { schoolId: school.id, kind: 'SCHOOL_ADMIN' },
     });
-  }
-  // Add another account using the phone-sized form, rather than only checking its presence.
-  await dialog.getByLabel('管理员姓名', { exact: true }).fill('第三位学校管理员');
-  await dialog.getByRole('button', { name: '创建学校管理账号' }).click();
-  await expect(dialog).not.toBeVisible();
-  expect(
-    await prisma.user.count({ where: { schoolId: school.id, kind: 'SCHOOL_ADMIN', active: true } }),
-  ).toBe(3);
+    await expect(dialog).toContainText(admin.loginId!);
+    const first = dialog.locator(`[data-school-administrator="${admin.id}"]`);
+    const resetButton = first.getByRole('button', { name: '重置临时密码', exact: true });
+    expect((await resetButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await expect(first.getByRole('button', { name: '停用管理账号', exact: true })).toBeDisabled();
+    const origin = process.env.TEST_APP_ORIGIN ?? 'http://localhost:3000';
+    const reauth = await page.request.post('/api/identity/reauthenticate', {
+      headers: { Origin: origin },
+      data: { realm: 'STAFF', password },
+    });
+    expect(reauth.status()).toBe(200);
+    const {
+      data: { proof },
+    } = await reauth.json();
+    const denied = await page.request.post('/api/organization/update-account', {
+      headers: { Origin: origin, 'x-tuheng-realm': 'STAFF' },
+      data: { id: admin.id, schoolId: school.id, active: false, proof },
+    });
+    expect(denied.status()).toBe(409);
+    expect(await denied.json()).toEqual({ error: 'LAST_ACTIVE_SCHOOL_ADMIN' });
+    await dialog.getByLabel('管理员姓名', { exact: true }).fill('第二位学校管理员');
+    await dialog.getByRole('button', { name: '创建学校管理账号' }).click();
+    await expect(dialog).not.toBeVisible();
+    await row.getByRole('button', { name: '查看详情' }).click();
+    await expect(dialog.getByText(/第二位学校管理员.*待改密/)).toBeVisible();
+    const second = await prisma.user.findFirstOrThrow({
+      where: { schoolId: school.id, kind: 'SCHOOL_ADMIN', id: { not: admin.id } },
+    });
+    expect(second.loginId).not.toBe(admin.loginId);
+    const secondCard = dialog.locator(`[data-school-administrator="${second.id}"]`);
+    await expect(first.getByRole('button', { name: '停用管理账号', exact: true })).toBeEnabled();
+    for (const op of ['重置临时密码', '停用管理账号', '启用管理账号']) {
+      page.once('dialog', async (alert) => {
+        await alert.accept();
+      });
+      await first.getByRole('button', { name: op, exact: true }).click();
+      if (op === '重置临时密码') {
+        await expect
+          .poll(
+            async () =>
+              (await prisma.user.findUniqueOrThrow({ where: { id: admin.id } })).credentialVersion,
+          )
+          .toBeGreaterThan(admin.credentialVersion);
+        await expect(dialog.getByRole('link', { name: '领取初始凭据', exact: true })).toBeVisible();
+      } else
+        await expect(
+          first.getByRole('button', {
+            name: op === '停用管理账号' ? '启用管理账号' : '停用管理账号',
+            exact: true,
+          }),
+        ).toBeVisible();
+      if (op === '停用管理账号')
+        await expect(
+          secondCard.getByRole('button', { name: '停用管理账号', exact: true }),
+        ).toBeDisabled();
+    }
+    for (const width of [1440, 1366, 1024, 768, 390, 360]) {
+      await page.setViewportSize({ width, height: width === 768 ? 1024 : 844 });
+      await dialog.getByRole('button', { name: '创建学校管理账号' }).scrollIntoViewIfNeeded();
+      await expect(dialog.getByRole('button', { name: '创建学校管理账号' })).toBeEnabled();
+      for (const button of await dialog.getByRole('button').all()) {
+        expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      }
+      expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+      ).toBe(true);
+      await page.screenshot({
+        path: `.runtime/school-administrators/multiple-${width}.png`,
+        fullPage: true,
+      });
+    }
+    // A phone user can cancel a close without losing an input, then save the actual name.
+    const name = dialog.getByLabel('学校名称', { exact: true });
+    const renamed = '已调整学校-' + code;
+    await name.fill(renamed);
+    await dialog.getByRole('button', { name: '关闭对话框', exact: true }).tap();
+    const unsaved = page.getByRole('dialog', { name: '未保存的修改', exact: true });
+    await unsaved.getByRole('button', { name: '继续编辑', exact: true }).tap();
+    await expect(name).toHaveValue(renamed);
+    await dialog.getByRole('button', { name: '保存名称', exact: true }).tap();
+    await expect(dialog).not.toBeVisible();
+    await expect(row.getByRole('heading', { name: renamed, exact: true })).toBeVisible();
+    expect((await prisma.school.findUniqueOrThrow({ where: { id: school.id } })).name).toBe(
+      renamed,
+    );
+    await row.getByRole('button', { name: '查看详情' }).tap();
+    // Add another account using the phone-sized form, rather than only checking its presence.
+    await dialog.getByLabel('管理员姓名', { exact: true }).fill('第三位学校管理员');
+    await dialog.getByRole('button', { name: '创建学校管理账号' }).tap();
+    await expect(dialog).not.toBeVisible();
+    expect(
+      await prisma.user.count({
+        where: { schoolId: school.id, kind: 'SCHOOL_ADMIN', active: true },
+      }),
+    ).toBe(3);
+  });
 });
 
 test('creating a school also creates the first administrator and keeps the additional-account entry available', async ({

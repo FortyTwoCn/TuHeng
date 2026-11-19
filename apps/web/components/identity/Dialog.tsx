@@ -9,6 +9,7 @@ export function Dialog({
   onClose,
   busy = false,
   drawer = false,
+  className = '',
   children,
 }: {
   open: boolean;
@@ -16,6 +17,7 @@ export function Dialog({
   onClose: () => void;
   busy?: boolean;
   drawer?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -35,7 +37,7 @@ export function Dialog({
     <dialog
       ref={dialog}
       aria-labelledby={titleId}
-      className={'ui-dialog' + (drawer ? ' ui-drawer' : '')}
+      className={'ui-dialog' + (drawer ? ' ui-drawer' : '') + (className ? ' ' + className : '')}
       onCancel={(e) => {
         e.preventDefault();
         if (!busy) onClose();
