@@ -1,11 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { NewPassword, normalizedEmail } from '@tuheng/contracts';
-import { accountRoles, needsOnboarding, requireIdentityManager } from '@tuheng/domain';
+import {
+  accountRoles,
+  needsOnboarding,
+  requireIdentityManager,
+  schoolAdministratorPolicy,
+} from '@tuheng/domain';
 import { encryptSecret, decryptSecret } from '../../packages/infrastructure/src/secret-store';
 import { isPublicAddress } from '../../packages/infrastructure/src/outbound';
 afterEach(() => vi.unstubAllEnvs());
 describe('identity security contracts', () => {
+  it.each([
+    [0, false, false],
+    [1, false, true],
+    [2, true, true],
+  ])('protects a school with %i enabled administrators', (count, canDisable, canEnableSchool) => {
+    expect(schoolAdministratorPolicy(count as number)).toEqual({ canDisable, canEnableSchool });
+  });
   it('normalizes case without merging plus aliases or dots', () => {
     expect(normalizedEmail(' A.B+tag@Example.com ')).toBe('a.b+tag@example.com');
   });

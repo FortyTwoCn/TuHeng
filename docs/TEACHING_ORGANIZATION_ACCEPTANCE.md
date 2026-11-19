@@ -2,6 +2,8 @@
 
 审查基线为 `7926ab6224e18dc0c19e313d2e638fa7ece488d5`。本地分支为 `codex/school-teaching-organization`，受验代码和测试的提交为 `1de6eab786a3671e979784736bfcd3d4fa19f113`。后续文档提交附上同一版本的验收证据。
 
+2026-11-19 产品规则更新：下面“并发补建只产生一个校管”及允许停用唯一校管是当时的历史验收结果，已由“允许多个独立校管、至少保留一个启用校管”替代。当前规则与验证见 [学校多管理员验收](SCHOOL_ADMINISTRATORS.md)。
+
 ## 基线复现与处理
 
 | 类型             | 基线行为与根因                                                                                         | 修改位置                                                                                                                    | 验收                                                                                                                                                             |
@@ -42,14 +44,14 @@
 
 ## 测试和证据
 
-| 实际命令 | 结果 |
-| --- | --- |
-| `npm run typecheck` | 通过，退出 0。构建生成的类型入口复原为开工时的开发版本后再次运行，仍通过 |
-| `npm run lint` | 通过，0 错误、0 警告 |
-| `npm test` | 22 个文件，240/240 通过 |
-| `npm run test:integration` | 9 个文件，59/59 通过，包含真实 PostgreSQL、Redis 和对象存储 |
-| `npm run test:e2e` | 生产构建、隔离 Web 与 Worker，Chromium 110/110 通过，5.7 分钟 |
-| `npm run build` | Next.js 16.4.2 生产构建通过，退出 0 |
+| 实际命令                   | 结果                                                                     |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `npm run typecheck`        | 通过，退出 0。构建生成的类型入口复原为开工时的开发版本后再次运行，仍通过 |
+| `npm run lint`             | 通过，0 错误、0 警告                                                     |
+| `npm test`                 | 22 个文件，240/240 通过                                                  |
+| `npm run test:integration` | 9 个文件，59/59 通过，包含真实 PostgreSQL、Redis 和对象存储              |
+| `npm run test:e2e`         | 生产构建、隔离 Web 与 Worker，Chromium 110/110 通过，5.7 分钟            |
+| `npm run build`            | Next.js 16.4.2 生产构建通过，退出 0                                      |
 
 基线单元 238/238 通过，但新增的教师越权建课和手机顶部动作回归均在基线失败。过程中还发现测试环境的明文 SMTP 模式与生产 TLS 策略冲突，改用本地 STARTTLS。一次集成回归有独立 Worker 抢先领取测试任务，模型替身未执行，结果为 BLOCKED_CONFIG。最终集成阶段由用例直接驱动任务，浏览器阶段运行独立 Worker。构建工具曾因 Next.js 版本安全提示退出，相同构建命令重跑成功。所有六条最终命令退出码均为 0。[验收数据](images/teaching-organization-20261118/verification.json)
 
@@ -72,7 +74,7 @@
 | 删除       | 无调用者的 UsersView、OrganizationView、ClassesView、AdminForms、旧 OrganizationConsole，以及已退休动作背后的 createUser / updateUser / importRoster 等实现                                      |
 | 迁移与合并 | 按人员、学校概览、目录、班级详情拆分工作台。共用有范围的选择器、表单和命令入口。编辑器归并合法线型和拓扑检查，移除旧 setSegment 和空 Inspector 包装，PlaneCreator、PlaneTools 继续由可达入口使用 |
 | 保留       | 旧管理入口的 410 响应、既有 SQL 迁移、geometry-v1、旧作业实时授课关系、原图和派生链、历史版本、正式成绩、任务和审计                                                                              |
-| 代码提交   | `af25da1` 课程权限、归档和迁移。`7fbf805` 后台业务、名单及退休接口清理。`3f90b6f` 属性卡及核心命令。`8397bd8` 投影轴属性文案。`f1b08a1` 管理和历史作答验收，`1de6eab` 窄屏输入确认                                       |
+| 代码提交   | `af25da1` 课程权限、归档和迁移。`7fbf805` 后台业务、名单及退休接口清理。`3f90b6f` 属性卡及核心命令。`8397bd8` 投影轴属性文案。`f1b08a1` 管理和历史作答验收，`1de6eab` 窄屏输入确认               |
 
 <details>
 <summary>按提交查看代码、迁移和测试文件</summary>

@@ -241,8 +241,9 @@ export function SchoolRow({
               </form>
               <section className="detail-section">
                 <h3>学校管理账号</h3>
+                <p className="muted">可创建多个独立管理账号，必须至少保留一个启用的管理员。</p>
                 {s.administrators.map((a) => (
-                  <div key={a.id}>
+                  <div key={a.id} data-school-administrator={a.id}>
                     {a.name} · {a.loginId} · {a.active ? '启用' : '停用'} ·{' '}
                     {a.mustChangePassword
                       ? '待改密'
@@ -261,7 +262,10 @@ export function SchoolRow({
                     </button>
                     <button
                       type="button"
-                      disabled={busy || !s.active}
+                      disabled={busy || (a.active && !a.canDeactivate)}
+                      title={
+                        a.active && !a.canDeactivate ? '必须至少保留一个启用的管理员' : undefined
+                      }
                       onClick={() => {
                         if (window.confirm('更改学校管理员启停状态？'))
                           void command('update-account', {
@@ -273,32 +277,38 @@ export function SchoolRow({
                     >
                       {a.active ? '停用管理账号' : '启用管理账号'}
                     </button>
+                    {a.active && !a.canDeactivate && (
+                      <p className="muted">
+                        最后一个启用的管理员；创建或启用其他管理员后才能停用。
+                      </p>
+                    )}
                   </div>
                 ))}
-                {!s.administrators.length && s.active && (
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      if (
-                        await command('create-school-admin', {
-                          schoolId: s.id,
-                          ...fields(e.currentTarget),
-                        })
-                      )
-                        saved();
-                    }}
-                  >
-                    <label>
-                      管理员姓名
-                      <input name="name" required maxLength={100} />
-                    </label>
-                    <button disabled={busy}>创建学校管理账号</button>
-                  </form>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (
+                      await command('create-school-admin', {
+                        schoolId: s.id,
+                        ...fields(e.currentTarget),
+                      })
+                    )
+                      saved();
+                  }}
+                >
+                  <label>
+                    管理员姓名
+                    <input name="name" required maxLength={100} />
+                  </label>
+                  <button disabled={busy}>创建学校管理账号</button>
+                </form>
+                {!s.active && !s.canActivate && (
+                  <p className="muted">请先创建或启用一个管理员，再启用学校。</p>
                 )}
                 <button
                   className="button danger"
                   type="button"
-                  disabled={busy}
+                  disabled={busy || (!s.active && !s.canActivate)}
                   onClick={() => {
                     if (
                       window.confirm(

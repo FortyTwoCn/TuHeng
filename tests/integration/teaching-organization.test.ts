@@ -353,29 +353,33 @@ describe.sequential('scoped teaching organization and historical assignments', (
     expect(await prisma.user.findUnique({ where: { id: original.id } })).toEqual(original);
     expect(await prisma.assignmentRecipient.count({ where: { assignmentId } })).toBe(1);
   });
-  it('supplements exactly one administrator under concurrency, with initial delivery and no role conversion', async () => {
+  it('creates distinct school administrators under concurrency, each with initial delivery and no role conversion', async () => {
     const empty = await prisma.school.create({ data: { code: 'vacant-' + tag, name: '历史学校' } });
     await expect(
       createSchoolAdministrator(admin, { schoolId: empty.id, name: '校管' }, schoolProof),
     ).rejects.toMatchObject({ status: 403 });
     const calls = await Promise.allSettled(
-      [1, 2].map(() =>
-        createSchoolAdministrator(root, { schoolId: empty.id, name: '校管' }, rootProof),
+      [1, 2].map((n) =>
+        createSchoolAdministrator(root, { schoolId: empty.id, name: '校管' + n }, rootProof),
       ),
     );
-    expect(calls.filter((c) => c.status === 'fulfilled')).toHaveLength(1);
-    const [user] = await prisma.user.findMany({ where: { schoolId: empty.id } });
-    expect(user).toMatchObject({
-      kind: 'SCHOOL_ADMIN',
-      roles: ['SCHOOL_ADMIN'],
-      mustChangePassword: true,
-      emailVerifiedAt: null,
-    });
-    expect(await prisma.credentialDeliveryItem.count({ where: { accountId: user.id } })).toBe(1);
-    expect(
-      await prisma.auditLog.count({
-        where: { resourceId: user.id, action: 'SCHOOL_ADMIN_CREATED' },
-      }),
-    ).toBe(1);
+    expect(calls.filter((c) => c.status === 'fulfilled')).toHaveLength(2);
+    const users = await prisma.user.findMany({ where: { schoolId: empty.id } });
+    expect(new Set(users.map((u) => u.loginId)).size).toBe(2);
+    for (const user of users) {
+      expect(user).toMatchObject({
+        kind: 'SCHOOL_ADMIN',
+        roles: ['SCHOOL_ADMIN'],
+        active: true,
+        mustChangePassword: true,
+        emailVerifiedAt: null,
+      });
+      expect(await prisma.credentialDeliveryItem.count({ where: { accountId: user.id } })).toBe(1);
+      expect(
+        await prisma.auditLog.count({
+          where: { resourceId: user.id, action: 'SCHOOL_ADMIN_CREATED' },
+        }),
+      ).toBe(1);
+    }
   });
 });

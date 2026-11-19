@@ -3,13 +3,23 @@ import { prisma } from '@tuheng/database';
 import { ensure, requireSchoolScope, type Actor } from '@tuheng/domain';
 
 type Tx = Prisma.TransactionClient;
-export async function lockOrganization(tx: Tx, actor: Actor, schoolId: string) {
+export async function lockOrganization(
+  tx: Tx,
+  actor: Actor,
+  schoolId: string,
+  options: { allowDisabledSchool?: boolean } = {},
+) {
   requireSchoolScope(actor, schoolId);
   ensure(['SITE_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'].includes(actor.kind ?? ''), 'FORBIDDEN', 403);
   const schools = await tx.$queryRaw<
     { active: boolean }[]
   >`SELECT active FROM "School" WHERE id=${schoolId} FOR UPDATE`;
-  ensure(schools[0]?.active, 'SCHOOL_DISABLED', 403);
+  ensure(schools[0], 'SCHOOL_NOT_FOUND', 404);
+  ensure(
+    schools[0].active || (options.allowDisabledSchool && actor.kind === 'SITE_ADMIN'),
+    'SCHOOL_DISABLED',
+    403,
+  );
   const owner = await tx.user.findUnique({
     where: { id: actor.id },
     select: { active: true, kind: true, schoolId: true },

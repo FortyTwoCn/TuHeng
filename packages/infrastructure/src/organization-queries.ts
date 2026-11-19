@@ -1,5 +1,5 @@
 import { prisma } from '@tuheng/database';
-import { ensure, requireSchoolScope, type Actor } from '@tuheng/domain';
+import { ensure, requireSchoolScope, schoolAdministratorPolicy, type Actor } from '@tuheng/domain';
 import { requireActiveSchool, requireManagedClass } from './organization';
 import { courseNumber } from './teaching-catalog';
 
@@ -59,17 +59,22 @@ export async function searchSchools(actor: Actor, search: Search) {
     _count: true,
   });
   return {
-    items: items.map(({ users, ...s }) => ({
-      ...s,
-      administrators: users.map((u) => ({
-        ...u,
-        emailVerifiedAt: u.emailVerifiedAt?.toISOString() ?? null,
-      })),
-      counts: {
-        teachers: counts.find((c) => c.schoolId === s.id && c.kind === 'TEACHER')?._count ?? 0,
-        students: counts.find((c) => c.schoolId === s.id && c.kind === 'STUDENT')?._count ?? 0,
-      },
-    })),
+    items: items.map(({ users, ...s }) => {
+      const policy = schoolAdministratorPolicy(users.filter((u) => u.active).length);
+      return {
+        ...s,
+        canActivate: policy.canEnableSchool,
+        administrators: users.map((u) => ({
+          ...u,
+          canDeactivate: !u.active || policy.canDisable,
+          emailVerifiedAt: u.emailVerifiedAt?.toISOString() ?? null,
+        })),
+        counts: {
+          teachers: counts.find((c) => c.schoolId === s.id && c.kind === 'TEACHER')?._count ?? 0,
+          students: counts.find((c) => c.schoolId === s.id && c.kind === 'STUDENT')?._count ?? 0,
+        },
+      };
+    }),
     total,
     page,
   };

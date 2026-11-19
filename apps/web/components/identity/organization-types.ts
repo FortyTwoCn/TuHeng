@@ -18,6 +18,7 @@ export type School = {
   name: string;
   code: string;
   active: boolean;
+  canActivate: boolean;
   _count: { users: number };
   counts: { teachers: number; students: number };
   administrators: {
@@ -25,6 +26,7 @@ export type School = {
     name: string;
     loginId: string | null;
     active: boolean;
+    canDeactivate: boolean;
     mustChangePassword: boolean;
     emailVerifiedAt: string | null;
   }[];

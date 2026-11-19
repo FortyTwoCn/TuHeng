@@ -34,6 +34,10 @@ export function requireIdentityManager(actor: Actor, schoolId: string, target: A
     (actor.kind === 'TEACHER' && target === 'STUDENT');
   ensure(allowed && target !== 'SITE_ADMIN', 'IDENTITY_FORBIDDEN', 403);
 }
+/** Count enabled SCHOOL_ADMIN accounts in the same school, including onboarding accounts. */
+export function schoolAdministratorPolicy(activeCount: number) {
+  return { canDisable: activeCount > 1, canEnableSchool: activeCount > 0 };
+}
 /** The same account state gates delivery metadata and the sensitive download. */
 export function initialCredentialIsAvailable(
   account:

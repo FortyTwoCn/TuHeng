@@ -8,6 +8,7 @@ import {
   ensure,
   requireIdentityManager,
   requireSchoolScope,
+  schoolAdministratorPolicy,
   type Actor,
 } from '@tuheng/domain';
 import { encryptSecret } from './secret-store';
@@ -171,12 +172,7 @@ export async function createSchoolAdministrator(
   ensure(actor.kind === 'SITE_ADMIN', 'FORBIDDEN', 403);
   await requireRecentAuthentication(actor, proof);
   return prisma.$transaction(async (tx) => {
-    await lockOrganization(tx, actor, input.schoolId);
-    ensure(
-      !(await tx.user.count({ where: { schoolId: input.schoolId, kind: 'SCHOOL_ADMIN' } })),
-      'SCHOOL_ADMIN_EXISTS',
-      409,
-    );
+    await lockOrganization(tx, actor, input.schoolId, { allowDisabledSchool: true });
     const batch = await createDeliveryBatch(tx, actor, input.schoolId);
     const user = await createAccountInTransaction(
       tx,
@@ -389,7 +385,18 @@ export async function updateAccount(
     'STUDENT_NUMBER_NOT_APPLICABLE',
   );
   await prisma.$transaction(async (tx) => {
-    await lockOrganization(tx, actor, target.schoolId!);
+    await lockOrganization(tx, actor, target.schoolId!, {
+      allowDisabledSchool: target.kind === 'SCHOOL_ADMIN',
+    });
+    // Read again after locking the school: two concurrent disable requests must not
+    // both count the same other administrator as the one that will remain enabled.
+    const current = await requireManagedAccount(actor, id, tx, schoolId);
+    if (current.kind === 'SCHOOL_ADMIN' && current.active && input.active === false) {
+      const activeCount = await tx.user.count({
+        where: { schoolId: current.schoolId, kind: 'SCHOOL_ADMIN', active: true },
+      });
+      ensure(schoolAdministratorPolicy(activeCount).canDisable, 'LAST_ACTIVE_SCHOOL_ADMIN', 409);
+    }
     await tx.user.update({ where: { id }, data: { ...input, tokenVersion: { increment: 1 } } });
     await tx.school.update({
       where: { id: target.schoolId! },
@@ -409,8 +416,15 @@ export async function updateAccount(
 export async function setSchoolActive(actor: Actor, id: string, active: boolean, proof: string) {
   ensure(actor.kind === 'SITE_ADMIN', 'FORBIDDEN', 403);
   await requireRecentAuthentication(actor, proof);
-  const affected = await prisma.user.count({ where: { schoolId: id } });
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
+    await lockOrganization(tx, actor, id, { allowDisabledSchool: true });
+    if (active) {
+      const activeCount = await tx.user.count({
+        where: { schoolId: id, kind: 'SCHOOL_ADMIN', active: true },
+      });
+      ensure(schoolAdministratorPolicy(activeCount).canEnableSchool, 'SCHOOL_ADMIN_REQUIRED', 409);
+    }
+    const affected = await tx.user.count({ where: { schoolId: id } });
     await tx.school.update({ where: { id }, data: { active, rosterVersion: { increment: 1 } } });
     await tx.user.updateMany({ where: { schoolId: id }, data: { tokenVersion: { increment: 1 } } });
     await tx.auditLog.create({
@@ -421,8 +435,8 @@ export async function setSchoolActive(actor: Actor, id: string, active: boolean,
         details: { affected },
       },
     });
+    return { affected };
   });
-  return { affected };
 }
 export async function changeClassMembership(
   actor: Actor,
