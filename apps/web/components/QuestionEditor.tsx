@@ -24,6 +24,8 @@ export function QuestionEditor({
   folders = [],
   initial,
   questionId,
+  schoolId,
+  initialAssets,
 }: {
   area?: 'teacher' | 'school' | 'admin';
   knowledge: { id: string; title: string }[];
@@ -31,21 +33,20 @@ export function QuestionEditor({
   folders?: { id: string; title: string }[];
   initial?: QuestionInput;
   questionId?: string;
+  schoolId?: string | null;
+  initialAssets?: { stem: UploadedAsset[]; reference: UploadedAsset[] };
 }) {
   const router = useRouter();
   const [geometry, setGeometry] = useState<GeometryDocument | null>(
     initial?.geometryDocument ?? null,
   );
-  const [assets, setAssets] = useState<UploadedAsset[]>(
-      initial?.assetIds.map((id) => ({ id, name: '已保存题干', mime: 'image/png' })) ?? [],
-    ),
-    [references, setReferences] = useState<UploadedAsset[]>(
-      initial?.reference.assetIds.map((id) => ({
-        id,
-        name: '已保存参考答案',
-        mime: 'image/png',
-      })) ?? [],
-    ),
+  const realm = selftest ? 'STUDENT' : 'STAFF';
+  const target = selftest ? { selfTest: true as const } : { schoolId, questionId };
+  const questionsHref =
+    `/${area}/questions` +
+    (area === 'admin' && schoolId ? '?schoolId=' + encodeURIComponent(schoolId) : '');
+  const [assets, setAssets] = useState<UploadedAsset[]>(initialAssets?.stem ?? []),
+    [references, setReferences] = useState<UploadedAsset[]>(initialAssets?.reference ?? []),
     [selected, setSelected] = useState<string[]>(initial?.knowledgeIds ?? []),
     [criteria, setCriteria] = useState(
       initial?.rubric.items.map((c) => ({ ...c, score: String(c.maxPoints / 10) })) ?? [
@@ -124,8 +125,8 @@ export function QuestionEditor({
             });
             router.push('/student/selftests');
           } else {
-            await action('question', { question, questionId });
-            router.push(`/${area}/questions`);
+            await action('question', { question, questionId, schoolId }, realm);
+            router.push(questionsHref);
           }
           router.refresh();
         } catch (e) {
@@ -233,7 +234,8 @@ export function QuestionEditor({
         <Uploader
           value={assets}
           onChange={setAssets}
-          purpose="QUESTION"
+          realm={realm}
+          target={{ ...target, kind: 'QUESTION' }}
           label="上传题干图或 PDF 资料"
         />
       </section>
@@ -279,7 +281,8 @@ export function QuestionEditor({
         <Uploader
           value={references}
           onChange={setReferences}
-          purpose="REFERENCE"
+          realm={realm}
+          target={{ ...target, kind: 'REFERENCE' }}
           label="上传参考答案"
         />
         {!selftest && (

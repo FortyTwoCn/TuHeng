@@ -4,23 +4,15 @@ import { resolveAudience, freezeAssignmentAudience, teachingScope } from './audi
 import { requireAssignmentManager } from './policy';
 import type { Actor, DataPort } from './entities';
 import { ensure, requireRole, requireClass, audit } from './policy';
-export async function ownAssets(db: DataPort, a: Actor, ids: string[], purpose?: string) {
-  ensure(new Set(ids).size === ids.length, 'DUPLICATE_ASSETS');
-  for (const id of ids) {
-    const asset = await db.get('storedAsset', id);
-    ensure(
-      asset && asset.ownerId === a.id && (!purpose || asset.purpose === purpose),
-      'ASSET_FORBIDDEN',
-      403,
-    );
-  }
-}
+import { bindUploadedAssets, questionScope } from './resource-context';
 export async function createQuestion(
   db: DataPort,
   a: Actor,
   input: unknown,
   privateSelf = false,
   questionId?: string,
+  schoolId?: string | null,
+  sourceVersionId?: string,
 ) {
   const data = QuestionInput.parse(input);
   if (data.geometryDocument) {
@@ -36,7 +28,6 @@ export async function createQuestion(
     data.reference.verified = false;
     data.reference.source = 'STUDENT';
   }
-  await ownAssets(db, a, [...new Set([...data.assetIds, ...data.reference.assetIds])]);
   for (const id of data.knowledgeIds)
     ensure(await db.get('knowledgePoint', id), 'UNKNOWN_KNOWLEDGE');
   ensure(
@@ -45,11 +36,50 @@ export async function createQuestion(
   );
   if (!privateSelf && data.confirmed) ensure(data.reference.verified, 'REFERENCE_NOT_VERIFIED');
   return db.transaction(async (tx) => {
-    const existing = questionId ? await tx.get('question', questionId) : null;
-    if (questionId) ensure(existing?.ownerId === a.id, 'QUESTION_FORBIDDEN', 403);
+    const scope = await questionScope(tx, a, { questionId, schoolId, selfTest: privateSelf });
     const q =
-      existing ??
-      (await tx.create('question', { ownerId: a.id, visibility: 'PRIVATE', courseId: null }));
+      scope.existing ??
+      (await tx.create('question', {
+        ownerId: a.id,
+        visibility: 'PRIVATE',
+        courseId: null,
+        schoolId: scope.schoolId,
+        selfTest: privateSelf,
+      }));
+    ensure(
+      new Set(data.assetIds).size === data.assetIds.length &&
+        new Set(data.reference.assetIds).size === data.reference.assetIds.length,
+      'DUPLICATE_ASSETS',
+    );
+    const previous = sourceVersionId ? await tx.get('questionVersion', sourceVersionId) : null;
+    if (sourceVersionId) {
+      const source = previous && (await tx.get('question', previous.questionId));
+      ensure(
+        source?.ownerId === a.id && !source.selfTest && source.schoolId === q.schoolId,
+        'QUESTION_SCOPE_FORBIDDEN',
+        403,
+      );
+    }
+    const previousVersions = previous
+      ? [previous]
+      : scope.existing
+        ? await tx.list('questionVersion', { questionId: q.id })
+        : [];
+    const reusable = new Set(
+      previousVersions.flatMap((v) => [...v.assetIds, ...v.reference.assetIds]),
+    );
+    await bindUploadedAssets(
+      tx,
+      a,
+      [...new Set([...data.assetIds, ...data.reference.assetIds])],
+      {
+        kind: 'QUESTION',
+        schoolId: q.schoolId,
+        questionId: q.id,
+        selfTest: q.selfTest,
+      },
+      reusable,
+    );
     const versions = await tx.list(
       'questionVersion',
       { questionId: q.id },
@@ -125,7 +155,9 @@ export async function createAssignment(
     const v = await db.get('questionVersion', id);
     ensure(v, 'QUESTION_NOT_FOUND');
     const q = await db.get('question', v.questionId);
-    ensure(q?.ownerId === a.id && q.active, 'QUESTION_FORBIDDEN', 403);
+    ensure(q?.ownerId === a.id && q.active && !q.selfTest, 'QUESTION_FORBIDDEN', 403);
+    const schoolId = resolved?.selection.schoolId ?? a.schoolId ?? null;
+    ensure(!q.schoolId || q.schoolId === schoolId, 'QUESTION_SCOPE_FORBIDDEN', 403);
     Rubric.parse(v.rubric);
     ensure(v.confirmed && v.reference.verified, 'QUESTION_NOT_CONFIRMED');
   }

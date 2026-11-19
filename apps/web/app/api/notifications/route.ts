@@ -1,45 +1,47 @@
 import { z } from 'zod';
-import { prisma } from '@tuheng/database';
-import { actor } from '../../../lib/auth';
+import { NotificationCategory } from '@tuheng/contracts';
+import {
+  markNotificationsRead,
+  notificationPage,
+} from '../../../../../packages/infrastructure/src/notification-inbox';
+import { actor, realmFromRequest } from '../../../lib/auth';
 import { checkOrigin, errorResponse, limitedBody } from '../../../lib/http';
-export async function GET() {
+
+const cursor = z
+  .string()
+  .regex(/^\d{1,10}$/)
+  .transform(Number)
+  .pipe(z.number().max(2147483647));
+export async function GET(request: Request) {
   try {
-    const a = await actor();
-    const items = await prisma.userNotification.findMany({
-      where: { userId: a.id, readAt: null },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
+    const a = await actor(realmFromRequest(request));
+    const query = new URL(request.url).searchParams;
+    const before = cursor.optional().parse(query.get('before') ?? undefined);
+    const category = NotificationCategory.optional().parse(query.get('category') ?? undefined);
+    const pageSize = query.get('mode') === 'recent' ? 6 : 25;
+    const data = await notificationPage(a, {
+      unread: query.get('unread') === '1',
+      before,
+      category,
+      pageSize,
     });
-    const assignments = await prisma.assignment.findMany({
-      where: { id: { in: items.map((i) => i.assignmentId) } },
-      select: { id: true, title: true },
-    });
-    return Response.json(
-      {
-        data: items.map((i) => ({
-          ...i,
-          title: assignments.find((a) => a.id === i.assignmentId)?.title ?? '作业',
-        })),
-      },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
-  } catch (e) {
-    return errorResponse(e);
+    return Response.json({ data }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    return errorResponse(error);
   }
 }
 export async function POST(request: Request) {
   try {
     checkOrigin(request);
-    const a = await actor(),
-      body = z
-        .object({ id: z.string() })
-        .parse(JSON.parse((await limitedBody(request, 1000)).toString()));
-    await prisma.userNotification.updateMany({
-      where: { id: body.id, userId: a.id },
-      data: { readAt: new Date() },
-    });
-    return Response.json({ data: { ok: true } });
-  } catch (e) {
-    return errorResponse(e);
+    const a = await actor(realmFromRequest(request));
+    const selection = z
+      .union([
+        z.strictObject({ ids: z.array(z.uuid()).min(1).max(100) }),
+        z.strictObject({ through: cursor }),
+      ])
+      .parse(JSON.parse((await limitedBody(request, 8000)).toString()));
+    return Response.json({ data: await markNotificationsRead(a, selection) });
+  } catch (error) {
+    return errorResponse(error);
   }
 }

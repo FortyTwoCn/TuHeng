@@ -144,7 +144,12 @@ export async function changeOwnPassword(actor: Actor, current: string, next: str
 }
 export async function bindVerifiedEmail(
   actor: Actor,
-  input: { challengeId: string; code: string; purpose: 'BIND_EMAIL' | 'CHANGE_EMAIL' },
+  input: {
+    challengeId: string;
+    code: string;
+    email: string;
+    purpose: 'BIND_EMAIL' | 'CHANGE_EMAIL';
+  },
 ) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
   ensure(user.active && user.tokenVersion === actor.tokenVersion, 'SESSION_REVOKED', 401);

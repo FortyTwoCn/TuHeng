@@ -25,17 +25,50 @@ const count = Math.min(2000, Math.max(1, Number(process.env.LOAD_USERS ?? 20))),
   concurrency = Math.min(50, Math.max(1, Number(process.env.LOAD_CONCURRENCY ?? 5))),
   tag = `LOAD-${Date.now()}`;
 const passwordHash = await hash(crypto.randomUUID(), 4);
+const school = await db.create('school', { name: `[压测] ${tag}`, code: tag });
 const teacher = await db.create('user', {
   name: `[压测]教师 ${tag}`,
   email: `teacher-${tag}@test.invalid`,
   passwordHash,
   roles: ['TEACHER'],
+  schoolId: school.id,
+  kind: 'TEACHER',
+  realm: 'STAFF',
+  mustChangePassword: false,
 });
-const actor: Actor = { id: teacher.id, name: teacher.name, roles: ['TEACHER'] };
-const course = await db.create('course', { title: `[压测] ${tag}`, code: tag });
+const actor: Actor = {
+  id: teacher.id,
+  name: teacher.name,
+  roles: ['TEACHER'],
+  kind: 'TEACHER',
+  schoolId: school.id,
+};
+const course = await db.create('course', {
+  title: `[压测] ${tag}`,
+  code: tag,
+  schoolId: school.id,
+});
 const offering = await db.create('courseOffering', { courseId: course.id, term: '压测专用' });
-const cls = await db.create('teachingClass', { name: `[压测] ${tag}`, offeringId: offering.id });
+const cls = await db.create('teachingClass', {
+  name: `[压测] ${tag}`,
+  offeringId: offering.id,
+  schoolId: school.id,
+});
 await db.create('teachingGrant', { userId: teacher.id, classId: cls.id });
+const students = Array.from({ length: count }, (_, n) => ({
+  id: crypto.randomUUID(),
+  name: `[压测]学生 ${n}`,
+  email: `student-${tag}-${n}@test.invalid`,
+  passwordHash,
+  roles: ['STUDENT' as const],
+  schoolId: school.id,
+  mustChangePassword: false,
+}));
+await db.createMany('user', students);
+await db.createMany(
+  'enrollment',
+  students.map((student) => ({ userId: student.id, classId: cls.id })),
+);
 const q = await createQuestion(db, actor, {
   title: `[压测]点的投影 ${tag}`,
   content: '已知两面投影，求第三投影。仅用于可靠提交与队列压测，不评价模型准确率。',
@@ -96,19 +129,18 @@ await Promise.all(
     while (cursor < count) {
       const n = cursor++;
       try {
-        const user = await db.create('user', {
-          name: `[压测]学生 ${n}`,
-          email: `student-${tag}-${n}@test.invalid`,
-          passwordHash,
+        const user = students[n];
+        const a: Actor = {
+          id: user.id,
+          name: user.name,
           roles: ['STUDENT'],
+          kind: 'STUDENT',
+          schoolId: school.id,
+        };
+        const asset = await uploadAsset(a, {
+          file: { name: '[压测]空白流程测试.png', bytes: image },
+          target: { kind: 'ASSIGNMENT_ANSWER', itemId: item.id },
         });
-        const a: Actor = { id: user.id, name: user.name, roles: ['STUDENT'] };
-        await db.create('enrollment', { userId: a.id, classId: cls.id });
-        const asset = await uploadAsset(
-          a,
-          { name: '[压测]空白流程测试.png', bytes: image, mime: 'image/png' },
-          'SUBMISSION',
-        );
         const t = performance.now();
         const at = await submitAnswer(db, a, {
           itemId: item.id,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '@tuheng/database';
 import { AuthRealm, VerificationPurpose } from '@tuheng/contracts';
-import { requiresVerifiedEmail } from '@tuheng/domain';
+import { ensure, requiresVerifiedEmail } from '@tuheng/domain';
 import { actor, rotateIdentitySession } from '../../../../lib/auth';
 import {
   checkOrigin,
@@ -64,9 +64,27 @@ export async function POST(request: Request, context: { params: Promise<{ operat
         { data: await reauthenticate(a, z.string().parse(input.password)) },
         { headers: { 'Cache-Control': 'no-store' } },
       );
-    if (operation === 'change-password')
-      await changeOwnPassword(a, z.string().parse(input.current), z.string().parse(input.password));
-    else if (operation === 'bind-email')
+    if (operation === 'cancel-email-code') {
+      const id = z.uuid().parse(input.challengeId);
+      await prisma.verificationChallenge.updateMany({
+        where: {
+          id,
+          realm,
+          accountId: a.id,
+          purpose: { in: ['BIND_EMAIL', 'CHANGE_EMAIL'] },
+          consumedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+      return Response.json({ data: { ok: true } });
+    }
+    if (operation === 'change-password') {
+      const { current, password, confirm } = z
+        .object({ current: z.string(), password: z.string(), confirm: z.string() })
+        .parse(input);
+      ensure(password === confirm, 'PASSWORD_CONFIRMATION_MISMATCH');
+      await changeOwnPassword(a, current, password);
+    } else if (operation === 'bind-email')
       await bindVerifiedEmail(
         a,
         z
@@ -74,6 +92,7 @@ export async function POST(request: Request, context: { params: Promise<{ operat
             purpose: z.enum(['BIND_EMAIL', 'CHANGE_EMAIL']),
             challengeId: z.string(),
             code: z.string(),
+            email: z.string(),
           })
           .parse(input),
       );

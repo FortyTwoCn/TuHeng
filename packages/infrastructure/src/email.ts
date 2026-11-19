@@ -198,6 +198,103 @@ const escapeHTML = (value: string) =>
     /[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
   );
+
+export type TeachingMail = {
+  to: string;
+  title: string;
+  summary: string;
+  schoolName?: string;
+  detailPath: string | null;
+  profilePath: string;
+  createdAt: Date;
+  deadlineAt?: Date | null;
+};
+export class TeachingMailError extends Error {
+  constructor(
+    public readonly code: string,
+    public readonly disposition: 'RETRY' | 'FAILED' | 'UNCERTAIN',
+  ) {
+    super(code);
+  }
+}
+
+function teachingMailOrigin() {
+  let url: URL;
+  try {
+    url = new URL(process.env.NEXTAUTH_URL ?? '');
+  } catch {
+    throw new DomainError('MAIL_ORIGIN_INVALID', 503);
+  }
+  ensure(
+    ['http:', 'https:'].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      (process.env.NODE_ENV !== 'production' ||
+        (url.protocol === 'https:' &&
+          !/^(localhost(?:\.|$)|127\.|0\.0\.0\.0$|\[::1\]$)/i.test(url.hostname))),
+    'MAIL_ORIGIN_INVALID',
+    503,
+  );
+  return url;
+}
+
+export async function sendTeachingMail(id: string, prepare: () => Promise<TeachingMail | null>) {
+  const site = teachingMailOrigin();
+  const { row, config, transport } = await smtpTransport();
+  try {
+    // Keep half the configured shared budget available for verification and account security.
+    const teachingBudget = Math.floor(config.perMinute / 2);
+    ensure(teachingBudget > 0, 'SMTP_VERIFICATION_BUDGET_RESERVED', 503);
+    await rateLimit('smtp-teaching:' + row.id, teachingBudget, 60000);
+    await rateLimit('smtp-budget:' + row.id, config.perMinute, 60000);
+    const mail = await prepare();
+    if (!mail) return false;
+    const date = new Intl.DateTimeFormat('zh-CN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Shanghai',
+    });
+    const text = [
+      '图衡 TuHeng',
+      mail.title,
+      mail.schoolName && `学校：${mail.schoolName}`,
+      mail.summary,
+      `通知时间：${date.format(mail.createdAt)}（北京时间）`,
+      mail.deadlineAt && `截止时间：${date.format(mail.deadlineAt)}（北京时间）`,
+      mail.detailPath && `查看详情：${new URL(mail.detailPath, site.origin).href}`,
+      `通知设置：${new URL(mail.profilePath, site.origin).href}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    try {
+      const result = await transport.sendMail({
+        from: { name: config.fromName, address: config.fromEmail },
+        to: EmailAddress.parse(mail.to),
+        replyTo: config.replyTo,
+        subject: '图衡｜' + mail.title.replace(/[\r\n]+/g, ' '),
+        messageId: `<notification-${id}@${site.hostname}>`,
+        text,
+      });
+      if (!result.accepted.length) throw new TeachingMailError('SMTP_RECIPIENT_REJECTED', 'FAILED');
+    } catch (error) {
+      if (error instanceof TeachingMailError) throw error;
+      const details = error as { code?: string; responseCode?: number; command?: string };
+      if (details.responseCode && details.responseCode >= 400 && details.responseCode < 500)
+        throw new TeachingMailError('SMTP_TEMPORARY_REJECTION', 'RETRY');
+      if (details.responseCode && details.responseCode >= 500)
+        throw new TeachingMailError('SMTP_SERVER_REJECTED', 'FAILED');
+      if (
+        /^(CONN|EHLO|HELO|STARTTLS|AUTH|MAIL FROM|RCPT TO)/.test(details.command ?? '') ||
+        ['ECONNREFUSED', 'EDNS', 'EAUTH'].includes(details.code ?? '')
+      )
+        throw new TeachingMailError('SMTP_CONNECTION_FAILED', 'RETRY');
+      throw new TeachingMailError('SMTP_SEND_STATUS_UNKNOWN', 'UNCERTAIN');
+    }
+    return true;
+  } finally {
+    transport.close();
+  }
+}
 export async function sendVerificationMail(challengeId: string, code: string) {
   const challenge = await prisma.verificationChallenge.findUniqueOrThrow({
     where: { id: challengeId },

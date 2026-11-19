@@ -120,13 +120,25 @@ export async function TeacherDashboard({ a }: { a: Actor }) {
     </>
   );
 }
-export async function QuestionsView({ a, segments }: { a: Actor; segments: string[] }) {
+export async function QuestionsView({
+  a,
+  segments,
+  selectedSchool,
+}: {
+  a: Actor;
+  segments: string[];
+  selectedSchool?: string;
+}) {
   domain.ensure(
     a.kind === 'TEACHER' || a.kind === 'SCHOOL_ADMIN' || a.kind === 'SITE_ADMIN',
     'FORBIDDEN',
     403,
   );
   const area = a.kind === 'SCHOOL_ADMIN' ? 'school' : a.kind === 'SITE_ADMIN' ? 'admin' : 'teacher';
+  const schoolId = a.schoolId ?? (a.kind === 'SITE_ADMIN' ? (selectedSchool ?? null) : null);
+  const school = schoolId ? await database.get('school', schoolId) : null;
+  if (schoolId) domain.ensure(school?.active, 'SCHOOL_DISABLED', 403);
+  const query = area === 'admin' && schoolId ? '?schoolId=' + encodeURIComponent(schoolId) : '';
   const knowledge = await database.list('knowledgePoint');
   if (segments[1] === 'new')
     return (
@@ -136,13 +148,27 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
           title="创建题目"
           description="先确认题意、参考答案与评分细则，再用于正式作业。"
         />
-        <QuestionEditor area={area} knowledge={knowledge} />
+        <QuestionEditor area={area} schoolId={schoolId} knowledge={knowledge} />
       </>
     );
   const questions = await domain.listQuestions(database, a);
   if (segments[1]) {
     const q = questions.find((q) => q.id === segments[1]);
     domain.ensure(q, 'NOT_FOUND', 404);
+    const parent = await database.get('question', q.questionId);
+    domain.ensure(
+      parent && (!selectedSchool || parent.schoolId === selectedSchool),
+      'NOT_FOUND',
+      404,
+    );
+    const attachments = await database.list('storedAsset', {
+      id: { in: [...q.assetIds, ...q.reference.assetIds] },
+    });
+    const metadata = (ids: string[]) =>
+      ids.flatMap((id) => {
+        const asset = attachments.find((row) => row.id === id);
+        return asset ? [{ id, name: asset.name, mime: asset.mime }] : [];
+      });
     return (
       <>
         <PageTitle
@@ -150,12 +176,26 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
           title="编辑题目 · 保存新版本"
           description={`当前版本 v${q.version}。已有作业仍引用原版本。`}
         />
-        <QuestionEditor area={area} knowledge={knowledge} initial={q} questionId={q.questionId} />
+        <QuestionEditor
+          area={area}
+          knowledge={knowledge}
+          initial={q}
+          questionId={q.questionId}
+          schoolId={parent.schoolId}
+          initialAssets={{ stem: metadata(q.assetIds), reference: metadata(q.reference.assetIds) }}
+        />
       </>
     );
   }
+  const ownedIds = new Set(
+    (await database.list('question', { ownerId: a.id, schoolId, selfTest: false })).map(
+      (row) => row.id,
+    ),
+  );
   const latest = questions.filter(
-    (q) => !questions.some((v) => v.questionId === q.questionId && v.version > q.version),
+    (q) =>
+      ownedIds.has(q.questionId) &&
+      !questions.some((v) => v.questionId === q.questionId && v.version > q.version),
   );
   return (
     <>
@@ -164,11 +204,24 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
         title="题库管理"
         description="以版本保存题目、答案与评分依据，让历史作答可追溯。"
         action={
-          <Link className="button primary" href={`/${area}/questions/new`}>
+          <Link className="button primary" href={`/${area}/questions/new${query}`}>
             ＋ 创建题目
           </Link>
         }
       />
+      {area === 'admin' && (
+        <div className="button-row">
+          <strong>{school?.name ?? '平台题库'}</strong>
+          <Link className="button secondary" href="/admin/questions?choose=1">
+            选择学校题库
+          </Link>
+          {school && (
+            <Link className="button secondary" href="/admin/questions">
+              返回平台题库
+            </Link>
+          )}
+        </div>
+      )}
       <Panel title={`个人题库 · ${latest.length} 道`}>
         {latest.length ? (
           <div className="table-scroll">
@@ -197,12 +250,16 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
                     </td>
                     <td>{formatPoints(q.maxPoints)}</td>
                     <td>
-                      <Link className="button ghost" href={`/${area}/questions/${q.id}`}>
+                      <Link className="button ghost" href={`/${area}/questions/${q.id}${query}`}>
                         编辑新版本
                       </Link>
                       <ActionButton
                         name="question"
-                        data={{ question: { ...q, title: `${q.title}（副本）` } }}
+                        data={{
+                          schoolId,
+                          sourceVersionId: q.id,
+                          question: { ...q, title: `${q.title}（副本）` },
+                        }}
                       >
                         复制
                       </ActionButton>
@@ -232,6 +289,13 @@ export async function QuestionsView({ a, segments }: { a: Actor; segments: strin
 }
 export async function NewAssignment({ a, selectedSchool }: { a: Actor; selectedSchool?: string }) {
   domain.ensure(a.kind, 'IDENTITY_REQUIRED', 403);
+  const questions = await domain.listQuestions(database, a);
+  const scope = new Map(
+    (await database.list('question', { ownerId: a.id, selfTest: false })).map((q) => [
+      q.id,
+      q.schoolId,
+    ]),
+  );
   return (
     <>
       <PageTitle
@@ -247,7 +311,9 @@ export async function NewAssignment({ a, selectedSchool }: { a: Actor; selectedS
             : []
         }
         initialSchool={selectedSchool}
-        questions={await domain.listQuestions(database, a)}
+        questions={questions
+          .filter((q) => scope.has(q.questionId))
+          .map((q) => ({ ...q, schoolId: scope.get(q.questionId) ?? null }))}
       />
     </>
   );

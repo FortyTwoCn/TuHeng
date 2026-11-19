@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import type { AuthRealm } from '@tuheng/contracts';
 import { useRouter } from 'next/navigation';
 import { realmSignOut } from './identity/client';
 const messages: Record<string, string> = {
@@ -18,10 +19,10 @@ const messages: Record<string, string> = {
   SCORE_OUT_OF_RANGE: '分数超出范围',
   SELFTEST_QUOTA: '今日自测调用已达到限额',
 };
-export async function action(name: string, data: unknown) {
+export async function action(name: string, data: unknown, realm?: AuthRealm) {
   const r = await fetch(`/api/actions/${name}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(realm ? { 'x-tuheng-realm': realm } : {}) },
     body: JSON.stringify(data),
   });
   const p = await r.json();
@@ -133,18 +134,26 @@ export function TextAction({
     </form>
   );
 }
-export function Logout({ realm = 'STAFF' }: { realm?: 'STAFF' | 'STUDENT' }) {
+export function Logout({
+  realm = 'STAFF',
+  className = 'logout',
+  label = '退出登录',
+}: {
+  realm?: AuthRealm;
+  className?: string;
+  label?: string;
+}) {
   const router = useRouter();
   return (
     <button
-      className="logout"
+      className={className}
       onClick={async () => {
         await realmSignOut(realm);
         router.push('/login');
         router.refresh();
       }}
     >
-      退出登录
+      {label}
     </button>
   );
 }

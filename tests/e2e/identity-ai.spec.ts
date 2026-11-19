@@ -636,8 +636,11 @@ test('first admin: password change opens the dashboard without SMTP or email bin
     page.once('dialog', (d) => d.accept());
     await newest.getByRole('button', { name: '启用此版本', exact: true }).click();
     await expect(newest.getByRole('button', { name: '停用此版本', exact: true })).toBeVisible();
-    await page.goto('/admin/security');
-    await expect(page.getByText('邮箱绑定为可选项，可用于邮箱登录和找回密码。')).toBeVisible();
+    const retired = await page.goto('/admin/security');
+    expect(retired?.status()).toBe(404);
+    await page.goto('/admin/profile');
+    await expect(page.getByRole('heading', { name: '用户中心', exact: true })).toBeVisible();
+    await expect(page.getByText('绑定邮箱', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '退出当前身份', exact: true }).click();
     await prepareLogin(page, 'admin');
     await page.getByLabel('登录 ID / 已绑定邮箱').fill('admin');
@@ -749,7 +752,7 @@ test('email methods: same verified address stays isolated across domains, codes 
   });
   const page = await context.newPage();
   const logout = async () => {
-    await page.getByRole('link', { name: '账号安全', exact: true }).tap();
+    await page.getByRole('banner').getByRole('link', { name: '用户中心', exact: true }).tap();
     await page.getByRole('button', { name: '退出当前身份', exact: true }).tap();
     await expect(page).toHaveURL('/login');
   };
@@ -792,6 +795,45 @@ test('email methods: same verified address stays isolated across domains, codes 
     });
     await logout();
   }
+  await page.goto('/login/student');
+  await page.getByRole('button', { name: '邮箱密码', exact: true }).tap();
+  await page.getByLabel('已绑定邮箱', { exact: true }).fill(email);
+  await page.getByLabel('密码', { exact: true }).fill(studentPassword);
+  await page.getByRole('button', { name: '登录', exact: true }).tap();
+  await expect(page).toHaveURL('/student/dashboard');
+  await page.getByRole('banner').getByRole('link', { name: '用户中心', exact: true }).tap();
+  await page.getByText('更换邮箱', { exact: true }).tap();
+  const firstTarget = `discard-${tag}@browser.invalid`;
+  const finalTarget = `new-binding-${tag}@browser.invalid`;
+  const emailInput = page.getByLabel('邮箱', { exact: true });
+  const codeInput = page.getByLabel('六位验证码', { exact: true });
+  await emailInput.fill(firstTarget);
+  const countBeforeChange = mail.length;
+  await page.getByRole('button', { name: '发送验证码', exact: true }).tap();
+  const prompt = page.getByRole('dialog', { name: '验证身份', exact: true });
+  await prompt.getByLabel('当前密码', { exact: true }).fill(studentPassword);
+  await prompt.getByRole('button', { name: '验证并继续', exact: true }).tap();
+  await expect.poll(() => mail.length).toBeGreaterThan(countBeforeChange);
+  await expect(page.getByText(firstTarget, { exact: true })).toBeVisible();
+  await codeInput.fill(lastCode());
+  await emailInput.fill(finalTarget);
+  await expect(codeInput).toHaveValue('');
+  await expect(codeInput).toBeDisabled();
+  const currentEmail = () =>
+    prisma.user.findUniqueOrThrow({ where: { id: student.id } }).then((u) => u.emailNormalized);
+  expect(await currentEmail()).toBe(email);
+  const countBeforeNew = mail.length;
+  await page.getByRole('button', { name: '发送验证码', exact: true }).tap();
+  await expect.poll(() => mail.length).toBeGreaterThan(countBeforeNew);
+  await expect(page.getByText(finalTarget, { exact: true })).toBeVisible();
+  await codeInput.fill(lastCode());
+  await page.getByRole('button', { name: '验证并绑定', exact: true }).tap();
+  await expect(page.getByText('绑定邮箱已更换。', { exact: true })).toBeVisible();
+  await expect.poll(currentEmail).toBe(finalTarget);
+  expect((await prisma.user.findUniqueOrThrow({ where: { id: teacher.id } })).emailNormalized).toBe(
+    email,
+  );
+  await logout();
   await page.goto('/login/staff');
   await page.getByRole('button', { name: '忘记密码', exact: true }).tap();
   await page.getByLabel('已绑定邮箱', { exact: true }).fill(email);

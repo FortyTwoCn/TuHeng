@@ -255,10 +255,6 @@ small,
 .term {
   color: var(--muted);
 }
-.small-avatar {
-  width: 30px;
-  height: 30px;
-}
 .role-switch {
   position: relative;
 }
@@ -1500,8 +1496,7 @@ progress {
     padding: 0 18px;
   }
   .breadcrumb > span,
-  .term,
-  .small-avatar {
+  .term {
     display: none;
   }
   .topbar-right {

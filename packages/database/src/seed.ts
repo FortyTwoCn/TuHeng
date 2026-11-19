@@ -89,6 +89,10 @@ for (const [id, title, chapter] of [
 ])
   await prisma.knowledgePoint.upsert({ where: { id }, create: { id, title, chapter }, update: {} });
 await ensureBucket();
+if (process.env.SEED_DEMO_RESOURCES === '1') {
+  const { seedResourceDemo } = await import('./seed-resource-demo');
+  await seedResourceDemo();
+}
 console.log(
   'Seed ready: explicitly marked demo course, accounts and knowledge points. No grades fabricated.',
 );

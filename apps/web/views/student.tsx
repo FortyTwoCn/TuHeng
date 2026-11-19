@@ -1,4 +1,4 @@
-import { Notifications } from '../components/identity/Notifications';
+import { assetHref } from '../lib/resource-links';
 import { ErrorBookList } from '../components/ErrorBookList';
 import Link from 'next/link';
 import { database } from '@tuheng/database';
@@ -33,7 +33,6 @@ export async function StudentDashboard({ a }: { a: Actor }) {
           </Link>
         }
       />
-      <Notifications />
       <div className="stats">
         <Stat
           title="课程作业"
@@ -249,7 +248,12 @@ export async function SelfTests({ a, segments }: { a: Actor; segments: string[] 
             {q.reference.verified ? '参考答案已验证' : '参考答案未经教师验证'}
           </Badge>
           {q.assetIds.map((id) => (
-            <a className="button secondary" href={`/api/assets/${id}`} key={id} target="_blank">
+            <a
+              className="button secondary"
+              href={assetHref(id, 'STUDENT')}
+              key={id}
+              target="_blank"
+            >
               查看题目材料
             </a>
           ))}
@@ -339,7 +343,12 @@ export async function ErrorBook({ a, segments }: { a: Actor; segments: string[] 
         <Panel>
           <p>{q.content}</p>
           {q.assetIds.map((id) => (
-            <a key={id} className="button secondary" href={`/api/assets/${id}`} target="_blank">
+            <a
+              key={id}
+              className="button secondary"
+              href={assetHref(id, 'STUDENT')}
+              target="_blank"
+            >
               查看原题
             </a>
           ))}

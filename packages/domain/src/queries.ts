@@ -1,4 +1,4 @@
-import { GradingResult } from '@tuheng/contracts';
+import { AssetArchiveContext, GradingResult } from '@tuheng/contracts';
 import type { Actor, DataPort, Entities } from './entities';
 import {
   ensure,
@@ -287,9 +287,30 @@ export async function canReadAsset(
 ): Promise<Entities['storedAsset']> {
   const asset = await db.get('storedAsset', id);
   ensure(asset, 'NOT_FOUND', 404);
-  if (asset.ownerId === a.id) return asset;
-  if (asset.parentId) {
+  ensure(
+    asset.purpose !== 'AVATAR' && ['STAGED', 'ARCHIVING', 'ARCHIVED'].includes(asset.state),
+    'ASSET_FORBIDDEN',
+    403,
+  );
+  const context = asset.storageContext ? AssetArchiveContext.parse(asset.storageContext) : null;
+  if (context?.kind === 'GRADING_PROCESSED' && asset.parentId) {
+    await attemptContext(db, a, context.attemptId);
     await canReadAsset(db, a, asset.parentId);
+    return asset;
+  }
+  if (
+    asset.ownerId === a.id &&
+    (a.kind === 'SITE_ADMIN' || asset.storageSchoolId === (a.schoolId ?? null))
+  ) {
+    if (asset.state === 'STAGED') {
+      const session =
+        asset.uploadSessionId && (await db.get('assetUploadSession', asset.uploadSessionId));
+      ensure(
+        session && !session.cancelledAt && session.expiresAt > new Date(),
+        'ASSET_UNAVAILABLE',
+        409,
+      );
+    }
     return asset;
   }
   const submissionRefs = await db.list('submissionAsset', { assetId: id });
@@ -301,7 +322,7 @@ export async function canReadAsset(
       /* test other permitted references */
     }
   }
-  const questions = await db.list('questionVersion', {}, { take: 10000 });
+  const questions = context?.kind === 'QUESTION' ? await db.questionVersionsUsingAsset(id) : [];
   for (const q of questions) {
     const stem = q.assetIds.includes(id),
       reference = q.reference.assetIds.includes(id);

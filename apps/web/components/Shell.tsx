@@ -11,11 +11,16 @@ import {
   Activity,
   ShieldCheck,
   ChevronRight,
+  Megaphone,
 } from 'lucide-react';
 import type { Actor } from '@tuheng/domain';
+import { prisma } from '@tuheng/database';
 import { Logout } from './Actions';
 import { BrandLogo } from './BrandLogo';
 import { MobileNavigation } from './MobileNavigation';
+import { AccountAvatar } from './profile/AccountAvatar';
+import { NotificationBell } from './notifications/NotificationBell';
+import './profile/account.css';
 const menus = {
   student: [
     ['dashboard', '学习概览', LayoutDashboard],
@@ -30,6 +35,7 @@ const menus = {
     ['questions', '题库管理', Layers],
     ['assignments', '作业管理', ClipboardList],
     ['reviews', '批改复核', ScanLine],
+    ['announcements', '公告管理', Megaphone],
     ['analytics', '基础学情', Activity],
   ],
   school: [
@@ -40,7 +46,7 @@ const menus = {
     ['questions', '题库', Layers],
     ['assignments', '校级作业', ClipboardList],
     ['imports', '导入与交付', BookOpen],
-    ['security', '账号安全', ShieldCheck],
+    ['announcements', '公告管理', Megaphone],
   ],
   admin: [
     ['dashboard', '管理概览', LayoutDashboard],
@@ -51,6 +57,7 @@ const menus = {
     ['imports', '名单导入与交付', BookOpen],
     ['questions', '题库', Layers],
     ['assignments', '学校作业', ClipboardList],
+    ['announcements', '公告管理', Megaphone],
     ['models', 'AI 中心', Settings2],
     ['jobs', 'AI 任务管理', Activity],
     ['audit', '操作审计', ShieldCheck],
@@ -58,7 +65,7 @@ const menus = {
     ['system', '系统状态', Settings2],
   ],
 } as const;
-export function Shell({
+export async function Shell({
   a,
   area,
   current,
@@ -72,13 +79,32 @@ export function Shell({
   children: React.ReactNode;
 }) {
   const menu = menus[area];
+  const realm = a.realm ?? (area === 'student' ? 'STUDENT' : 'STAFF');
+  const account = await prisma.user.findUnique({
+    where: { id: a.id },
+    select: { avatarAssetId: true },
+  });
+  const profileHref = `/${area}/profile`;
+  const notificationsHref = `/${area}/notifications`;
+  const sectionLabel =
+    { profile: '用户中心', notifications: '通知中心', announcements: '公告' }[current] ??
+    menu.find((m) => m[0] === current)?.[1] ??
+    '工作空间';
   const link = (path: string) =>
     '/' +
     area +
     '/' +
     path +
     (schoolId &&
-    ['users', 'organization', 'classes', 'assignments', 'imports', 'delivery'].includes(path)
+    [
+      'users',
+      'organization',
+      'classes',
+      'assignments',
+      'imports',
+      'delivery',
+      'questions',
+    ].includes(path)
       ? '?schoolId=' + encodeURIComponent(schoolId)
       : '');
   return (
@@ -110,20 +136,22 @@ export function Shell({
         </nav>
         <div className="sidebar-bottom">
           <div className="account">
-            <span className="avatar">{a.name.slice(0, 1)}</span>
-            <span>
-              <b>{a.name}</b>
-              <small>
-                {area === 'student'
-                  ? '学生'
-                  : area === 'teacher'
-                    ? '教师'
-                    : area === 'school'
-                      ? '学校管理员'
-                      : '系统管理员'}
-              </small>
-            </span>
-            <Logout realm={a.realm ?? (area === 'student' ? 'STUDENT' : 'STAFF')} />
+            <Link href={profileHref} className="sidebar-profile" aria-label="用户中心">
+              <AccountAvatar name={a.name} realm={realm} version={account?.avatarAssetId} />
+              <span>
+                <b>{a.name}</b>
+                <small>
+                  {area === 'student'
+                    ? '学生'
+                    : area === 'teacher'
+                      ? '教师'
+                      : area === 'school'
+                        ? '学校管理员'
+                        : '系统管理员'}
+                </small>
+              </span>
+            </Link>
+            <Logout realm={realm} />
           </div>
         </div>
       </aside>
@@ -132,13 +160,21 @@ export function Shell({
           <div className="breadcrumb">
             <span>图衡教学平台</span>
             <ChevronRight size={14} />
-            <strong>{menu.find((m) => m[0] === current)?.[1] ?? '工作空间'}</strong>
+            <strong>{sectionLabel}</strong>
           </div>
           <div className="topbar-right">
             <span className="term">工程图学 · 教学空间</span>
-            <Link href={`/${area}/security`}>账号安全</Link>
-            <Link href="/login">其他身份登录</Link>
-            <span className="avatar small-avatar">{a.name.slice(0, 1)}</span>
+            <Link className="topbar-switch" href="/login">
+              其他身份登录
+            </Link>
+            <NotificationBell key={realm + ':' + a.id} realm={realm} href={notificationsHref} />
+            <Link
+              href={profileHref}
+              className="topbar-control topbar-profile"
+              aria-label="用户中心"
+            >
+              <AccountAvatar name={a.name} realm={realm} version={account?.avatarAssetId} />
+            </Link>
           </div>
         </header>
         <main className="workspace">{children}</main>
@@ -151,16 +187,17 @@ export function Shell({
           </Link>
         ))}
         <MobileNavigation
-          items={menu
-            .slice(4)
-            .filter(([path]) => path !== 'security')
-            .map(([path, label]) => ({
+          items={[
+            ...menu.slice(4).map(([path, label]) => ({
               href: link(path),
               label,
               active: current === path,
-            }))}
-          securityHref={`/${area}/security`}
-          realm={a.realm ?? (area === 'student' ? 'STUDENT' : 'STAFF')}
+            })),
+            { href: profileHref, label: '用户中心', active: current === 'profile' },
+            { href: notificationsHref, label: '通知中心', active: current === 'notifications' },
+            { href: '/login', label: '其他身份登录', active: false },
+          ]}
+          realm={realm}
         />
       </nav>
     </div>

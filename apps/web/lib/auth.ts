@@ -114,6 +114,11 @@ export async function actor(realm?: Realm, allowOnboarding = false): Promise<Act
   if (!allowOnboarding && result.onboarding) throw new DomainError('ONBOARDING_REQUIRED', 403);
   return result;
 }
+export function realmFromRequest(request: Request) {
+  const realm = AuthRealm.safeParse(request.headers.get('x-tuheng-realm'));
+  ensure(realm.success, 'SELECT_AUTH_REALM', 401);
+  return realm.data;
+}
 export async function rotateIdentitySession(id: string, realm: Realm) {
   const u = await prisma.user.findUniqueOrThrow({ where: { id } });
   ensure(u.realm === realm && u.active, 'SESSION_REVOKED', 401);

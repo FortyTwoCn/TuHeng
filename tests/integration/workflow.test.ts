@@ -110,16 +110,14 @@ describe.sequential(
       })
         .png()
         .toBuffer();
-      const stem = await uploadAsset(
-        teacher,
-        { name: '自动化测试-题干.png', bytes: image, mime: 'image/png' },
-        'QUESTION',
-      );
-      const ref = await uploadAsset(
-        teacher,
-        { name: '自动化测试-参考.png', bytes: image, mime: 'image/png' },
-        'REFERENCE',
-      );
+      const stem = await uploadAsset(teacher, {
+        file: { name: '自动化测试-题干.png', bytes: image },
+        target: { kind: 'QUESTION' },
+      });
+      const ref = await uploadAsset(teacher, {
+        file: { name: '自动化测试-参考.png', bytes: image },
+        target: { kind: 'REFERENCE' },
+      });
       const q = await domain.createQuestion(db, teacher, {
         title: `[自动化测试] ${tag} 点投影`,
         content: f.question.content,
@@ -156,11 +154,10 @@ describe.sequential(
       })
         .png()
         .toBuffer();
-      const asset = await uploadAsset(
-        student,
-        { name: '自动化测试-作答.png', bytes: image, mime: 'image/png' },
-        'SUBMISSION',
-      );
+      const asset = await uploadAsset(student, {
+        file: { name: '自动化测试-作答.png', bytes: image },
+        target: { kind: 'ASSIGNMENT_ANSWER', itemId },
+      });
       assetId = asset.id;
       expect((await downloadAsset(student, asset.id)).buffer.equals(image)).toBe(true);
       await domain.saveDraft(db, student, itemId, [asset.id]);

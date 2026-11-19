@@ -80,7 +80,9 @@ export async function AssignmentDetails({
                 <span>题目版本 v{item.question.version}</span>
                 <span>{item.question.chapter}</span>
               </div>
-              {assets.length > 0 && <DrawingViewer assets={assets} />}
+              {assets.length > 0 && (
+                <DrawingViewer assets={assets} realm={a.kind === 'STUDENT' ? 'STUDENT' : 'STAFF'} />
+              )}
               {(teacher || manager) && item.question.geometryDocument && (
                 <GeometryEditor value={item.question.geometryDocument} readOnly role="teacher" />
               )}

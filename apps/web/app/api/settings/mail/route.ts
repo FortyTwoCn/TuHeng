@@ -4,10 +4,20 @@ import { actor } from '../../../../lib/auth';
 import { checkOrigin, errorResponse, limitedBody } from '../../../../lib/http';
 import { requireSMTPManager } from '@tuheng/domain';
 import { manageSMTP, saveSMTP } from '../../../../../../packages/infrastructure/src/email';
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const a = await actor('STAFF');
     requireSMTPManager(a);
+    if (new URL(request.url).searchParams.get('view') === 'teaching-delivery') {
+      const groups = await prisma.notificationDelivery.groupBy({
+        by: ['state'],
+        _count: { _all: true },
+      });
+      return Response.json(
+        { data: Object.fromEntries(groups.map((row) => [row.state, row._count._all])) },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
     const rows = await prisma.sMTPConfigurationVersion.findMany({
       orderBy: { version: 'desc' },
       take: 30,

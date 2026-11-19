@@ -15,6 +15,7 @@
     "db:generate": "prisma generate --schema packages/database/prisma/schema.prisma",
     "db:migrate": "dotenv -e .env -- tsx scripts/migrate.ts",
     "db:seed": "dotenv -e .env -- tsx packages/database/src/seed.ts",
+    "dev:reset-resources": "dotenv -e .env -- tsx scripts/dev-reset-resources.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",

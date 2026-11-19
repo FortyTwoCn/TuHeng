@@ -1,6 +1,7 @@
 import { prepareLogin, verifyIdentity } from './identity-login';
 import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { prisma } from '@tuheng/database';
 const sample = path.resolve('tests/samples/projection.png');
 let audienceFixtures: string[] = [];
@@ -125,20 +126,29 @@ test('A/B/D: teacher publishes, student uploads, teacher reviews, student views 
   const item = await prisma.assignmentItem.findFirstOrThrow({
     where: { assignmentId: assignedId },
   });
-  const excludedAsset = await prisma.storedAsset.create({
-    data: {
-      ownerId: 'student2',
-      name: 'permission-fixture.png',
-      mime: 'image/png',
-      bytes: 1,
-      purpose: 'SUBMISSION',
-      objectKey: 'never-read-excluded/' + crypto.randomUUID(),
+  const deniedUpload = await other.request.post('/api/assets', {
+    headers: {
+      Origin: process.env.TEST_APP_ORIGIN ?? 'http://localhost:3000',
+      'x-tuheng-realm': 'STUDENT',
+    },
+    multipart: {
+      file: {
+        name: 'permission-fixture.png',
+        mimeType: 'image/png',
+        buffer: await readFile(sample),
+      },
+      target: JSON.stringify({ kind: 'ASSIGNMENT_ANSWER', itemId: item.id }),
     },
   });
+  expect(deniedUpload.status()).toBe(403);
   for (const command of ['draft', 'submit']) {
     const refused = await other.request.post('/api/actions/' + command, {
       headers: { Origin: process.env.TEST_APP_ORIGIN ?? 'http://localhost:3000' },
-      data: { itemId: item.id, assetIds: [excludedAsset.id], idempotencyKey: crypto.randomUUID() },
+      data: {
+        itemId: item.id,
+        assetIds: [crypto.randomUUID()],
+        idempotencyKey: crypto.randomUUID(),
+      },
     });
     expect(refused.status()).toBe(403);
     expect((await refused.json()).error).toBe('ASSIGNMENT_RECIPIENT_REQUIRED');

@@ -1,12 +1,15 @@
 'use client';
 import { useState } from 'react';
-import type { Annotation } from '@tuheng/contracts';
+import type { Annotation, AuthRealm } from '@tuheng/contracts';
+import { assetHref } from '../lib/resource-links';
 export function DrawingViewer({
   assets,
+  realm,
   annotations = [],
   processed = [],
 }: {
   assets: { id: string; name: string; mime: string }[];
+  realm: AuthRealm;
   annotations?: Annotation[];
   processed?: { originalId: string; processedId: string }[];
 }) {
@@ -53,10 +56,10 @@ export function DrawingViewer({
       </div>
       <div className="drawing-scroll">
         {a.mime === 'application/pdf' ? (
-          <iframe title={a.name} src={`/api/assets/${id}`} sandbox="" />
+          <iframe title={a.name} src={assetHref(id, realm)} sandbox="" />
         ) : (
           <div className="drawing-surface" style={{ width: `${zoom * 100}%` }}>
-            <img src={`/api/assets/${id}`} alt={a.name} />
+            <img src={assetHref(id, realm)} alt={a.name} />
             {mode === 'original' && (
               <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="教师及AI图纸批注">
                 {annotations

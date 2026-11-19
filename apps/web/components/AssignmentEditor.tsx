@@ -22,6 +22,7 @@ export function AssignmentEditor({
     version: number;
     maxPoints: number;
     confirmed: boolean;
+    schoolId: string | null;
   }[];
 }) {
   const router = useRouter(),
@@ -127,6 +128,7 @@ export function AssignmentEditor({
                     setPreview(undefined);
                     setReviewerIds([]);
                     setReviewerAssignments([]);
+                    setSelected([]);
                   }}
                 >
                   <option value="">请选择学校</option>
@@ -193,7 +195,7 @@ export function AssignmentEditor({
       <section className="panel">
         <h2>从已确认题库选择</h2>
         {questions
-          .filter((q) => q.confirmed)
+          .filter((q) => q.confirmed && (!q.schoolId || q.schoolId === audience.schoolId))
           .map((q) => (
             <label className="question-choice" key={q.id}>
               <input

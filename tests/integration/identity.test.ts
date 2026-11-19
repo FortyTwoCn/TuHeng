@@ -219,6 +219,7 @@ describe.sequential('real database + local SMTP identity flows', () => {
     await bindVerifiedEmail(actor, {
       challengeId: challenge.challengeId,
       code,
+      email,
       purpose: 'BIND_EMAIL',
     });
     expect(

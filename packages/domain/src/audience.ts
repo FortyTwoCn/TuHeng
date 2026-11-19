@@ -2,6 +2,7 @@ import { AudienceSelection, ReviewerAssignment } from '@tuheng/contracts';
 import type { Actor, DataPort, Entities } from './entities';
 import { ensure, audit } from './policy';
 import { requireSchoolScope } from './identity';
+import { assignmentNotice, recordNotifications } from './notification-events';
 export async function teachingScope(db: DataPort, actor: Actor, schoolId: string) {
   requireSchoolScope(actor, schoolId);
   const school = await db.get('school', schoolId);
@@ -98,8 +99,10 @@ export async function freezeAssignmentAudience(
     assignment.audience.reviewerAssignments ?? [],
   );
   const revision = (assignment.audienceRevision ?? 0) + 1;
-  for (const person of resolved.recipients) {
-    await db.create('assignmentRecipient', {
+  const publishedAt = new Date();
+  await db.createMany(
+    'assignmentRecipient',
+    resolved.recipients.map((person) => ({
       assignmentId: assignment.id,
       studentId: person.studentId,
       schoolId: resolved.selection.schoolId,
@@ -108,14 +111,15 @@ export async function freezeAssignmentAudience(
       revision,
       active: true,
       inferred: false,
-    });
-    await db.create('userNotification', {
-      userId: person.studentId,
-      assignmentId: assignment.id,
-      kind: 'ASSIGNMENT_PUBLISHED',
-      revision,
-    });
-  }
+      activeSince: publishedAt,
+    })),
+  );
+  await recordNotifications(
+    db,
+    resolved.recipients.map((p) => p.studentId),
+    assignmentNotice(assignment, 'ASSIGNMENT_PUBLISHED', revision),
+    publishedAt,
+  );
   await db.update('assignment', assignment.id, { audienceRevision: revision });
   await audit(db, actor, 'ASSIGNMENT_AUDIENCE_FROZEN', assignment.id, {
     revision,
@@ -166,6 +170,9 @@ export async function reviseAssignmentAudience(
       ids = new Set(resolved.recipients.map((r) => r.studentId)),
       revision = expectedRevision + 1;
     const items = await tx.list('assignmentItem', { assignmentId: id });
+    const removed: string[] = [],
+      added: string[] = [];
+    const now = new Date();
     for (const row of old) {
       if (!ids.has(row.studentId)) {
         const submissions = await tx.list('submission', {
@@ -177,13 +184,7 @@ export async function reviseAssignmentAudience(
         });
         ensure(!attempts.length, 'CANNOT_REMOVE_SUBMITTED_RECIPIENT', 409);
         await tx.update('assignmentRecipient', row.id, { active: false, revision });
-        if (row.active)
-          await tx.create('userNotification', {
-            userId: row.studentId,
-            assignmentId: id,
-            kind: 'ASSIGNMENT_REMOVED',
-            revision,
-          });
+        if (row.active) removed.push(row.studentId);
       }
     }
     for (const person of resolved.recipients) {
@@ -197,17 +198,20 @@ export async function reviseAssignmentAudience(
         revision,
         active: true,
         inferred: false,
+        ...(!existing?.active ? { activeSince: now } : {}),
       };
       if (existing) await tx.update('assignmentRecipient', existing.id, data);
       else await tx.create('assignmentRecipient', data);
-      if (!existing?.active)
-        await tx.create('userNotification', {
-          userId: person.studentId,
-          assignmentId: id,
-          kind: 'ASSIGNMENT_ADDED',
-          revision,
-        });
+      if (!existing?.active) added.push(person.studentId);
     }
+    await tx.lockNotificationRecipients([...added, ...removed]);
+    await recordNotifications(
+      tx,
+      removed,
+      assignmentNotice(ass, 'ASSIGNMENT_REMOVED', revision),
+      now,
+    );
+    await recordNotifications(tx, added, assignmentNotice(ass, 'ASSIGNMENT_ADDED', revision), now);
     await tx.update('assignment', id, {
       audience: {
         ...resolved.selection,
@@ -219,10 +223,8 @@ export async function reviseAssignmentAudience(
     });
     await audit(tx, actor, 'ASSIGNMENT_AUDIENCE_REVISED', id, {
       revision,
-      added: resolved.recipients
-        .filter((p) => !old.some((o) => o.studentId === p.studentId))
-        .map((p) => p.studentId),
-      removed: old.filter((o) => !ids.has(o.studentId)).map((o) => o.studentId),
+      added,
+      removed,
     });
     return { revision, count: resolved.count };
   });

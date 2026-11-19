@@ -16,40 +16,49 @@ model SiteConfigurationVersion {
 }
 
 model User {
-  id                   String              @id @default(uuid())
-  email                String
-  name                 String
-  passwordHash         String
-  roles                String[]
-  active               Boolean             @default(true)
-  tokenVersion         Int                 @default(0)
-  createdAt            DateTime            @default(now())
-  kind                 String              @default("STUDENT")
-  realm                String              @default("STUDENT")
-  loginId              String?             @unique
-  schoolId             String?
-  studentNumber        String?
-  emailNormalized      String?
-  emailVerifiedAt      DateTime?
-  mustChangePassword   Boolean             @default(true)
-  passwordExpiresAt    DateTime?
-  credentialVersion    Int                 @default(0)
-  lastLoginAt          DateTime?
-  installationComplete Boolean             @default(false)
-  school               School?             @relation(fields: [schoolId], references: [id])
-  enrollments          Enrollment[]
-  grants               TeachingGrant[]
-  questions            Question[]
-  assets               StoredAsset[]
-  submissions          Submission[]
-  attempts             SubmissionAttempt[]
-  decisions            GradeDecision[]
-  appeals              Appeal[]
-  folders              SelfTestFolder[]
-  sets                 SelfTestSet[]
-  errors               ErrorBookEntry[]
-  evidence             KnowledgeEvidence[]
-  audits               AuditLog[]
+  id                      String                  @id @default(uuid())
+  email                   String
+  name                    String
+  passwordHash            String
+  roles                   String[]
+  active                  Boolean                 @default(true)
+  tokenVersion            Int                     @default(0)
+  createdAt               DateTime                @default(now())
+  kind                    String                  @default("STUDENT")
+  realm                   String                  @default("STUDENT")
+  loginId                 String?                 @unique
+  schoolId                String?
+  studentNumber           String?
+  emailNormalized         String?
+  emailVerifiedAt         DateTime?
+  mustChangePassword      Boolean                 @default(true)
+  passwordExpiresAt       DateTime?
+  credentialVersion       Int                     @default(0)
+  lastLoginAt             DateTime?
+  installationComplete    Boolean                 @default(false)
+  avatarAssetId           String?                 @unique
+  avatarRevision          Int                     @default(0)
+  notificationPreferences Json?
+  notificationConsent     Json?
+  avatar                  StoredAsset?            @relation("CurrentAvatar", fields: [avatarAssetId], references: [id], onDelete: Restrict)
+  uploadSessions          AssetUploadSession[]
+  notifications           UserNotification[]
+  announcements           Announcement[]
+  announcementReceipts    AnnouncementRecipient[]
+  school                  School?                 @relation(fields: [schoolId], references: [id])
+  enrollments             Enrollment[]
+  grants                  TeachingGrant[]
+  questions               Question[]
+  assets                  StoredAsset[]
+  submissions             Submission[]
+  attempts                SubmissionAttempt[]
+  decisions               GradeDecision[]
+  appeals                 Appeal[]
+  folders                 SelfTestFolder[]
+  sets                    SelfTestSet[]
+  errors                  ErrorBookEntry[]
+  evidence                KnowledgeEvidence[]
+  audits                  AuditLog[]
 
   @@unique([realm, emailNormalized])
   @@unique([schoolId, studentNumber])
@@ -127,15 +136,19 @@ model KnowledgePoint {
 model Question {
   id         String            @id @default(uuid())
   ownerId    String
+  schoolId   String?
+  selfTest   Boolean           @default(false)
   courseId   String?
   visibility String            @default("PRIVATE")
   active     Boolean           @default(true)
   createdAt  DateTime          @default(now())
   owner      User              @relation(fields: [ownerId], references: [id])
   course     Course?           @relation(fields: [courseId], references: [id])
+  school     School?           @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   versions   QuestionVersion[]
 
   @@index([ownerId, active])
+  @@index([schoolId, active])
 }
 
 model QuestionVersion {
@@ -183,6 +196,7 @@ model Assignment {
   items            AssignmentItem[]
 
   @@index([classId, status, dueAt])
+  @@index([status, dueAt])
 }
 
 model AssignmentItem {
@@ -223,6 +237,7 @@ model SubmissionAttempt {
   publishedDecisionId   String?           @unique
   geometryAnswer        Json?
   geometrySchemaVersion String?
+  storageContext        Json?
   owner                 User              @relation(fields: [ownerId], references: [id])
   submission            Submission?       @relation(fields: [submissionId], references: [id])
   questionVersion       QuestionVersion   @relation(fields: [questionVersionId], references: [id])
@@ -249,25 +264,83 @@ model SubmissionAsset {
   asset     StoredAsset       @relation(fields: [assetId], references: [id])
 
   @@unique([attemptId, position])
+  @@index([assetId])
 }
 
 model StoredAsset {
-  id          String            @id @default(uuid())
-  ownerId     String
-  objectKey   String            @unique
-  name        String
-  mime        String
-  bytes       Int
-  width       Int?
-  height      Int?
-  purpose     String
-  parentId    String?
-  transform   Json?
-  createdAt   DateTime          @default(now())
-  owner       User              @relation(fields: [ownerId], references: [id])
-  submissions SubmissionAsset[]
+  id                   String              @id @default(uuid())
+  ownerId              String
+  objectKey            String              @unique
+  name                 String
+  mime                 String
+  bytes                Int
+  width                Int?
+  height               Int?
+  purpose              String
+  parentId             String?
+  transform            Json?
+  storageSchoolId      String?
+  storageSubjectUserId String?
+  storageContext       Json?
+  checksum             String
+  state                String
+  uploadSessionId      String?
+  discardAfter         DateTime?
+  createdAt            DateTime            @default(now())
+  owner                User                @relation(fields: [ownerId], references: [id])
+  currentAvatar        User?               @relation("CurrentAvatar")
+  parent               StoredAsset?        @relation("AssetLineage", fields: [parentId], references: [id], onDelete: Restrict)
+  children             StoredAsset[]       @relation("AssetLineage")
+  uploadSession        AssetUploadSession? @relation(fields: [uploadSessionId], references: [id], onDelete: Restrict)
+  archiveTask          AssetArchiveTask?
+  submissions          SubmissionAsset[]
 
   @@index([ownerId, createdAt])
+  @@index([state, discardAfter])
+  @@index([parentId])
+  @@index([uploadSessionId])
+}
+
+model AssetUploadSession {
+  id             String        @id @default(uuid())
+  ownerId        String
+  schoolId       String?
+  targetSchoolId String?
+  target         Json
+  expiresAt      DateTime
+  cancelledAt    DateTime?
+  createdAt      DateTime      @default(now())
+  owner          User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  assets         StoredAsset[]
+
+  @@index([expiresAt])
+}
+
+model AssetArchiveTask {
+  id             String      @id @default(uuid())
+  assetId        String      @unique
+  sourceKey      String
+  sourceChecksum String
+  targetKey      String      @unique
+  state          String      @default("PENDING")
+  attempts       Int         @default(0)
+  nextAttemptAt  DateTime    @default(now())
+  leaseUntil     DateTime?
+  leaseToken     String?
+  errorCode      String?
+  finishedAt     DateTime?
+  asset          StoredAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([state, nextAttemptAt])
+}
+
+model AssetObjectGarbage {
+  id          String   @id @default(uuid())
+  objectKey   String   @unique
+  deleteAfter DateTime
+  attempts    Int      @default(0)
+
+  @@index([deleteAfter])
 }
 
 model ModelConfigurationVersion {
@@ -470,13 +543,14 @@ model LoginThrottle {
 }
 
 model School {
-  id            String   @id @default(uuid())
-  code          String   @unique
+  id            String     @id @default(uuid())
+  code          String     @unique
   name          String
-  active        Boolean  @default(true)
-  rosterVersion Int      @default(0)
-  createdAt     DateTime @default(now())
+  active        Boolean    @default(true)
+  rosterVersion Int        @default(0)
+  createdAt     DateTime   @default(now())
   users         User[]
+  questions     Question[]
 }
 
 model IdentitySequence {
@@ -485,18 +559,18 @@ model IdentitySequence {
 }
 
 model VerificationChallenge {
-  tokenVersion Int @default(-1)
-  id          String    @id @default(uuid())
-  realm       String
-  purpose     String
-  accountId   String
-  targetEmail String
-  digest      String
-  expiresAt   DateTime
-  failures    Int       @default(0)
-  consumedAt  DateTime?
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
+  tokenVersion Int       @default(-1)
+  id           String    @id @default(uuid())
+  realm        String
+  purpose      String
+  accountId    String
+  targetEmail  String
+  digest       String
+  expiresAt    DateTime
+  failures     Int       @default(0)
+  consumedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
 
   @@index([realm, purpose, accountId, createdAt])
 }
@@ -606,6 +680,7 @@ model AssignmentRecipient {
   active       Boolean  @default(true)
   inferred     Boolean  @default(false)
   createdAt    DateTime @default(now())
+  activeSince  DateTime @default(now())
 
   @@unique([assignmentId, studentId])
   @@index([studentId, active])
@@ -672,58 +747,123 @@ model AITaskBindingVersion {
 }
 
 model AIInvocation {
-  id               String    @id @default(uuid())
-  runId            String?   @unique
+  id               String                @id @default(uuid())
+  runId            String?               @unique
   taskKey          String
   schoolId         String?
   actorId          String
   resourceId       String
   snapshot         Json?
-  status           String    @default("BLOCKED_CONFIG")
-  attempts         Int       @default(0)
+  status           String                @default("BLOCKED_CONFIG")
+  attempts         Int                   @default(0)
   inputTokens      Int?
   outputTokens     Int?
   durationMs       Int?
   errorCode        String?
-  billingUncertain Boolean   @default(false)
+  billingUncertain Boolean               @default(false)
   estimatedCost    Float?
   costCurrency     String?
   callAttempts     AIInvocationAttempt[]
   startedAt        DateTime?
   finishedAt       DateTime?
-  createdAt        DateTime  @default(now())
+  createdAt        DateTime              @default(now())
 
   @@index([taskKey, schoolId, status])
 }
 
 model AIInvocationAttempt {
-  id String @id @default(uuid())
-  invocationId String
-  ordinal Int
-  providerId String
-  modelId String
-  status String
-  inputTokens Int?
-  outputTokens Int?
-  durationMs Int?
-  estimatedCost Float?
-  costCurrency String?
-  billingUncertain Boolean @default(false)
-  errorCode String?
-  createdAt DateTime @default(now())
-  invocation AIInvocation @relation(fields: [invocationId], references: [id])
+  id               String       @id @default(uuid())
+  invocationId     String
+  ordinal          Int
+  providerId       String
+  modelId          String
+  status           String
+  inputTokens      Int?
+  outputTokens     Int?
+  durationMs       Int?
+  estimatedCost    Float?
+  costCurrency     String?
+  billingUncertain Boolean      @default(false)
+  errorCode        String?
+  createdAt        DateTime     @default(now())
+  invocation       AIInvocation @relation(fields: [invocationId], references: [id])
+
   @@unique([invocationId, ordinal])
   @@index([providerId, createdAt])
 }
 
 model UserNotification {
-  id String @id @default(uuid())
-  userId String
-  assignmentId String
-  kind String
-  revision Int
-  readAt DateTime?
-  createdAt DateTime @default(now())
-  @@unique([userId, assignmentId, kind, revision])
-  @@index([userId, readAt, createdAt])
+  id           String                @id @default(uuid())
+  sequence     Int                   @unique @default(autoincrement())
+  userId       String
+  eventKey     String
+  kind         String
+  category     String
+  title        String
+  summary      String
+  resourceType String
+  resourceId   String
+  schoolId     String?
+  revision     Int?
+  deadlineAt   DateTime?
+  readAt       DateTime?
+  createdAt    DateTime              @default(now())
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  delivery     NotificationDelivery?
+
+  @@unique([userId, eventKey])
+  @@index([userId, sequence])
+  @@index([userId, readAt, sequence])
+  @@index([userId, category, sequence])
+  @@index([resourceType, resourceId, kind, deadlineAt])
+}
+
+model NotificationDelivery {
+  id             String           @id @default(uuid())
+  notificationId String           @unique
+  consentVersion Int
+  state          String           @default("PENDING")
+  attempts       Int              @default(0)
+  expiresAt      DateTime
+  nextAttemptAt  DateTime         @default(now())
+  leaseToken     String?
+  leaseUntil     DateTime?
+  sendingAt      DateTime?
+  errorCode      String?
+  finishedAt     DateTime?
+  notification   UserNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([state, nextAttemptAt])
+  @@index([state, leaseUntil])
+}
+
+model Announcement {
+  id          String                  @id @default(uuid())
+  creatorId   String
+  schoolId    String?
+  title       String
+  body        String
+  audience    Json
+  revision    Int                     @default(1)
+  publishedAt DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  creator     User                    @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  recipients  AnnouncementRecipient[]
+
+  @@index([creatorId, createdAt])
+  @@index([schoolId, publishedAt])
+}
+
+model AnnouncementRecipient {
+  id             String       @id @default(uuid())
+  announcementId String
+  userId         String
+  schoolId       String
+  revision       Int
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([announcementId, userId])
+  @@index([userId, announcementId])
 }

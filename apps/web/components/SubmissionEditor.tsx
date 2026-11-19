@@ -39,7 +39,18 @@ export function SubmissionEditor({
           role="student"
         />
       )}
-      <Uploader value={assets} onChange={setAssets} />
+      <Uploader
+        value={assets}
+        onChange={setAssets}
+        realm="STUDENT"
+        target={
+          itemId
+            ? { kind: 'ASSIGNMENT_ANSWER', itemId }
+            : reviewEntryId
+              ? { kind: 'REVIEW_ANSWER', entryId: reviewEntryId }
+              : { kind: 'SELFTEST_ANSWER', itemId: selfTestItemId! }
+        }
+      />
       <div className="button-row">
         {itemId && (
           <button

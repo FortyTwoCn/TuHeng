@@ -151,11 +151,18 @@ describe.sequential('assignment recipients actually authorize business operation
   it('AU06: publication notifications and per-person review grants follow the actual recipient snapshot', async () => {
     expect(
       await prisma.userNotification.count({
-        where: { assignmentId, userId: student.id, kind: 'ASSIGNMENT_PUBLISHED' },
+        where: {
+          resourceId: assignmentId,
+          resourceType: 'ASSIGNMENT',
+          userId: student.id,
+          kind: 'ASSIGNMENT_PUBLISHED',
+        },
       }),
     ).toBe(1);
     expect(
-      await prisma.userNotification.count({ where: { assignmentId, userId: excluded.id } }),
+      await prisma.userNotification.count({
+        where: { resourceId: assignmentId, resourceType: 'ASSIGNMENT', userId: excluded.id },
+      }),
     ).toBe(0);
     const rootUser = await prisma.user.findUniqueOrThrow({ where: { id: 'admin' } });
     const root: Actor = {
@@ -196,14 +203,24 @@ describe.sequential('assignment recipients actually authorize business operation
     );
     expect(
       await prisma.userNotification.count({
-        where: { assignmentId, userId: excluded.id, kind: 'ASSIGNMENT_ADDED' },
+        where: {
+          resourceId: assignmentId,
+          resourceType: 'ASSIGNMENT',
+          userId: excluded.id,
+          kind: 'ASSIGNMENT_ADDED',
+        },
       }),
     ).toBe(1);
     // Restore the original expression through an explicit audited revision.
     await reviseAssignmentAudience(db, root, assignmentId, selection, 2, 1, [teacher.id]);
     expect(
       await prisma.userNotification.count({
-        where: { assignmentId, userId: excluded.id, kind: 'ASSIGNMENT_REMOVED' },
+        where: {
+          resourceId: assignmentId,
+          resourceType: 'ASSIGNMENT',
+          userId: excluded.id,
+          kind: 'ASSIGNMENT_REMOVED',
+        },
       }),
     ).toBe(1);
   });

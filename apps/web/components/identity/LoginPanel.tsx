@@ -116,13 +116,13 @@ export function LoginPanel({
             if (!mounted.current) return;
             const status = await identityRequest('/api/identity/status?realm=' + realm);
             if (!mounted.current) return;
+            const callback = new URLSearchParams(location.search).get('callbackUrl');
+            const next = loginDestination(status.kind, callback);
             window.location.assign(
               status.onboarding
-                ? `/onboarding/${realm.toLowerCase()}`
-                : loginDestination(
-                    status.kind,
-                    new URLSearchParams(location.search).get('callbackUrl'),
-                  ),
+                ? `/onboarding/${realm.toLowerCase()}` +
+                    (callback ? '?' + new URLSearchParams({ callbackUrl: next }) : '')
+                : next,
             );
           } catch (e) {
             if (mounted.current) setError((e as Error).message);

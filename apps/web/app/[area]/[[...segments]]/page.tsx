@@ -2,11 +2,14 @@ import { redirect, notFound } from 'next/navigation';
 import { actor } from '../../../lib/auth';
 import { organizationWorkspace } from '../../../views/organization/workspace';
 import { ChooseSchool } from '../../../views/organization/navigation';
-import { AccountSetup } from '../../../components/identity/AccountSetup';
+import { loginEntryUrl } from '../../../components/identity/auth-navigation';
 import { SystemSettings } from '../../../components/identity/SystemSettings';
 import { Shell } from '../../../components/Shell';
 import { requireRole, DomainError, type Actor } from '@tuheng/domain';
-import { Panel } from '@tuheng/ui';
+import { Panel, PageTitle } from '@tuheng/ui';
+import { ProfileView } from '../../../views/profile';
+import { AnnouncementsView } from '../../../views/announcements';
+import { NotificationCenter } from '../../../components/notifications/NotificationCenter';
 import { StudentDashboard, AssignmentList, SelfTests, ErrorBook } from '../../../views/student';
 import { AssignmentDetails } from '../../../views/assignment';
 import { ResultView } from '../../../views/result';
@@ -25,6 +28,13 @@ export async function generateMetadata({
   params: Promise<{ area: string; segments?: string[] }>;
 }) {
   const { area, segments = [] } = await params;
+  const name = (
+    { profile: '用户中心', notifications: '通知中心', announcements: '公告' } as Record<
+      string,
+      string
+    >
+  )[segments[0]];
+  if (name) return { title: name + ' · 图衡' };
   if (area === 'admin' && ['settings', 'mail'].includes(segments[0]))
     return {
       title: `系统设置 · ${segments[0] === 'mail' || segments[1] === 'mail' ? '邮件服务' : '网站信息'} · 图衡`,
@@ -41,14 +51,20 @@ export default async function Workspace({
   const { area, segments = ['dashboard'] } = await params;
   const search = await searchParams;
   if (!['student', 'teacher', 'admin', 'school'].includes(area)) notFound();
-  let a;
-  try {
-    a = await actor(area === 'student' ? 'STUDENT' : 'STAFF', true);
-    if (a.onboarding) redirect(`/onboarding/${area === 'student' ? 'student' : 'staff'}`);
-  } catch (e) {
-    if (e instanceof Error && e.message === 'NEXT_REDIRECT') throw e;
-    redirect(`/login/${area === 'student' ? 'student' : 'staff'}`);
-  }
+  const realm = area === 'student' ? 'STUDENT' : 'STAFF';
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(search))
+    if (typeof value === 'string') query.set(key, value);
+  const returnTo =
+    `/${area}/${segments.map(encodeURIComponent).join('/')}` + (query.size ? '?' + query : '');
+  const a = await actor(realm, true).catch((e) => {
+    if (e instanceof DomainError) redirect(loginEntryUrl(realm, returnTo));
+    throw e;
+  });
+  if (a.onboarding)
+    redirect(
+      `/onboarding/${realm.toLowerCase()}?` + new URLSearchParams({ callbackUrl: returnTo }),
+    );
   const section = segments[0];
   let view: React.ReactNode;
   try {
@@ -121,12 +137,21 @@ async function workspaceView(
       'questions',
       'organization',
       'settings',
+      'announcements',
     ].includes(section) &&
     segments.length > 1
   )
     notFound();
   if (
-    ['reviews', 'results', 'assignments', 'questions', 'settings', 'classes'].includes(section) &&
+    [
+      'reviews',
+      'results',
+      'assignments',
+      'questions',
+      'settings',
+      'classes',
+      'announcements',
+    ].includes(section) &&
     segments.length > 2
   )
     notFound();
@@ -148,12 +173,22 @@ async function workspaceView(
           ? ['classes', 'students', 'imports', 'delivery']
           : [];
   if (organizations.includes(section)) return organizationWorkspace(a, area, segments, search);
+  if (section === 'profile') return <ProfileView actor={a} />;
+  if (section === 'notifications')
+    return (
+      <>
+        <PageTitle title="通知中心" description="查看作业提醒、成绩动态和公告。" />
+        <NotificationCenter realm={area === 'student' ? 'STUDENT' : 'STAFF'} />
+      </>
+    );
+  if (section === 'announcements')
+    return AnnouncementsView({ a, area, segment: segments[1], cursor: search.before });
+  if (area === 'admin' && section === 'questions' && search.choose)
+    return ChooseSchool({ a, path: '/admin/questions', title: '学校题库', search });
   if (area === 'admin' && section === 'assignments' && (!search.schoolId || search.choose))
     return ChooseSchool({ a, path: '/admin/' + segments.join('/'), title: '学校作业', search });
   let view: React.ReactNode;
-  if (section === 'security')
-    view = <AccountSetup realm={area === 'student' ? 'STUDENT' : 'STAFF'} security />;
-  else if (area === 'school') {
+  if (area === 'school') {
     requireRole(a, 'SCHOOL_ADMIN');
     if (section === 'assignments')
       view =
@@ -204,7 +239,8 @@ async function workspaceView(
           : segments[1]
             ? await AssignmentDetails({ a, id: segments[1], selectedSchool: search.schoolId })
             : await AssignmentList({ a, area: 'admin', search });
-    else if (section === 'questions') view = await QuestionsView({ a, segments });
+    else if (section === 'questions')
+      view = await QuestionsView({ a, segments, selectedSchool: search.schoolId });
     else if (section === 'models') view = await ModelsView({ a, search });
     else if (section === 'jobs') view = await JobsView({ a, search });
     else if (section === 'audit') view = await AuditView({ a });

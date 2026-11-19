@@ -4,7 +4,13 @@ import {
   executeRosterImport,
 } from '../../../packages/infrastructure/src/roster-import';
 import { purgeExpiredSecrets } from '../../../packages/infrastructure/src/secret-store';
-import { prisma } from '@tuheng/database';
+import { database, prisma } from '@tuheng/database';
+import { scanAssignmentDeadlines } from '@tuheng/domain';
+import {
+  archivePendingAssets,
+  cleanExpiredAssets,
+} from '../../../packages/infrastructure/src/asset-maintenance';
+import { dispatchNotificationMail } from '../../../packages/infrastructure/src/notification-delivery';
 import { dispatchOutbox, redisOptions, reconcileQueuedRuns } from '@tuheng/infrastructure';
 import {
   executeGradingRun,
@@ -53,13 +59,38 @@ async function tick() {
     dispatching = false;
   }
 }
-await tick();
+void tick();
 const timer = setInterval(tick, 3000);
-console.log('TuHeng Worker ready: formal and selftest queues');
+function periodic(label: string, work: () => Promise<unknown>, interval: number) {
+  let pending: Promise<unknown> | undefined;
+  function run() {
+    if (pending) return;
+    pending = work()
+      .catch(() => {
+        console.error(JSON.stringify({ event: label + '-failed', recoverable: true }));
+      })
+      .finally(() => {
+        pending = undefined;
+      });
+  }
+  run();
+  const timer = setInterval(run, interval);
+  return async () => {
+    clearInterval(timer);
+    await pending;
+  };
+}
+const stopBackground = [
+  periodic('archive-assets', archivePendingAssets, 3000),
+  periodic('clean-assets', cleanExpiredAssets, 60_000),
+  periodic('deadline-scan', () => scanAssignmentDeadlines(database), 60_000),
+  periodic('teaching-mail', dispatchNotificationMail, 5000),
+];
+console.log('TuHeng Worker ready: grading, roster, assets and notifications');
 for (const sig of ['SIGTERM', 'SIGINT'] as const)
   process.on(sig, async () => {
     clearInterval(timer);
-    await Promise.all(workers.map((w) => w.close()));
+    await Promise.all([...workers.map((w) => w.close()), ...stopBackground.map((stop) => stop())]);
     await prisma.$disconnect();
     process.exit(0);
   });

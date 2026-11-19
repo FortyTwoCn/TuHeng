@@ -23,6 +23,8 @@ import { retryRun, rerunCurrentConfig } from '../../packages/infrastructure/src/
 import { executeGradingRun } from '../../packages/infrastructure/src/grading-runner';
 import { listGradingJobs } from '../../packages/infrastructure/src/job-records';
 import { listAIInvocations } from '../../packages/infrastructure/src/ai-records';
+import { uploadAsset } from '@tuheng/infrastructure';
+import { readFile } from 'node:fs/promises';
 const tag = crypto.randomUUID();
 let server: Server,
   fixture: Awaited<ReturnType<typeof aiFixture>>,
@@ -124,15 +126,9 @@ beforeAll(async () => {
     await prisma.assignmentItem.findFirstOrThrow({ where: { assignmentId: assignment.id } })
   ).id;
   assetId = (
-    await prisma.storedAsset.create({
-      data: {
-        ownerId: student.id,
-        name: 'metadata-only.png',
-        mime: 'image/png',
-        bytes: 1,
-        purpose: 'SUBMISSION',
-        objectKey: `test-not-loaded/${tag}`,
-      },
+    await uploadAsset(student, {
+      file: { name: 'fixture.png', bytes: await readFile('tests/samples/projection.png') },
+      target: { kind: 'ASSIGNMENT_ANSWER', itemId },
     })
   ).id;
 });

@@ -1,10 +1,11 @@
 import { Prisma } from '@prisma/client';
 import { prisma, database } from '@tuheng/database';
-import { GradingRequest, type VisionProvider } from '@tuheng/contracts';
+import { AnswerStorageContext, GradingRequest, type VisionProvider } from '@tuheng/contracts';
 import { GeometryGradingEngine, GradingError } from '@tuheng/grading-core';
 import { ProviderError } from '@tuheng/ai-providers';
 import { SharpImagePipeline } from '@tuheng/image-pipeline';
-import { putObject, getObject } from './storage';
+import { getObject } from './storage';
+import { storeGradingImage } from './assets';
 import { invocationProvider } from './ai-gateway';
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 export async function executeGradingRun(
@@ -57,6 +58,7 @@ export async function executeGradingRun(
       ...request.reference.assets.map((asset) => [asset.id, question.question.ownerId] as const),
       ...request.submissionAssets.map((asset) => [asset.id, attempt.ownerId] as const),
     ]);
+    const generated: string[] = [];
     const pipeline = new SharpImagePipeline(
       async (id) => {
         const asset = await prisma.storedAsset.findUniqueOrThrow({ where: { id } });
@@ -66,21 +68,15 @@ export async function executeGradingRun(
       },
       async (parentId, buffer, record) => {
         const parent = await prisma.storedAsset.findUniqueOrThrow({ where: { id: parentId } });
-        const objectKey = `private/${parent.ownerId}/processed/${runId}/${crypto.randomUUID()}`;
-        await putObject(objectKey, buffer, 'image/png');
-        const a = await prisma.storedAsset.create({
-          data: {
-            ownerId: parent.ownerId,
-            objectKey,
-            name: `处理图-${parent.name}`,
-            mime: 'image/png',
-            bytes: buffer.length,
-            purpose: 'PROCESSED',
-            parentId,
-            transform: json(record),
-          },
-        });
-        return a.id;
+        const answer = AnswerStorageContext.parse(attempt.storageContext);
+        const id = await storeGradingImage(
+          parent,
+          { kind: 'GRADING_PROCESSED', answer, attemptId: attempt.id, runId },
+          buffer,
+          record,
+        );
+        generated.push(id);
+        return id;
       },
     );
     const result = await new GeometryGradingEngine(provider, pipeline).grade(request);
@@ -96,6 +92,10 @@ export async function executeGradingRun(
         },
       });
       if (!owned.count) return;
+      await tx.storedAsset.updateMany({
+        where: { id: { in: generated }, state: 'ARCHIVED' },
+        data: { discardAfter: null },
+      });
       if (invocation)
         await tx.aIInvocation.update({
           where: { id: invocation.id },

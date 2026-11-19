@@ -47,7 +47,12 @@ export async function ResultView({ a, id }: { a: Actor; id: string }) {
                 annotations={suggestion?.result.geometryAnnotations}
               />
             )}
-            <DrawingViewer assets={d.assets} annotations={annotations} processed={processed} />
+            <DrawingViewer
+              assets={d.assets}
+              annotations={annotations}
+              processed={processed}
+              realm={d.teacher ? 'STAFF' : 'STUDENT'}
+            />
           </Panel>
           {suggestion && (
             <Panel>
@@ -80,44 +85,47 @@ export async function ResultView({ a, id }: { a: Actor; id: string }) {
             <Panel title="参考答案">
               <p>{d.question.reference.content}</p>
               <DrawingViewer
+                realm={d.teacher ? 'STAFF' : 'STUDENT'}
                 assets={await database.list('storedAsset', {
                   id: { in: d.question.reference.assetIds },
                 })}
               />
             </Panel>
           )}
-          <Panel title="申诉与处理记录">
-            {d.appeals.map((ap) => (
-              <div className="list-item" key={ap.id}>
-                <div className="grow">
-                  <Status status={ap.status} />
-                  <p>{ap.reason}</p>
-                  {ap.response && <p>教师处理：{ap.response}</p>}
-                  {d.teacher && ap.status === 'OPEN' && (
-                    <TextAction
-                      name="appeal-resolve"
-                      field="response"
-                      data={{ id: ap.id }}
-                      label="保存处理意见"
-                      placeholder="说明维持成绩或更正的理由；更正成绩需另存并发布新版本。"
-                    />
-                  )}
+          <div id="appeals">
+            <Panel title="申诉与处理记录">
+              {d.appeals.map((ap) => (
+                <div className="list-item" key={ap.id}>
+                  <div className="grow">
+                    <Status status={ap.status} />
+                    <p>{ap.reason}</p>
+                    {ap.response && <p>教师处理：{ap.response}</p>}
+                    {d.teacher && ap.status === 'OPEN' && (
+                      <TextAction
+                        name="appeal-resolve"
+                        field="response"
+                        data={{ id: ap.id }}
+                        label="保存处理意见"
+                        placeholder="说明维持成绩或更正的理由；更正成绩需另存并发布新版本。"
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {!d.teacher && d.attempt.ownerId === a.id && d.attempt.publishedDecisionId && (
-              <TextAction
-                name="appeal"
-                field="reason"
-                data={{ attemptId: id }}
-                label="提交申诉"
-                placeholder="请说明具体评分项、作图证据和申诉理由。"
-              />
-            )}
-            {!d.appeals.length && !d.attempt.publishedDecisionId && (
-              <p className="muted">正式成绩发布后开放申诉。</p>
-            )}
-          </Panel>
+              ))}
+              {!d.teacher && d.attempt.ownerId === a.id && d.attempt.publishedDecisionId && (
+                <TextAction
+                  name="appeal"
+                  field="reason"
+                  data={{ attemptId: id }}
+                  label="提交申诉"
+                  placeholder="请说明具体评分项、作图证据和申诉理由。"
+                />
+              )}
+              {!d.appeals.length && !d.attempt.publishedDecisionId && (
+                <p className="muted">正式成绩发布后开放申诉。</p>
+              )}
+            </Panel>
+          </div>
         </div>
         <aside>
           {d.teacher ? (

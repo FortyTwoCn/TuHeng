@@ -3,8 +3,8 @@ import { GradingRequest } from '@tuheng/contracts';
 import { exportGeometryBundle } from '@tuheng/geometry-core';
 import { validateAnswerGeometry } from './geometry';
 import type { Actor, DataPort, Entities } from './entities';
-import { ensure, requireAssignmentRecipient, checkSubmissionWindow, audit } from './policy';
-import { ownAssets } from './teaching';
+import { ensure, audit } from './policy';
+import { answerStorageContext, bindUploadedAssets } from './resource-context';
 export async function scheduleRun(
   tx: DataPort,
   attempt: Entities['submissionAttempt'],
@@ -99,15 +99,13 @@ export async function saveDraft(
   assetIds: string[],
   geometry?: unknown,
 ) {
-  await ownAssets(db, a, assetIds, 'SUBMISSION');
-  const item = await db.get('assignmentItem', itemId);
-  ensure(item, 'NOT_FOUND', 404);
-  const ass = await db.get('assignment', item.assignmentId);
-  ensure(ass, 'NOT_FOUND', 404);
-  checkSubmissionWindow(ass, new Date());
-  await requireAssignmentRecipient(db, a, ass);
   return db.transaction(async (tx) => {
-    const question = await tx.get('questionVersion', item.questionVersionId);
+    const { context, questionVersionId } = await answerStorageContext(tx, a, {
+      kind: 'ASSIGNMENT_ANSWER',
+      itemId,
+    });
+    await bindUploadedAssets(tx, a, assetIds, context);
+    const question = await tx.get('questionVersion', questionVersionId);
     const draftGeometry = validateAnswerGeometry(question?.geometryDocument, geometry);
     const s = (await tx.list('submission', { userId: a.id, itemId }))[0];
     return s
@@ -140,37 +138,43 @@ export async function submitAnswer(
     (input.assetIds.length > 0 || input.geometry != null) && input.assetIds.length <= 10,
     'ANSWER_EVIDENCE_REQUIRED',
   );
-  await ownAssets(db, a, input.assetIds, 'SUBMISSION');
-  for (const id of input.assetIds)
-    ensure(
-      (await db.get('storedAsset', id))?.mime !== 'application/pdf',
-      'SUBMISSION_MUST_BE_IMAGE',
-    );
+  ensure(
+    [input.itemId, input.selfTestItemId, input.reviewEntryId].filter(Boolean).length === 1,
+    'ANSWER_TARGET_REQUIRED',
+  );
   return db.transaction(async (tx) => {
     const prior = (
       await tx.list('submissionAttempt', { ownerId: a.id, idempotencyKey: input.idempotencyKey })
     )[0];
     if (prior) return prior;
+    const { context, questionVersionId } = await answerStorageContext(
+      tx,
+      a,
+      input.itemId
+        ? { kind: 'ASSIGNMENT_ANSWER', itemId: input.itemId }
+        : input.reviewEntryId
+          ? { kind: 'REVIEW_ANSWER', entryId: input.reviewEntryId }
+          : { kind: 'SELFTEST_ANSWER', itemId: input.selfTestItemId! },
+    );
+    await bindUploadedAssets(tx, a, input.assetIds, context);
     let submissionId: string | null = null,
       selfTestItemId: string | null = null,
-      questionVersionId: string,
       source = 'ASSIGNMENT',
       version = 1;
-    if (input.itemId) {
-      const item = await tx.get('assignmentItem', input.itemId);
-      ensure(item, 'NOT_FOUND', 404);
-      const ass = await tx.get('assignment', item.assignmentId);
+    if (context.kind === 'ASSIGNMENT_ANSWER') {
+      const ass = await tx.get('assignment', context.assignmentId);
       ensure(ass, 'NOT_FOUND', 404);
-      await requireAssignmentRecipient(tx, a, ass);
-      checkSubmissionWindow(ass, new Date());
-      let s = (await tx.list('submission', { userId: a.id, itemId: item.id }))[0];
+      let s = (await tx.list('submission', { userId: a.id, itemId: context.itemId }))[0];
       if (!s)
-        s = await tx.create('submission', { userId: a.id, itemId: item.id, draftAssetIds: [] });
+        s = await tx.create('submission', {
+          userId: a.id,
+          itemId: context.itemId,
+          draftAssetIds: [],
+        });
       const attempts = await tx.list('submissionAttempt', { submissionId: s.id });
       ensure(attempts.length < ass.maxAttempts, 'ATTEMPT_LIMIT');
-      version = attempts.length + 1;
+      version = Math.max(0, ...attempts.map((at) => at.version)) + 1;
       submissionId = s.id;
-      questionVersionId = item.questionVersionId;
     } else {
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
@@ -180,19 +184,8 @@ export async function submitAnswer(
         submittedAt: { gt: today },
       });
       ensure(attempts.length < quota, 'SELFTEST_QUOTA');
-      source = input.reviewEntryId ? 'REVIEW' : 'SELFTEST';
-      if (input.reviewEntryId) {
-        const entry = await tx.get('errorBookEntry', input.reviewEntryId);
-        ensure(entry?.ownerId === a.id, 'FORBIDDEN', 403);
-        questionVersionId = entry.questionVersionId;
-      } else {
-        const item = await tx.get('selfTestItem', input.selfTestItemId ?? '');
-        ensure(item, 'NOT_FOUND', 404);
-        const set = await tx.get('selfTestSet', item.setId);
-        ensure(set?.ownerId === a.id, 'PRIVATE_SELFTEST', 403);
-        selfTestItemId = item.id;
-        questionVersionId = item.questionVersionId;
-      }
+      source = context.kind === 'REVIEW_ANSWER' ? 'REVIEW' : 'SELFTEST';
+      if (context.kind === 'SELFTEST_ANSWER') selfTestItemId = context.itemId;
     }
     const question = await tx.get('questionVersion', questionVersionId);
     const geometryAnswer = validateAnswerGeometry(question?.geometryDocument, input.geometry);
@@ -211,6 +204,7 @@ export async function submitAnswer(
       source,
       version,
       idempotencyKey: input.idempotencyKey,
+      storageContext: context,
       ...(geometryAnswer
         ? { geometryAnswer, geometrySchemaVersion: geometryAnswer.schemaVersion }
         : {}),

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { PageTitle } from '@tuheng/ui';
 import { SMTPSettings } from './SMTPSettings';
 import { SiteSettings } from './SiteSettings';
+import { TeachingMailSummary } from './TeachingMailSummary';
 
 export const settingSections = [
   {
@@ -14,7 +15,7 @@ export const settingSections = [
   {
     key: 'mail',
     title: '邮件服务',
-    description: '验证码与账号通知的发送配置',
+    description: '验证码、账号安全与教学通知的发送配置',
     role: 'SITE_ADMIN',
     href: '/admin/settings/mail',
   },
@@ -40,7 +41,14 @@ export function SystemSettings({ section = 'site' }: { section?: 'site' | 'mail'
           </Link>
         ))}
       </nav>
-      {section === 'site' ? <SiteSettings /> : <SMTPSettings />}
+      {section === 'site' ? (
+        <SiteSettings />
+      ) : (
+        <>
+          <SMTPSettings />
+          <TeachingMailSummary />
+        </>
+      )}
     </section>
   );
 }

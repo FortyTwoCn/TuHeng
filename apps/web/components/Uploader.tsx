@@ -2,6 +2,8 @@
 import { useRef, useState } from 'react';
 import { UploadCloud, ArrowUp, ArrowDown, Trash2, RotateCw, Camera } from 'lucide-react';
 import { action } from './Actions';
+import type { AuthRealm, AssetUploadTarget } from '@tuheng/contracts';
+import { assetHref } from '../lib/resource-links';
 export interface UploadedAsset {
   id: string;
   name: string;
@@ -10,12 +12,14 @@ export interface UploadedAsset {
 export function Uploader({
   value,
   onChange,
-  purpose = 'SUBMISSION',
+  target,
+  realm,
   label = '上传作答图纸',
 }: {
   value: UploadedAsset[];
   onChange: (v: UploadedAsset[]) => void;
-  purpose?: string;
+  target: AssetUploadTarget;
+  realm: AuthRealm;
   label?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null),
@@ -24,6 +28,7 @@ export function Uploader({
     [error, setError] = useState(''),
     [failed, setFailed] = useState<File[]>([]);
   async function upload(files: File[]) {
+    setProgress(0);
     setError('');
     const next = [...value],
       fail: File[] = [];
@@ -36,6 +41,7 @@ export function Uploader({
         const asset = await new Promise<UploadedAsset>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('POST', '/api/assets');
+          xhr.setRequestHeader('x-tuheng-realm', realm);
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
           };
@@ -53,7 +59,7 @@ export function Uploader({
           xhr.ontimeout = () => reject(new Error('上传超时'));
           const form = new FormData();
           form.set('file', file);
-          form.set('purpose', purpose);
+          form.set('target', JSON.stringify(target));
           xhr.send(form);
         });
         next.push(asset);
@@ -66,8 +72,8 @@ export function Uploader({
     setFailed(fail);
     setProgress(null);
   }
-  const accept =
-    purpose === 'SUBMISSION' ? 'image/jpeg,image/png' : 'image/jpeg,image/png,application/pdf';
+  const pdfAllowed = ['QUESTION', 'REFERENCE', 'DOCUMENT'].includes(target.kind);
+  const accept = pdfAllowed ? 'image/jpeg,image/png,application/pdf' : 'image/jpeg,image/png';
   return (
     <div className="uploader">
       <div
@@ -80,10 +86,7 @@ export function Uploader({
       >
         <UploadCloud size={30} />
         <strong>{label}</strong>
-        <p>
-          拖放文件，或选择本地文件 · JPG / PNG{purpose !== 'SUBMISSION' ? ' / PDF' : ''} ·
-          单个不超过15MB
-        </p>
+        <p>拖放文件，或选择本地文件 · JPG / PNG{pdfAllowed ? ' / PDF' : ''} · 单个不超过15MB</p>
         <div className="button-row">
           <button
             type="button"
@@ -145,11 +148,11 @@ export function Uploader({
         {value.map((asset, index) => (
           <div className="uploaded" key={asset.id}>
             {asset.mime === 'application/pdf' ? (
-              <a href={`/api/assets/${asset.id}`} target="_blank">
+              <a href={assetHref(asset.id, realm)} target="_blank">
                 PDF · 点击预览
               </a>
             ) : (
-              <img src={`/api/assets/${asset.id}`} alt={asset.name} />
+              <img src={assetHref(asset.id, realm)} alt={asset.name} />
             )}
             <span>
               {index + 1}. {asset.name}
@@ -185,11 +188,16 @@ export function Uploader({
                   aria-label="旋转图纸"
                   onClick={async () => {
                     try {
-                      const rotated = await action('asset-transform', {
-                        id: asset.id,
-                        rotate: 90,
-                        crop: null,
-                      });
+                      const rotated = await action(
+                        'asset-transform',
+                        {
+                          id: asset.id,
+                          target,
+                          rotate: 90,
+                          crop: null,
+                        },
+                        realm,
+                      );
                       onChange(value.map((a) => (a.id === asset.id ? rotated : a)));
                     } catch (e) {
                       setError((e as Error).message);
@@ -202,7 +210,15 @@ export function Uploader({
               <button
                 type="button"
                 aria-label="移除文件"
-                onClick={() => onChange(value.filter((a) => a.id !== asset.id))}
+                onClick={() => {
+                  onChange(value.filter((a) => a.id !== asset.id));
+                  void fetch(assetHref(asset.id, realm), {
+                    method: 'DELETE',
+                    headers: { 'x-tuheng-realm': realm },
+                  }).catch(() => {
+                    /* Expired upload sessions are also cleaned by the Worker. */
+                  });
+                }}
               >
                 <Trash2 size={16} />
               </button>
@@ -213,11 +229,16 @@ export function Uploader({
                 <CropControls
                   onCrop={async (crop) => {
                     try {
-                      const cropped = await action('asset-transform', {
-                        id: asset.id,
-                        rotate: 0,
-                        crop,
-                      });
+                      const cropped = await action(
+                        'asset-transform',
+                        {
+                          id: asset.id,
+                          target,
+                          rotate: 0,
+                          crop,
+                        },
+                        realm,
+                      );
                       onChange(value.map((a) => (a.id === asset.id ? cropped : a)));
                     } catch (e) {
                       setError((e as Error).message);

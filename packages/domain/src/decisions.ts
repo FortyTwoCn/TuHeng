@@ -1,6 +1,7 @@
 import { ScoreDecisionInput, Annotation } from '@tuheng/contracts';
 import type { Actor, DataPort } from './entities';
 import { ensure, requireRole, attemptContext, audit } from './policy';
+import { recordNotifications } from './notification-events';
 export async function reviewGrade(db: DataPort, a: Actor, input: unknown) {
   const data = ScoreDecisionInput.parse(input);
   return db.transaction(async (tx) => {
@@ -51,7 +52,7 @@ export async function publishGrade(db: DataPort, a: Actor, decisionId: string) {
   return db.transaction(async (tx) => {
     const decision = await tx.get('gradeDecision', decisionId);
     ensure(decision, 'NOT_FOUND', 404);
-    const { attempt } = await attemptContext(tx, a, decision.attemptId, true);
+    const { attempt, assignment } = await attemptContext(tx, a, decision.attemptId, true);
     if (decision.publishedAt) return decision;
     const latest = (
       await tx.list(
@@ -91,16 +92,66 @@ export async function publishGrade(db: DataPort, a: Actor, decisionId: string) {
         questionVersionId: q.id,
       });
     await audit(tx, a, 'GRADE_PUBLISHED', decision.id);
+    if (assignment) {
+      const updated = !!attempt.publishedDecisionId;
+      await recordNotifications(
+        tx,
+        [attempt.ownerId],
+        {
+          kind: updated ? 'GRADE_UPDATED' : 'GRADE_PUBLISHED',
+          eventKey: `grade:${decision.id}`,
+          resourceType: 'GRADE_DECISION',
+          resourceId: decision.id,
+          schoolId: assignment.schoolId ?? a.schoolId,
+          revision: decision.revision,
+          title: updated ? '题目正式成绩已更新' : '题目正式成绩已发布',
+          summary: `${assignment.title} · ${q.title}`,
+        },
+        now,
+      );
+    }
     return { ...decision, publishedAt: now };
   });
 }
 export async function appealGrade(db: DataPort, a: Actor, attemptId: string, reason: string) {
   return db.transaction(async (tx) => {
-    const { attempt } = await attemptContext(tx, a, attemptId);
+    const { attempt, assignment } = await attemptContext(tx, a, attemptId);
     ensure(attempt.ownerId === a.id && attempt.publishedDecisionId, 'NO_PUBLISHED_GRADE');
     ensure(!(await tx.list('appeal', { attemptId, status: 'OPEN' })).length, 'APPEAL_ALREADY_OPEN');
     const appeal = await tx.create('appeal', { attemptId, userId: a.id, reason });
     await audit(tx, a, 'APPEAL_CREATED', appeal.id);
+    if (assignment) {
+      const reviewers = assignment.audienceRevision
+        ? ((
+            await tx.list('assignmentRecipient', {
+              assignmentId: assignment.id,
+              studentId: a.id,
+              active: true,
+            })
+          )[0]?.reviewerIds ?? [])
+        : (await tx.list('teachingGrant', { classId: assignment.classId! })).map(
+            (grant) => grant.userId,
+          );
+      const eligible = await tx.list('user', {
+        id: { in: reviewers },
+        active: true,
+        kind: 'TEACHER',
+        schoolId: a.schoolId ?? null,
+      });
+      await recordNotifications(
+        tx,
+        eligible.map((u) => u.id),
+        {
+          kind: 'APPEAL_OPENED',
+          eventKey: `appeal:${appeal.id}:opened`,
+          resourceType: 'APPEAL',
+          resourceId: appeal.id,
+          schoolId: assignment.schoolId ?? a.schoolId,
+          title: '收到一条作答申诉',
+          summary: assignment.title,
+        },
+      );
+    }
     return appeal;
   });
 }
@@ -109,10 +160,20 @@ export async function resolveAppeal(db: DataPort, a: Actor, id: string, response
   return db.transaction(async (tx) => {
     const appeal = await tx.get('appeal', id);
     ensure(appeal, 'NOT_FOUND');
-    await attemptContext(tx, a, appeal.attemptId, true);
+    const { assignment } = await attemptContext(tx, a, appeal.attemptId, true);
     ensure(appeal.status === 'OPEN', 'APPEAL_CLOSED');
     await tx.update('appeal', id, { response, status: 'RESOLVED' });
     await audit(tx, a, 'APPEAL_RESOLVED', id);
+    if (assignment)
+      await recordNotifications(tx, [appeal.userId], {
+        kind: 'APPEAL_RESOLVED',
+        eventKey: `appeal:${id}:resolved`,
+        resourceType: 'APPEAL',
+        resourceId: id,
+        schoolId: assignment.schoolId ?? a.schoolId,
+        title: '申诉已有处理结果',
+        summary: `${assignment.title} · 可查看教师回复。`,
+      });
     return { id };
   });
 }

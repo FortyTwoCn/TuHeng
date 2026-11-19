@@ -6,11 +6,9 @@ import { Logout } from './Actions';
 
 export function MobileNavigation({
   items,
-  securityHref,
   realm,
 }: {
   items: { href: string; label: string; active: boolean }[];
-  securityHref: string;
   realm: 'STAFF' | 'STUDENT';
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -43,9 +41,6 @@ export function MobileNavigation({
               {item.label}
             </Link>
           ))}
-          <Link href={securityHref} onClick={() => dialog.current?.close()}>
-            账号安全
-          </Link>
         </nav>
         <Logout realm={realm} />
       </dialog>

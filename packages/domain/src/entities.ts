@@ -1,4 +1,17 @@
-import type { Role, QuestionInput, GeometryDocument } from '@tuheng/contracts';
+import type {
+  Role,
+  QuestionInput,
+  GeometryDocument,
+  AssetArchiveContext,
+  AssetPurpose,
+  AssetUploadTarget,
+  AnswerStorageContext,
+  NotificationCategory,
+  NotificationKind,
+  NotificationResource,
+  NotificationPreferences,
+  AnnouncementAudience,
+} from '@tuheng/contracts';
 export interface Actor {
   id: string;
   roles: Role[];
@@ -34,14 +47,48 @@ export interface Entities {
     active: boolean;
     tokenVersion: number;
     createdAt: Date;
+    avatarAssetId?: string | null;
+    avatarRevision?: number;
+    notificationPreferences?: NotificationPreferences | null;
+    notificationConsent?: Partial<Record<NotificationCategory, number>> | null;
   };
   userNotification: Row & {
     userId: string;
-    assignmentId: string;
-    kind: string;
-    revision: number;
+    sequence: number;
+    eventKey: string;
+    kind: NotificationKind;
+    category: NotificationCategory;
+    title: string;
+    summary: string;
+    resourceType: NotificationResource;
+    resourceId: string;
+    schoolId: string | null;
+    revision: number | null;
+    deadlineAt: Date | null;
     readAt: Date | null;
     createdAt: Date;
+  };
+  notificationDelivery: Row & {
+    notificationId: string;
+    consentVersion: number;
+    expiresAt: Date;
+  };
+  announcement: Row & {
+    creatorId: string;
+    schoolId: string | null;
+    title: string;
+    body: string;
+    audience: AnnouncementAudience;
+    revision: number;
+    publishedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  announcementRecipient: Row & {
+    announcementId: string;
+    userId: string;
+    schoolId: string;
+    revision: number;
   };
   school: Row & { code: string; name: string; active: boolean; rosterVersion: number };
   assignmentRecipient: Row & {
@@ -54,6 +101,7 @@ export interface Entities {
     active: boolean;
     inferred: boolean;
     createdAt: Date;
+    activeSince: Date;
   };
   course: Row & { title: string; code: string; schoolId?: string | null; archived?: boolean };
   courseOffering: Row & { courseId: string; term: string; archived?: boolean };
@@ -68,6 +116,8 @@ export interface Entities {
   knowledgePoint: Row & { title: string; chapter: string };
   question: Row & {
     ownerId: string;
+    schoolId: string | null;
+    selfTest: boolean;
     courseId: string | null;
     visibility: string;
     active: boolean;
@@ -119,6 +169,7 @@ export interface Entities {
     publishedDecisionId: string | null;
     geometryAnswer?: GeometryDocument | null;
     geometrySchemaVersion?: string | null;
+    storageContext?: AnswerStorageContext;
   };
   submissionAsset: Row & { attemptId: string; assetId: string; position: number };
   storedAsset: Row & {
@@ -129,10 +180,32 @@ export interface Entities {
     bytes: number;
     width: number | null;
     height: number | null;
-    purpose: string;
+    purpose: AssetPurpose;
     parentId: string | null;
     transform: unknown | null;
+    storageSchoolId: string | null;
+    storageSubjectUserId: string | null;
+    storageContext: AssetArchiveContext | null;
+    checksum: string;
+    state: 'WRITING' | 'STAGED' | 'ARCHIVING' | 'ARCHIVED' | 'DELETING';
+    uploadSessionId: string | null;
+    discardAfter: Date | null;
     createdAt: Date;
+  };
+  assetUploadSession: Row & {
+    ownerId: string;
+    schoolId: string | null;
+    targetSchoolId: string | null;
+    target: AssetUploadTarget;
+    expiresAt: Date;
+    cancelledAt: Date | null;
+    createdAt: Date;
+  };
+  assetArchiveTask: Row & {
+    assetId: string;
+    sourceKey: string;
+    sourceChecksum: string;
+    targetKey: string;
   };
   aIProvider: Row & {
     name: string;
@@ -273,6 +346,31 @@ export interface Entities {
   };
 }
 export type Table = keyof Entities;
+export type AnnouncementDirectory = {
+  schoolId: string | null;
+  permittedClassIds?: string[];
+  classId?: string;
+  q?: string;
+  after?: string;
+  kind?: 'STUDENT' | 'TEACHER';
+  selection?: AnnouncementAudience;
+};
+export type AnnouncementPerson = {
+  id: string;
+  name: string;
+  kind: string;
+  schoolId: string;
+  schoolName: string;
+};
+export type DeadlineCandidate = {
+  recipientId: string;
+  studentId: string;
+  id: string;
+  schoolId: string;
+  title: string;
+  dueAt: Date;
+  missing: number;
+};
 export type Where<T> = {
   [K in keyof T]?: T[K] | { in?: T[K][]; lt?: T[K]; gt?: T[K]; not?: T[K] };
 };
@@ -284,6 +382,11 @@ export interface DataPort {
     options?: { take?: number; orderBy?: keyof Entities[K]; desc?: boolean },
   ): Promise<Entities[K][]>;
   create<K extends Table>(table: K, data: Partial<Entities[K]>): Promise<Entities[K]>;
+  createMany<K extends Table>(table: K, rows: Partial<Entities[K]>[]): Promise<void>;
+  lockNotificationRecipients(ids: string[]): Promise<void>;
+  questionVersionsUsingAsset(id: string): Promise<Entities['questionVersion'][]>;
+  announcementPeople(directory: AnnouncementDirectory, take: number): Promise<AnnouncementPerson[]>;
+  deadlineCandidates(now: Date, after: string, take: number): Promise<DeadlineCandidate[]>;
   update<K extends Table>(table: K, id: string, data: Partial<Entities[K]>): Promise<Entities[K]>;
   transaction<T>(work: (tx: DataPort) => Promise<T>): Promise<T>;
 }

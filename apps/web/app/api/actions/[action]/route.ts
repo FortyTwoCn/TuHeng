@@ -1,10 +1,15 @@
 import { z } from 'zod';
-import { GeometryDocument, AudienceSelection, ReviewerAssignment } from '@tuheng/contracts';
+import {
+  AssetUploadTarget,
+  GeometryDocument,
+  AudienceSelection,
+  ReviewerAssignment,
+} from '@tuheng/contracts';
 import { database, prisma } from '@tuheng/database';
 import * as domain from '@tuheng/domain';
 import * as infra from '@tuheng/infrastructure';
 import { requireRecentAuthentication } from '../../../../../../packages/infrastructure/src/identity-security';
-import { actor } from '../../../../lib/auth';
+import { actor, realmFromRequest } from '../../../../lib/auth';
 import { checkOrigin, errorResponse, limitedBody } from '../../../../lib/http';
 const id = z.string().min(1).max(200),
   title = z.string().min(1).max(200);
@@ -12,8 +17,8 @@ export const runtime = 'nodejs';
 export async function POST(request: Request, { params }: { params: Promise<{ action: string }> }) {
   try {
     checkOrigin(request);
-    const a = await actor();
     const { action } = await params;
+    const a = await actor(action === 'asset-transform' ? realmFromRequest(request) : undefined);
     domain.ensure(
       ![
         'user-create',
@@ -37,8 +42,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     let result: unknown;
     switch (action) {
       case 'question': {
-        const p = z.object({ question: z.unknown(), questionId: id.optional() }).parse(body);
-        result = await domain.createQuestion(database, a, p.question, false, p.questionId);
+        const p = z
+          .object({
+            question: z.unknown(),
+            questionId: id.optional(),
+            schoolId: id.nullish(),
+            sourceVersionId: id.optional(),
+          })
+          .parse(body);
+        result = await domain.createQuestion(
+          database,
+          a,
+          p.question,
+          false,
+          p.questionId,
+          p.schoolId,
+          p.sourceVersionId,
+        );
         break;
       }
       case 'question-disable': {
@@ -176,16 +196,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
         const p = z
           .object({
             id,
+            target: AssetUploadTarget,
             rotate: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
             crop: z
               .object({ left: z.number(), top: z.number(), width: z.number(), height: z.number() })
               .nullable(),
           })
           .parse(body);
-        result = await infra.transformAsset(a, p.id, {
-          maxDimension: 2400,
-          rotate: p.rotate,
-          crop: p.crop,
+        result = await infra.transformAsset(a, {
+          id: p.id,
+          target: p.target,
+          options: { maxDimension: 2400, rotate: p.rotate, crop: p.crop },
         });
         break;
       }
