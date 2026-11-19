@@ -58,6 +58,8 @@ Playwright 非 CI 配置会复用指定地址的已运行服务；没有服务�
 | 教学组织与名单       | `teaching-organization.test.ts`、`roster.test.ts`、`audience.test.ts`                                                              | 两校隔离、课程多学期、成员复用、跨开课导入、归档、交接及快照。        |
 | AI / SMTP / 网站配置 | `ai-gateway.test.ts`、`site-settings.test.ts`、`tests/e2e/identity-ai.spec.ts`                                                     | 协议、配置版本、预算、真实页面操作与本地邮件替身。                    |
 | 作业闭环             | `tests/integration/workflow.test.ts`、`tests/e2e/workflow.spec.ts`、`onboarded-teaching.ts`                                        | 出题、发布、上传、草稿、正式提交、复核、成绩与自测保护。              |
+| 存储上下文和头像 | `resource-lifecycle.test.ts`、`profile-notifications.spec.ts` | 暂存归档、读写范围、版本复用、派生链、头像并发和双域访问。 |
+| 教学通知与公告 | `teaching-notifications.test.ts`、`profile-notifications.spec.ts` | 发布快照、催交、成绩和申诉事件、投递恢复、公告范围、移动端已读与业务跳转。 |
 | 管理界面             | `school-teaching.spec.ts`、`ui-management.spec.ts`、`organization-layout.spec.ts`                                                  | 学校/人员/课程/班级真实深链接，搜索、导入、凭据、移动抽屉与实际点击。 |
 | 几何内核与教学保存   | `tests/unit/geometry*.test.ts`、`tests/integration/geometry.test.ts`                                                               | 坐标、拓扑、笔迹、曲线、绑定、历史 JSON 与服务端题干保护。            |
 | 编辑器浏览器交互     | `geometry-ux.spec.ts`、`geometry-components.spec.ts`、`geometry-pen.spec.ts`、`geometry-curves.spec.ts`、`geometry-repair.spec.ts` | 真鼠标拖动、松手前 HUD、吸附、合点、撤销、顶部动作、输入和导出。      |
@@ -94,3 +96,29 @@ Playwright 非 CI 配置会复用指定地址的已运行服务；没有服务�
 重复眼睛来自浏览器原生密码按钮与 `SecretInput` 自带控件同时显示。修复仅在该组件范围隐藏 `::-ms-reveal`，保留右侧可访问按钮；方式依据 [Microsoft Edge 文档](https://learn.microsoft.com/en-us/microsoft-edge/web-platform/password-reveal)。[修复前](images/school-details-20261119/reauth-edge-before.png) / [修复后](images/school-details-20261119/reauth-edge.png)均为实际页面截图。
 
 桌面、平板与手机界面见[学校详情截图](images/school-details-20261119/)。本次未重跑完整浏览器套件；触控是浏览器模拟，未验证实体 iPad、Safari、系统软键盘或电子笔。真实 SMTP、真实模型调用不属于本次前端验收，没有将协议替身或旧报告算作真实服务通过。
+
+## 私有资源、用户中心与通知的验证记录
+
+2026-11-19 基于 `8da19e0` 开发。验收运行在 Windows、Node.js 26.13.0、Chrome 157.0.8103.79，使用独立 PostgreSQL 测试 schema、Redis 命名空间、私有 S3 测试桶以及本地 STARTTLS 邮件替身。
+
+| 命令 | 本次结果 |
+| --- | --- |
+| `npm run typecheck`、`npm run lint` | 通过。 |
+| `npm test` | 22 个文件，243 项通过。 |
+| `npm run test:integration` | 12 个文件，71 项通过。 |
+| `npm run test:e2e` | 选定的 `profile-notifications`、`identity-ai`、`workflow` 和 `organization-layout` 四个套件全部通过，共 17 项。 |
+| `npm run build` | 初次编译完成后命令退出。使用同一配置重试，退出码 0。 |
+
+| 场景 | 验证结果 |
+| --- | --- |
+| 空库初始化 | 十条迁移依次完成，测试种子成功，演示题目及作业使用新资源结构。 |
+| 旧开发资源切换演练 | 在隔离环境执行预检、清理、迁移及回读。删除旧对象、关联作答与评分及对应任务，保留无关对象、任务、账号、学校、配置和纯文字题目。 |
+| 私有上传 | 演示附件由实际 Worker 归入学校题库，回读 22082 字节且 SHA-256 一致。评分样本同时记录学生目录和教师源图所有权。 |
+| 失败恢复 | 集成测试覆盖归档失败、并发绑定、重复执行、资源清理、旧头像保留及并发替换。 |
+| SMTP 与账号安全 | 使用本地 SMTP 检查协议提交、教学邮件重试和跳过，浏览器验证换绑目标变化、验证码流程及双域隔离。 |
+
+原开发环境仅执行只读预检，发现 12 个旧资产、3 个关联题目版本、3 份作业及 6 次提交与评分运行。自动审批以“策略阻止”为由拒绝停止原服务并执行实际清理的命令。隔离演练覆盖了同一工具链，原数据库尚未切换。[开发环境切换步骤](OPERATIONS.md)
+
+浏览器用例覆盖 360、390、768、1024、1366 和 1440px，验证顶栏控件尺寸、触摸点击、头像上传和移除、公告发布和授权详情跳转。修复前分类选择因控件名称不明确而超时，修复后完成分类筛选、批量已读及查看详情。[截图与上传样本](RESOURCES_NOTIFICATIONS.md#实际界面与上传样本)
+
+手机触摸使用浏览器模拟。外部邮箱送达、真实模型调用和实体设备没有实测。完整浏览器套件未在本轮运行。

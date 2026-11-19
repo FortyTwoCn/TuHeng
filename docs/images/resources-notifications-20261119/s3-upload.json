@@ -1,0 +1,23 @@
+{
+  "testData": true,
+  "bucket": "tuheng-profile-round-test",
+  "questionUpload": {
+    "assetId": "3beea35f-14d7-4f42-9360-ff6e873db9c1",
+    "purpose": "QUESTION",
+    "state": "ARCHIVED",
+    "mime": "image/png",
+    "archivedByWorker": true,
+    "stage": "private/schools/school-demo/users/teacher/staging/3cf142d3-f525-4820-9958-a1a9d04c718c/3beea35f-14d7-4f42-9360-ff6e873db9c1.png",
+    "finalKey": "private/schools/school-demo/question-bank/questions/2ec0f1bf-4f28-4ca7-a792-8a45c6c9b2fc/assets/originals/3beea35f-14d7-4f42-9360-ff6e873db9c1.png",
+    "sha256": "6f86ceeaec89d50cebc7c4b5c43e0d1057e3878aae2b87efedb453f66b66ff06",
+    "checkedBytes": 22082
+  },
+  "processedExample": {
+    "assetId": "763a3888-81fa-448b-8d97-8a221140dd95",
+    "parentId": "dcdb4ffa-d058-49d4-b66d-036a944c2f96",
+    "ownerIsSourceOwner": true,
+    "ownerId": "7195978b-5438-4dbc-a891-3325f0136649",
+    "storageSubjectUserId": "d67d5222-c7dd-4d66-83f2-122c8ce49159",
+    "key": "private/schools/972b41ff-6a8b-43d1-8138-fe115102c868/users/d67d5222-c7dd-4d66-83f2-122c8ce49159/assignments/e8d83b9f-d286-4857-aa03-a629f2e40d99/items/8c315757-687b-4514-8117-c8889844a76f/attempts/ac7fb497-cf22-4f6d-833f-d0c5a46888cd/grading-runs/03120465-c368-469e-a330-ce880cacac77/processed/dcdb4ffa-d058-49d4-b66d-036a944c2f96/763a3888-81fa-448b-8d97-8a221140dd95.png"
+  }
+}

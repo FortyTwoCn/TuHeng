@@ -10,6 +10,7 @@
 | 建校、管理多位校管、建课程和学期、导入成员、发布作业 | [业务操作指南](WORKFLOWS.md)                             |
 | 确认四类账号能做什么                                 | [权限矩阵](PERMISSIONS.md)                               |
 | 配置模型、邮件与备案号，处理评分任务                 | [后台配置](AI_CONFIGURATION.md)                          |
+| 管理头像和个人邮件，查通知或发布公告，核对资源目录 | [私有资源、用户中心和通知](RESOURCES_NOTIFICATIONS.md) |
 | 使用统一投影图、电子笔、曲线和对象属性               | [几何编辑器操作](GEOMETRY_EDITOR_INTERACTION.md)         |
 
 ## 开发与维护
@@ -29,6 +30,7 @@
 - [统一图纸与换面轴](geometry-examples/v2/)、[参考关系与合点](geometry-examples/ux-v2/)、[曲线](geometry-examples/curves/)、[电子笔方向校正](geometry-examples/pen-direction/)可用于核对导出数据；笔迹样本与验证统计文件的用途见几何契约。
 - [教学管理当前截图](images/organization-ui-20261119/)展示实际开发页面；其中 `before-*` 为改动前记录，`reference.png` 为生成的设计参考，不能当作运行结果。
 - [学校详情与身份验证截图](images/school-details-20261119/)展示本次桌面、平板和手机实际页面；`reauth-edge-before.png` 记录修复前重复的密码显示按钮，其余为修复后的页面。
+- [用户中心、通知和公告截图](RESOURCES_NOTIFICATIONS.md#实际界面与上传样本)及私有资源实际上传样本来自隔离环境。
 - [编辑器属性卡截图](images/teaching-organization-20261118/)及其他日期目录为当时的验证证据，不保证每张图片都代表当前页面。实际测试覆盖以 [TESTING](TESTING.md) 为准。
 
 维护文档时同时检查页面名称、脚本、配置键和相对链接。不要在文档或截图中写入实际密码、主密钥、模型凭据或真实学生名册。

@@ -2,7 +2,7 @@
 
 [返回文档目录](README.md)
 
-图衡采用模块化单体：Next.js Web 负责页面与薄 API，独立 Node.js Worker 负责名单导入、任务投递和评分处理。数据库是业务状态的权威来源；Redis 和对象存储分别承担队列/限额与私有文件。
+图衡采用模块化单体。Next.js Web 提供工作空间和 API，Node.js Worker 负责名单导入、评分、资源归档、截止提醒与教学邮件。PostgreSQL 保存业务状态，Redis 承担评分与导入队列及共享限额，S3 保存私有文件。
 
 ## 模块边界
 
@@ -34,6 +34,9 @@
 | `/{admin,school,teacher}/classes/{id}`     | 指定班级详情、成员和授课操作               | 学校能力或 TeachingGrant；Enrollment 与授课变更。                       |
 | `/{area}/imports`、`/{area}/delivery`      | `RosterImportWizard`、`CredentialDelivery` | 导入批次、逐行事务、凭据版本及下载票据。                                |
 | `/{area}/questions`、`/{area}/assignments` | 建题、作业、接收人选择                     | `domain/teaching.ts`、`queries.ts`、`audience.ts`。                     |
+| `/{area}/profile`、`/api/profile` | 资料、头像、邮箱和密码、教学邮件偏好 | `profile.ts`、`avatars.ts`、身份服务和通知同意版本。 |
+| `/{area}/notifications`、`/{area}/announcements` | 最近通知、历史、发布公告 | `notification-events.ts`、`notification-access.ts`、`announcements.ts`。 |
+| `/api/assets` | 有上下文的上传、读取和取消 | `resource-context.ts`、`resource-paths.ts`、`assets.ts`、`asset-maintenance.ts`。 |
 | `/geometry` 与教学编辑器                   | `GeometryEditor`                           | 同一几何契约与命令；独立作图本地导出，教学页经既有草稿/提交用例保存。   |
 | `/admin/models`、`/admin/jobs`             | AI 配置与任务诊断                          | `ai-admin.ts`、`ai-gateway.ts`、`grading-jobs.ts`；版本快照与任务幂等。 |
 | `/admin/settings/{site,mail}`              | 网站信息与邮件版本                         | domain 配置校验、事务审计、SMTP 和 SecretStore。                        |

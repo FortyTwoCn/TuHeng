@@ -2,7 +2,7 @@
 
 [返回文档目录](README.md)
 
-实际模型见 [schema.prisma](../packages/database/prisma/schema.prisma)，历史 SQL 见 [migrations](../packages/database/prisma/migrations/)。当前文档更新不增加数据库迁移，不修改账号、历史作答或正式成绩。
+实际模型见 [schema.prisma](../packages/database/prisma/schema.prisma)，按版本执行 [SQL 迁移](../packages/database/prisma/migrations/)。
 
 ## 学校与教学组织
 
@@ -52,12 +52,27 @@ AIProviderVersion、AIModelVersion、AITaskBindingVersion 和 AIInvocation 记�
 
 `npm run db:migrate` 使用 [scripts/migrate.ts](../scripts/migrate.ts) 执行受审查 SQL，通过 advisory lock、事务、名称与 SHA-256 校验防止重复执行或历史脚本被改写。记录表为 `_tuheng_migrations`，不与 `_prisma_migrations` 混用。
 
-目前迁移依次涵盖：初始模型、几何作答、身份/AI 扩展、AI 尝试、接收人通知、验证会话版本、管理员可选邮箱、站点设置、课程与开课归档。多校管和本次文档整理不需要新表。
+迁移 `2026111901_resources_notifications` 增加题目的学校范围、资源归档和头像、通知投递与公告快照。已有旧附件的开发库应先执行[开发资源切换](OPERATIONS.md#开发资源切换)；没有旧附件时可直接应用。旧通知在此次切换清理。
 
 - 升级先备份，再安装依赖、生成客户端、运行迁移并重启服务，见[运行指南](OPERATIONS.md#升级现有实例)。
 - 需要结构变更时新增迁移目录，可用 Prisma diff 辅助生成 SQL，人工审查后执行；不编辑已应用 SQL、不 reset。
 - `.gitattributes` 将迁移固定为 LF。runner 只兼容旧 Windows 库的 CRLF 校验差异，不放行其他 SQL 内容变更、不重写旧 checksum。
 - 代码回退前核对旧版本是否理解新字段和数据。优先前向修复；如必须恢复备份，应同时恢复匹配的数据库、对象存储与主密钥，并单独处理备份后新增业务数据。
+
+## 资源与通知模型
+
+| 模型 | 保存内容 |
+| --- | --- |
+| `StoredAsset` | 私有 key、文件校验、生命周期、源资产、授权所有者、归档主体与学校范围。 |
+| `AssetUploadSession`、`AssetArchiveTask`、`AssetObjectGarbage` | 有期限的上传上下文、幂等归档和条件切换、旧暂存对象延迟删除。 |
+| `Question.schoolId`、`SubmissionAttempt.storageContext` | 固定题库范围及生成评分处理图所需的作答位置。 |
+| `User.avatarAssetId`、`avatarRevision` | 当前头像稳定 ID 和用于并发校验的版本。 |
+| `User.notificationPreferences`、`notificationConsent` | 总开关、分类偏好和分类同意版本。 |
+| `UserNotification`、`NotificationDelivery` | 收件人、业务事件、游标、已读时间；邮件的幂等任务、租约、有效期和结果。 |
+| `Announcement`、`AnnouncementRecipient` | 公告版本、内容、发布范围及人员快照。 |
+| `AssignmentRecipient.activeSince` | 本次进入有效作业名单的时间，用于催交间隔。 |
+
+业务状态、通知行和投递任务一起提交。资源归档和 SMTP 发送由 Worker 在事务外执行。
 
 ## 旧身份与模型迁移
 

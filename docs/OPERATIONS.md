@@ -50,6 +50,28 @@ npm run identity:bootstrap -- --reset-root --output .runtime/admin-recovery.txt
 
 **重新生成 Prisma 客户端、迁移数据库、重启进程是三个独立步骤。** 浏览器刷新与开发热更新不能替代进程重启。迁移用仓库的 runner，记录在 `_tuheng_migrations`，不与 Prisma 自身迁移记录混用；详见[数据迁移](DATABASE.md#迁移与回退)。
 
+## 开发资源切换
+
+旧开发库升级到新资源结构时，先运行只读预检。它输出数据库及 schema、私有桶和前缀、Redis 数据库及队列命名空间，以及受影响记录的实际数量。
+
+```sh
+npm run dev:reset-resources
+```
+
+核对目标与清单后，停止指向这套开发数据的 Web 和 Worker，在同一环境中执行下列命令。将 `<预检输出的 target>` 整段替换为预检给出的值，保留引号。
+
+```sh
+npm run dev:reset-resources -- --apply "--confirm=<预检输出的 target>"
+npm run db:generate
+npm run db:migrate
+```
+
+工具仅在开发环境和本机 PostgreSQL 运行。先按依赖清理引用旧附件的题目版本、作业、自测及作答评分链，更新相关草稿，清理旧通知；再删除记录对应的旧对象键和评分任务。账号、学校、课程、开课、班级、成员及授课关系、AI、密钥、SMTP、站点设置保留。与被清理附件无关的业务记录、对象和队列任务保留。
+
+对象与队列清理失败时，使用相同目标重试原命令。工具从 `.runtime/dev-resource-reset/` 恢复该次操作的精确清单，并再次检查对象引用。新环境直接生成客户端并运行迁移。自动化测试数据库可在既有测试种子环境中设置 `SEED_DEMO_RESOURCES=1` 后运行 `npm run db:seed`，生成走新归档流程的演示题目和作业。
+
+重启 Web 与 Worker。检查网站的用户中心、通知和私有附件读取是否正常。
+
 ## 局域网开发与平板访问
 
 `npm run dev` 监听 `0.0.0.0:3000`。电脑与平板连同一局域网，在 `.env` 填写实际电脑 IPv4，例如：
