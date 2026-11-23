@@ -8,8 +8,8 @@ export async function SiteFooter() {
   try {
     ({ filingNumber } = await readSiteSettings(database));
   } catch {
-    // Public pages, especially login, remain usable during a settings/database outage.
-    console.error(JSON.stringify({ event: 'site-footer-settings-unavailable' }));
+    // The brand-only footer is a valid fallback when site settings are unavailable.
+    console.warn(JSON.stringify({ event: 'site-footer-settings-unavailable' }));
   }
   return (
     <footer className="site-footer" aria-label="网站信息">
