@@ -3,8 +3,6 @@ const groups: Record<string, string> = {
   无限辅助线: '构造',
   圆心圆弧: '圆弧工具',
   三点圆弧: '圆弧工具',
-  平行线: '构造',
-  垂直线: '构造',
   新增投影轴: '构造',
   连接两点: '关系',
   投影关联: '关系',
@@ -14,15 +12,13 @@ const groups: Record<string, string> = {
   '框选（两次点击）': '选择方式',
   加选: '选择方式',
   减选: '选择方式',
-  实线笔迹: '电子笔线型',
-  虚线笔迹: '电子笔线型',
-  辅助线笔迹: '电子笔线型',
   基准符号: '工程符号',
   表面粗糙度: '工程符号',
   形位公差: '工程符号',
   公差文本: '工程符号',
   '打开 JSON 或图纸包 ZIP': '文件',
   '导出 JSON': '文件',
+  '下载图纸 JSON Schema': '文件',
   '导出展开图 SVG': '文件',
   导出关系描述: '文件',
 };
@@ -33,11 +29,18 @@ export async function choose(page: Page, name: string) {
     if (await close.isVisible()) await close.click();
     await page.getByLabel('绘图线型', { exact: true }).selectOption('DASHED');
   }
-  const names:Record<string,string>={实线:'直线',虚线:'直线',辅助线:'无限辅助线',圆弧:'圆心圆弧'};
-  const label=names[name]??name;
+  const names: Record<string, string> = {
+    实线: '直线',
+    虚线: '直线',
+    辅助线: '无限辅助线',
+    圆弧: '圆心圆弧',
+  };
+  const label = names[name] ?? name;
   const button = page.getByRole('button', { name: label, exact: true });
   if (!(await button.first().isVisible())) {
-    if (groups[label]) await page.getByRole('button', { name: groups[label], exact: true }).click();
+    if (label === '平行线' || label === '垂直线') await properties(page);
+    else if (groups[label])
+      await page.getByRole('button', { name: groups[label], exact: true }).click();
     else if (['放大', '缩小', '适应画布', '聚焦当前投影'].includes(label)) await settings(page);
   }
   await button.click();

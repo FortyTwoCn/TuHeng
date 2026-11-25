@@ -136,10 +136,10 @@ test('UX24/26: pending construction cannot overwrite an external document revisi
   await setup(page);
   const first = page.locator('[data-editor=a]'),
     svg = first.locator('.geo-view svg');
-  await first.getByRole('button', { name: '构造', exact: true }).click();
-  await first.getByRole('button', { name: '平行线', exact: true }).click();
   const r = await at(svg, 0, 25);
   await page.mouse.click(r.x, r.y);
+  await first.getByRole('button', { name: '编辑属性', exact: true }).click();
+  await first.getByRole('button', { name: '平行线', exact: true }).click();
   const p = await at(svg, -45, 15);
   await page.mouse.click(p.x, p.y);
   const confirm = first.getByRole('button', { name: '确认创建', exact: true });

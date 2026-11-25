@@ -15,6 +15,7 @@ import {
 import type { Hit, SessionInteraction as InteractionState } from './interaction-controller';
 import { movingIds } from './interaction-controller';
 import type { CadPick } from './cad-pointer';
+import type { Appearance } from './CadPreferences';
 import type { EditorControls, Tool } from './types';
 export interface Gesture {
   cadId?: string;
@@ -22,7 +23,7 @@ export interface Gesture {
   grip?: CadGrip;
   subtract: boolean;
   penOwnsInput: boolean;
-  penStyle: EditorControls['session']['penStyle'];
+  appearance: Appearance;
   id: number;
   start: Vec2;
   last: Vec2;
@@ -48,6 +49,26 @@ export interface Gesture {
   next?: GeometryDocument;
   candidate?: SnapCandidate;
 }
+
+function appendSelection(selection: string[], ids: string[]) {
+  return [...new Set([...selection, ...ids])];
+}
+
+export function selectionFromMarquee(gesture: Gesture, ids: string[]) {
+  if (gesture.subtract) return gesture.selection.filter((id) => !ids.includes(id));
+  return gesture.additive ? appendSelection(gesture.selection, ids) : ids;
+}
+
+export function selectionFromClick(gesture: Gesture, hit?: Hit) {
+  const { selection, toggle, additive, subtract } = gesture;
+  if (!hit) return subtract || additive ? selection : [];
+  if (subtract || (toggle && selection.includes(hit.id))) {
+    return selection.filter((id) => id !== hit.id);
+  }
+  if (toggle || additive) return appendSelection(selection, [hit.id]);
+  return [hit.id];
+}
+
 export function dragSelection(
   g: Gesture,
   p: Vec2,

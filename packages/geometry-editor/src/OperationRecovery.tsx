@@ -1,14 +1,15 @@
 import type { GeometryDocument } from '@tuheng/contracts';
 import { useMemo } from 'react';
-import { sheetToLocal, type PenStrokeStyle } from '@tuheng/geometry-core';
-import { rawStrokeDocument, type StrokeSample } from './drawing-session';
+import { sheetToLocal } from '@tuheng/geometry-core';
+import { styleNewGeometry, type Appearance } from './CadPreferences';
+import { penStrokeStyle, rawStrokeDocument, type StrokeSample } from './drawing-session';
 export interface ReversibleStep {
   raw: GeometryDocument;
   next: GeometryDocument;
 }
 
 export interface InterruptedStroke {
-  penStyle: PenStrokeStyle;
+  appearance: Appearance;
   scale: number;
   base: GeometryDocument;
   samples: StrokeSample[];
@@ -32,7 +33,7 @@ export function OperationRecovery({
   lastSnap: ReversibleStep | null;
   lastPen: ReversibleStep | null;
   interrupted: InterruptedStroke | null;
-  replace: (d: GeometryDocument) => void;
+  replace: (d: GeometryDocument) => GeometryDocument | undefined;
   commit: (d: GeometryDocument) => void;
   report: (s: string) => void;
   setLastSnap: (s: ReversibleStep | null) => void;
@@ -57,8 +58,9 @@ export function OperationRecovery({
             disabled={!snapCurrent}
             onClick={() => {
               if (lastSnap) {
-                replace(lastSnap.raw);
-                if (lastPen) setLastPen({ ...lastPen, next: lastSnap.raw });
+                const applied = replace(lastSnap.raw);
+                if (!applied) return;
+                if (lastPen) setLastPen({ ...lastPen, next: applied });
                 setLastSnap(null);
                 report('已取消自动吸附，保留原始操作');
               }
@@ -71,7 +73,7 @@ export function OperationRecovery({
             disabled={!penCurrent}
             onClick={() => {
               if (lastPen) {
-                replace(lastPen.raw);
+                if (!replace(lastPen.raw)) return;
                 setLastSnap(null);
                 setLastPen(null);
                 report('已恢复原始笔迹');
@@ -92,12 +94,11 @@ export function OperationRecovery({
                 ...sheetToLocal(doc, interrupted.viewId, p),
                 pressure: p.pressure,
               }));
-              commit(
-                rawStrokeDocument(doc, interrupted.viewId, samples, role, undefined, {
-                  style: interrupted.penStyle,
-                  cssPixelsPerMm: interrupted.scale,
-                }),
-              );
+              const raw = rawStrokeDocument(doc, interrupted.viewId, samples, role, undefined, {
+                style: penStrokeStyle(interrupted.appearance),
+                cssPixelsPerMm: interrupted.scale,
+              });
+              commit(styleNewGeometry(doc, raw, interrupted.appearance));
               setInterrupted(null);
             } catch (e) {
               report((e as Error).message);

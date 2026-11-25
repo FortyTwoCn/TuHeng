@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "tuheng.geometry/3.0.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": { "x": 0, "y": 0 },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": { "x": 0, "y": 0 },
+        "xAxis": { "x": -1, "y": 0 },
+        "yAxis": { "x": 0, "y": 1 }
+      },
+      "mapping": ["x", "z"],
+      "signs": [1, 1]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": { "x": 0, "y": 0 },
+        "xAxis": { "x": -1, "y": 0 },
+        "yAxis": { "x": 0, "y": 1 }
+      },
+      "mapping": ["x", "y"],
+      "signs": [1, -1]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": { "x": 0, "y": 0 },
+        "xAxis": { "x": 1, "y": 0 },
+        "yAxis": { "x": 0, "y": 1 }
+      },
+      "mapping": ["y", "z"],
+      "signs": [1, 1]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "point-a",
+      "kind": "point",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "position": { "x": 15, "y": 10 },
+      "name": "A",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "point-b",
+      "kind": "point",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "position": { "x": 55, "y": 10 },
+      "name": "B",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "segment-ab",
+      "kind": "segment",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "startPoint": "point-a",
+      "endPoint": "point-b"
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": "线段 AB"
+  }
+}

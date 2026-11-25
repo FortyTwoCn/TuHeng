@@ -1,23 +1,24 @@
 'use client';
-import { dragSelection, marqueeTargets, type Gesture } from './selection-gesture';
-import { SketchOverlays } from './SketchOverlays';
+import {
+  dragSelection,
+  marqueeTargets,
+  selectionFromClick,
+  selectionFromMarquee,
+  type Gesture,
+} from './selection-gesture';
 import { DynamicLineInput, type DynamicInputHandle, type LineFields } from './DynamicLineInput';
 import { dragMeasurement, exactDrag, type DragMeasurement } from './measured-drag';
-import { entityNames } from './PropertyFields';
-import { lineSnapAt, locateCadPoint, type CadPick } from './cad-pointer';
-import { RelationGuide } from './RelationGuide';
+import { locateCadPoint, type CadPick } from './cad-pointer';
+import { sheetToViewport, useCadPrecision } from './useCadPrecision';
 import { useDraftingTracking } from './useDraftingTracking';
 import { styleNewGeometry } from './CadPreferences';
 
-import { settlePen } from './drawing-session';
+import { penStrokeStyle, settlePen } from './drawing-session';
 import { useRef, useState, useEffect, useEffectEvent, useCallback, useMemo } from 'react';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import type { Vec2, GeometryDocument } from '@tuheng/contracts';
 import {
   cadPreview,
-  cadLineEndpoint,
-  cadLength,
-  cadNumber,
   angle,
   cadStep,
   cadGrips,
@@ -30,38 +31,33 @@ import {
   appendStrokeSample,
   distance,
   linkProjection,
-  point,
   snapCandidates,
   confirmSnap,
   sheetToLocal,
   drawingViewAt,
   localToSheet,
-  addProjectionAxis,
-  orthographic,
   type Bounds,
   type SnapCandidate,
 } from '@tuheng/geometry-core';
-import { ViewportDrawing } from './ViewportDrawing';
+import { ViewportScene, type Marquee } from './ViewportScene';
+import { ViewportProjection } from './ViewportProjection';
+import { EntityStyleHint, OverlappingTargets, SnapFeedback } from './ViewportFeedback';
 import {
   OperationRecovery,
   type ReversibleStep,
   type InterruptedStroke,
 } from './OperationRecovery';
-import { AxisTools } from './AxisTools';
-import { constructionClick, axisClick, type AxisDraft } from './projection-command';
-import { ConstructionPanel } from './ConstructionPanel';
+import {
+  constructionClick,
+  constructionGuide,
+  axisClick,
+  type AxisDraft,
+} from './projection-command';
 import { FloatingInspector } from './FloatingInspector';
-import { MeasurementOverlay } from './MeasurementOverlay';
 import { textEntry } from './commands';
 import { useViewportCamera } from './useViewportCamera';
-import {
-  interactionThresholds,
-  targetFromKey,
-  resolveReference,
-  referenceDirection,
-  add,
-  scale as multiply,
-} from '@tuheng/geometry-core';
+import { usePointerFrames } from './usePointerFrames';
+import { interactionThresholds, targetFromKey, resolveReference } from '@tuheng/geometry-core';
 import {
   hitTargets,
   movingIds,
@@ -74,91 +70,70 @@ export function Viewport(
     viewId: string;
     focusKey: number;
     cameraRef: RefObject<Bounds | null>;
-    replace: (doc: GeometryDocument) => void;
+    replace: (doc: GeometryDocument) => GeometryDocument | undefined;
   },
 ) {
   const { document: doc, viewId, tool, role, readOnly, report } = props;
   const cad = props.cad.session;
   const tracking = useDraftingTracking(doc, cad?.commandId, props.snapping && props.objectSnap);
-  const clearTracking=tracking.clear;
+  const clearTracking = tracking.clear;
   const [cadCursor, setCadCursor] = useState<{ op: CadSession; pick: CadPick } | null>(null);
-  const lastCadPointer = useRef<{ prefix: string; sheet: Vec2; frameId: string; scale: number; threshold: number } | null>(null);
+  const lastCadPointer = useRef<{
+    prefix: string;
+    sheet: Vec2;
+    frameId: string;
+    scale: number;
+    threshold: number;
+  } | null>(null);
   const altHeld = useRef(false);
   const [skippedPick, setSkippedPick] = useState<string | null>(null);
   const activeCursor = cadCursor?.op === cad ? cadCursor.pick : undefined;
-  const [typedLine, setTypedLine] = useState<{ prefix: string; fields: LineFields }>();
-  const [lineError, setLineError] = useState('');
-  const [pickedGrip,setPickedGrip]=useState<{base:GeometryDocument; grip:CadGrip}>();
-  const placingGrip = pickedGrip?.base===doc && !cad && tool==='select' ? pickedGrip.grip : undefined;
+  const [dragError, setDragError] = useState('');
+  const [pickedGrip, setPickedGrip] = useState<{ base: GeometryDocument; grip: CadGrip }>();
+  const placingGrip =
+    pickedGrip?.base === doc && !cad && tool === 'select' ? pickedGrip.grip : undefined;
   const [dragMeasure, setDragMeasure] = useState<DragMeasurement>();
   const [dragFields, setDragFields] = useState<LineFields>();
-  const exactPreview = useMemo(()=>{
-    if(!dragMeasure || !dragFields || dragMeasure.base!==doc) return;
-    try {return exactDrag(dragMeasure,dragFields,role);} catch { return; }
-  },[dragMeasure,dragFields,doc,role]);
+  const exactPreview = useMemo(() => {
+    if (!dragMeasure || !dragFields || dragMeasure.base !== doc) return;
+    try {
+      return exactDrag(dragMeasure, dragFields, role);
+    } catch {
+      return;
+    }
+  }, [dragMeasure, dragFields, doc, role]);
   const dynamicInput = useRef<DynamicInputHandle>(null);
   const crosshair = useRef<SVGGElement>(null);
-  const drawingLine = cad?.commandId === 'segment' && cad.points.length === 1;
-  const fields = typedLine?.prefix === cad?.prefix ? typedLine?.fields : undefined;
-  function precisePick(pick: CadPick): CadPick {
-    if (!cad || !drawingLine || !fields) return pick;
-    const position = cadLineEndpoint(cad.points[0], pick.directionPosition ?? pick.position, fields);
-    const matches = distance(position,pick.position) < 1e-8;
-    return {...pick,position,rawPosition:position,entityId:matches?pick.entityId:undefined,snap:lineSnapAt(pick, cad.points[0], position)};
-  }
-  const [scalarDraft,setScalarDraft]=useState<{prefix:string; value:string}>();
-  const scalarMode = cad?.phase==='points' && cad.points.length===1
-    ? cad.commandId==='rotate' ? 'angle' : cad.commandId==='compass'&&!cad.parameters.opening ? 'opening' : undefined
-    : undefined;
-  const scalar = scalarDraft?.prefix===cad?.prefix ? scalarDraft?.value : undefined;
-  const lineCursor: CadPick | undefined = drawingLine ? activeCursor ?? {
-    type:'point',viewId:cad.viewId,position:cad.points[0],rawPosition:cad.points[0],
-  } : undefined;
-  let lineEnd = lineCursor?.position;
-  let lineSnap = lineCursor?.snap;
-  if (lineCursor) {
-    try {
-      const preview = precisePick(lineCursor);
-      lineEnd = preview.position;
-      lineSnap = preview.snap;
-    } catch { lineSnap = undefined; }
-  }
-  const cadDisplay = useMemo(() => {
-    if (!cad || drawingLine) return null;
-    try {
-      const live = scalarMode==='angle' && scalar?.trim() ? {...cad,parameters:{...cad.parameters,angle:scalar}} : cad;
-      return cadPreview(
-        live,
-        doc,
-        activeCursor?.position,
-        activeCursor?.entityId,
-        activeCursor?.viewId,
-        props.hiddenLayers,
-      );
-    } catch {
-      return null;
-    }
-  }, [cad, doc, activeCursor, drawingLine, props.hiddenLayers,scalar,scalarMode]);
   const svg = useRef<SVGSVGElement>(null),
     gesture = useRef<Gesture | null>(null),
     pinchPair = useRef<Vec2[] | null>(null),
     pointers = useRef(new Map<number, Vec2>());
-  const pending = useRef<ReactPointerEvent<SVGSVGElement> | null>(null),
-    frame = useRef<number | null>(null);
-  const [marquee, setMarquee] = useState<{
-      box: Bounds;
-      mode: 'window' | 'crossing';
-      ids: string[];
-    } | null>(null),
-    [overlaps, setOverlaps] = useState<Hit[]>([]);
+  const { queueMotion, flushMotion, discardMotion, recheckHover, discardHover } =
+    usePointerFrames();
+  const [marquee, setMarquee] = useState<Marquee | null>(null);
+  const [overlaps, setOverlaps] = useState<Hit[]>([]);
   const [constructionPreview, setConstructionPreview] = useState<{
     revision: object;
     next: GeometryDocument;
   } | null>(null);
-  const [preview, setPreview] = useState<Vec2[]>([]),
-    [previewDoc, setPreviewDoc] = useState<GeometryDocument | null>(null),
-    [candidate, setCandidate] = useState<SnapCandidate | null>(null),
-    [candidateView, setCandidateView] = useState(viewId);
+  const [preview, setPreview] = useState<Vec2[]>([]);
+  const [previewDoc, setPreviewDoc] = useState<GeometryDocument | null>(null);
+  const [candidate, setCandidate] = useState<SnapCandidate | null>(null);
+  const [candidateView, setCandidateView] = useState(viewId);
+  const precision = useCadPrecision({
+    cad: props.cad,
+    doc,
+    cursor: activeCursor,
+    hiddenLayers: props.hiddenLayers,
+    afterLineCommit() {
+      setCadCursor(null);
+      setCandidate(null);
+      props.consumeSnap();
+    },
+    focusCanvas(preventScroll) {
+      svg.current?.focus({ preventScroll });
+    },
+  });
   const [operationView, setOperationView] = useState<string>(),
     [hoverView, setHoverView] = useState<string>();
   const [steps, setSteps] = useState<Vec2[]>([]),
@@ -177,9 +152,11 @@ export function Viewport(
     viewId,
     busy,
   );
-  useEffect(()=>{props.cameraRef.current=box;},[box,props.cameraRef]);
-  const [inspectId,setInspectId]=useState<string>();
-  const inspected=readOnly ? doc.entities.find(e=>e.id===inspectId) : undefined;
+  useEffect(() => {
+    props.cameraRef.current = box;
+  }, [box, props.cameraRef]);
+  const [inspectId, setInspectId] = useState<string>();
+  const inspected = readOnly ? doc.entities.find((e) => e.id === inspectId) : undefined;
   const cssScale = () => {
     const m = svg.current?.getScreenCTM();
     return m ? Math.hypot(m.a, m.b) : size.width / box.width;
@@ -207,11 +184,10 @@ export function Viewport(
     setMarquee(null);
     setSteps([]);
     setOperationView(undefined);
-    if (frame.current !== null) cancelAnimationFrame(frame.current);
-    frame.current = null;
-    pending.current = null;
+    discardMotion();
+    discardHover();
     setState('idle');
-  }, [report, clearTracking]);
+  }, [report, clearTracking, discardMotion, discardHover]);
   const altChanged = useEffectEvent((pressed: boolean) => {
     altHeld.current = pressed;
     if (pressed && gesture.current) gesture.current.pausedSnap = true;
@@ -220,8 +196,17 @@ export function Viewport(
   const snapSettingsChanged = useEffectEvent(() => refreshSnap(altHeld.current));
   useEffect(() => {
     snapSettingsChanged();
-  }, [props.ortho, props.tracking, props.objectSnap, props.objectTypes, props.snapping,
-      props.gridSnap, props.axesSnap, props.skipSnap, skippedPick]);
+  }, [
+    props.ortho,
+    props.tracking,
+    props.objectSnap,
+    props.objectTypes,
+    props.snapping,
+    props.gridSnap,
+    props.axesSnap,
+    props.skipSnap,
+    skippedPick,
+  ]);
   useEffect(() => {
     const el = svg.current;
     if (!el) return;
@@ -245,7 +230,10 @@ export function Viewport(
       }
       if (e.key === 'Escape') {
         if (!gesture.current && !axisDraft && !placingGrip && steps.length === 0) return;
-        if (cad) { cancel(); return; } // The editor's single command handler cancels the session.
+        if (cad) {
+          cancel();
+          return;
+        } // The editor's single command handler cancels the session.
         e.preventDefault();
         e.stopPropagation();
         cancel();
@@ -317,7 +305,7 @@ export function Viewport(
     const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(inverse);
     return { x: p.x, y: -p.y };
   }
-  function inputPoint(e: ReactPointerEvent<SVGSVGElement>, inverse?: DOMMatrix) {
+  function inputPoint(e: ReactPointerEvent<Element>, inverse?: DOMMatrix) {
     return cad && e.pointerType === 'touch' && props.touchOffset && pointers.current.size < 2
       ? local({ clientX: e.clientX, clientY: e.clientY - 32 }, inverse)
       : local(e, inverse);
@@ -325,40 +313,35 @@ export function Viewport(
   function showCursor(sheet: Vec2, frameId: string) {
     const scale = size.width / box.width;
     if (crosshair.current) {
-      crosshair.current.setAttribute('transform', `translate(${sheet.x} ${-sheet.y}) scale(${1/scale})`);
+      crosshair.current.setAttribute(
+        'transform',
+        `translate(${sheet.x} ${-sheet.y}) scale(${1 / scale})`,
+      );
       crosshair.current.style.visibility = 'visible';
     }
     const position = sheetToLocal(doc, frameId, sheet);
     const output = props.cursorStatusRef?.current;
     if (output) {
       const frame = doc.views.find((v) => v.id === frameId)?.name ?? frameId;
-      output.replaceChildren(`${frame} · u ${position.x.toFixed(4)} · v ${position.y.toFixed(4)} mm`);
+      output.replaceChildren(
+        `${frame} · u ${position.x.toFixed(4)} · v ${position.y.toFixed(4)} mm`,
+      );
     }
   }
-  function commitLine() {
-    if (!lineCursor) return;
-    try {
-      const pick = precisePick(lineCursor);
-      if (distance(cad!.points[0],pick.position) < 1e-8) throw Error('移动光标或输入大于零的长度');
-      if (props.cad.send(pick)) {
-        setTypedLine(undefined);
-        setLineError('');
-        setCadCursor(null);
-        setCandidate(null);
-        props.consumeSnap();
-        svg.current?.focus({preventScroll:true});
-      }
-    } catch(error) {setLineError(error instanceof Error ? error.message : '输入无效');}
-  }
   function commitDrag() {
-    if(!dragMeasure || dragMeasure.base!==doc) { cancel(); return; }
+    if (!dragMeasure || dragMeasure.base !== doc) {
+      cancel();
+      return;
+    }
     try {
-      const result = exactDrag(dragMeasure,dragFields??{},role);
+      const result = exactDrag(dragMeasure, dragFields ?? {}, role);
       cancel();
       accept(result.document);
-      setLineError('');
-      svg.current?.focus({preventScroll:true});
-    } catch(error) {setLineError(error instanceof Error ? error.message : '输入无效');}
+      setDragError('');
+      svg.current?.focus({ preventScroll: true });
+    } catch (error) {
+      setDragError(error instanceof Error ? error.message : '输入无效');
+    }
   }
   function updateGrip(g: Gesture, p: Vec2) {
     if (!g.grip) return;
@@ -383,19 +366,22 @@ export function Viewport(
     setState('draggingEndpoint');
   }
   const fail = (e: unknown) => props.report(e instanceof Error ? e.message : '几何操作失败');
-  function accept(next: GeometryDocument, raw?: GeometryDocument) {
-    next = styleNewGeometry(doc, next, props.appearance);
-    if (raw) raw = styleNewGeometry(doc, raw, props.appearance);
-    props.commit(next);
+  function accept(next: GeometryDocument, raw?: GeometryDocument, appearance = props.appearance) {
+    const alternative = raw && JSON.stringify(raw) !== JSON.stringify(next) ? raw : undefined;
+    const applied = props.commit(styleNewGeometry(doc, next, appearance));
+    if (!applied) return;
     props.consumeSnap();
     setSteps([]);
     setOperationView(undefined);
     setPreview([]);
     setPreviewDoc(null);
     setCandidate(null);
-    setLastSnap(raw && JSON.stringify(raw) !== JSON.stringify(next) ? { raw, next } : null);
-    const created = next.entities.filter((e) => !doc.entities.some((p) => p.id === e.id));
-    if (created.length) props.select([created.at(-1)!.id]);
+    setLastSnap(
+      alternative ? { raw: styleNewGeometry(doc, alternative, appearance), next: applied } : null,
+    );
+    const created = applied.entities.filter((e) => !doc.entities.some((p) => p.id === e.id));
+    if (created.length && tool !== 'pen') props.select([created.at(-1)!.id]);
+    return applied;
   }
   const snapOptions = {
     objects: props.objectSnap,
@@ -433,7 +419,10 @@ export function Viewport(
       threshold,
       paused || skippedPick === session.prefix,
       candidate ?? undefined,
-      tracking.active.filter(({viewId}) => viewId === (session.points.length || session.ids.length ? session.viewId : frameId)),
+      tracking.active.filter(
+        ({ viewId }) =>
+          viewId === (session.points.length || session.ids.length ? session.viewId : frameId),
+      ),
     );
     if (acquire) tracking.visit(result.pick.viewId, paused ? undefined : result.candidate);
     setCandidate(result.candidate ?? null);
@@ -444,9 +433,10 @@ export function Viewport(
     const pick = locate(op, p, g.viewId, g.scale, g.snapPixels, paused);
     setCadCursor({ op, pick });
     if (g.cadFirst && distance(g.start, p) * g.scale >= g.dragPixels) {
-      const start = paused || props.skipSnap || skippedPick === op.prefix
-        ? { ...g.cadFirst, position: g.cadFirst.rawPosition, entityId: undefined }
-        : g.cadFirst;
+      const start =
+        paused || props.skipSnap || skippedPick === op.prefix
+          ? { ...g.cadFirst, position: g.cadFirst.rawPosition, entityId: undefined }
+          : g.cadFirst;
       const first = cadStep(op, doc, start).session;
       if (first) setPreviewDoc(cadPreview(first, doc, pick.position, pick.entityId));
       setPreview([start, pick].map((v) => localToSheet(doc, v.viewId, v.position)));
@@ -456,16 +446,25 @@ export function Viewport(
   function refreshSnap(pressed: boolean) {
     const g = gesture.current;
     if (g) {
-      if (g.state === 'panning' || g.state === 'movingRuler' || g.revision !== props.revision) return;
+      if (g.state === 'panning' || g.state === 'movingRuler' || g.revision !== props.revision)
+        return;
       if (g.grip && g.next) updateGrip(g, g.last);
-      else if (cad && g.cadId === cad.commandId) updateCadCursor(cad, g.last, g, !!g.pausedSnap || pressed);
+      else if (cad && g.cadId === cad.commandId)
+        updateCadCursor(cad, g.last, g, !!g.pausedSnap || pressed);
       else if (g.raw && g.hit) drag(g, g.last);
       else if (g.state === 'drawingStroke' && pressed) setCandidate(null);
       return;
     }
     const cursor = lastCadPointer.current;
     if (cad && cursor?.prefix === cad.prefix) {
-      const pick = locate(cad, cursor.sheet, cursor.frameId, cursor.scale, cursor.threshold, pressed);
+      const pick = locate(
+        cad,
+        cursor.sheet,
+        cursor.frameId,
+        cursor.scale,
+        cursor.threshold,
+        pressed,
+      );
       setCadCursor({ op: cad, pick });
     }
   }
@@ -491,8 +490,7 @@ export function Viewport(
     const entity =
       ref?.kind === 'entity' ? doc.entities.find((e) => e.id === ref.entityId) : undefined;
     if (entity && entity.scope !== 'SHEET') return entity.viewId;
-    // Hit tolerances may straddle an axis. A new stroke belongs to its region, not
-    // to a nearby point from another projection. Explicit connections/editing retain identity.
+    // 新笔迹按落点所在图纸区域确定投影。显式引用或编辑既有对象时沿用对象的视图。
     const usesExisting =
       (cad ? cad.phase === 'selection' : tool === 'select') ||
       (props.session.construction?.phase === 'position' &&
@@ -515,13 +513,15 @@ export function Viewport(
           accept(g.next);
         }
       } else {
-        setPickedGrip({base:doc,grip:g.grip});
+        setPickedGrip({ base: doc, grip: g.grip });
         props.report('指定夹点的新位置，按 Esc 取消');
       }
       return;
     }
     if (cad) {
-      const pick = precisePick(locate(cad, p, g.viewId, g.scale, g.snapPixels, !!g.pausedSnap));
+      const pick = precision.precisePick(
+        locate(cad, p, g.viewId, g.scale, g.snapPixels, !!g.pausedSnap),
+      );
       const start =
         g.cadFirst && (g.pausedSnap || props.skipSnap)
           ? { ...g.cadFirst, position: g.cadFirst.rawPosition, entityId: undefined }
@@ -531,8 +531,7 @@ export function Viewport(
           ? props.cad.send(start, pick)
           : props.cad.send(pick);
       if (fitted) {
-        setTypedLine(undefined);
-        setLineError('');
+        precision.clearLineDraft();
         props.consumeSnap();
         setLastSnap(fitted.raw ? { raw: fitted.raw, next: fitted.next } : null);
       }
@@ -578,13 +577,7 @@ export function Viewport(
           return;
         }
         const ids = updateMarquee(g, p);
-        props.select(
-          g.subtract
-            ? g.selection.filter((id) => !ids.includes(id))
-            : g.additive
-              ? [...new Set([...g.selection, ...ids])]
-              : ids,
-        );
+        props.select(selectionFromMarquee(g, ids));
         setMarquee(null);
         setSteps([]);
         return;
@@ -608,21 +601,7 @@ export function Viewport(
         }
       } else {
         setOverlaps(hits);
-        props.select(
-          target
-            ? g.subtract
-              ? g.selection.filter((id) => id !== target.id)
-              : g.toggle
-                ? g.selection.includes(target.id)
-                  ? g.selection.filter((id) => id !== target.id)
-                  : [...g.selection, target.id]
-                : g.additive
-                  ? [...new Set([...g.selection, target.id])]
-                  : [target.id]
-            : g.subtract || g.additive
-              ? g.selection
-              : [],
-        );
+        props.select(selectionFromClick(g, target));
       }
       return;
     }
@@ -647,13 +626,13 @@ export function Viewport(
         g.scale,
         g.snapPixels,
         !!g.pausedSnap,
-        g.penStyle,
+        penStrokeStyle(g.appearance),
       );
-      accept(result.next, result.raw);
-      if (result.rawStroke)
+      const applied = accept(result.next, result.raw, g.appearance);
+      if (result.rawStroke && applied)
         setLastPen({
-          raw: styleNewGeometry(doc, result.rawStroke, props.appearance),
-          next: styleNewGeometry(doc, result.next, props.appearance),
+          raw: styleNewGeometry(doc, result.rawStroke, g.appearance),
+          next: applied,
         });
       report(result.message);
     }
@@ -662,19 +641,20 @@ export function Viewport(
     if (e.button !== 0 && !(e.pointerType === 'mouse' && e.button === 1)) return;
     e.preventDefault();
     svg.current?.focus({ preventScroll: true });
-    // A pen stroke owns its transform until up/cancel. Palm/touch cannot change its camera.
+    // 笔尖落下后固定本次笔迹的坐标变换。掌触不能切换到双指导航。
     if (gesture.current?.penOwnsInput && e.pointerType === 'touch') return;
     if (pointers.current.size >= 2) return;
     if (dragMeasure && !gesture.current) {
-      setDragMeasure(undefined); setDragFields(undefined); setPreviewDoc(null); setLineError('');
+      setDragMeasure(undefined);
+      setDragFields(undefined);
+      setPreviewDoc(null);
+      setDragError('');
     }
     if (e.isTrusted) svg.current?.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size >= 2) {
       pinchPair.current = [...pointers.current.values()];
-      pending.current = null;
-      if(frame.current!==null) cancelAnimationFrame(frame.current);
-      frame.current=null;
+      discardMotion();
       gesture.current = null;
       setPreviewDoc(null);
       setDragMeasure(undefined);
@@ -711,11 +691,21 @@ export function Viewport(
         (tool === 'pen' && e.pointerType === 'touch' && !props.fingerDraw);
     const ids = hit ? (props.selected.includes(hit.id) ? props.selected : [hit.id]) : [];
     const frameId = drawingFrame(p, hit);
-    showCursor(p,frameId);
-    const gripAttribute = (e.target as Element).closest('[data-grip-entity]')?.getAttribute('data-grip-entity');
-    const gripKey = !cad && !readOnly && tool === 'select' && (e.target as Element).getAttribute('data-cad-grip');
-    const entity = props.selected.includes(gripAttribute ?? '') ? doc.entities.find(v=>v.id===gripAttribute) : undefined;
-    const grip = pan ? undefined : placingGrip ?? (gripKey && entity ? cadGrips(doc,entity,role).find(v=>v.key===gripKey) : undefined);
+    showCursor(p, frameId);
+    const gripAttribute = (e.target as Element)
+      .closest('[data-grip-entity]')
+      ?.getAttribute('data-grip-entity');
+    const gripKey =
+      !cad && !readOnly && tool === 'select' && (e.target as Element).getAttribute('data-cad-grip');
+    const entity = props.selected.includes(gripAttribute ?? '')
+      ? doc.entities.find((v) => v.id === gripAttribute)
+      : undefined;
+    const grip = pan
+      ? undefined
+      : (placingGrip ??
+        (gripKey && entity
+          ? cadGrips(doc, entity, role).find((v) => v.key === gripKey)
+          : undefined));
     gesture.current = {
       cadId: cad?.commandId,
       grip,
@@ -739,7 +729,7 @@ export function Viewport(
       base: doc,
       pausedSnap: e.altKey || (!!cad && skippedPick === cad.prefix),
       tool,
-      penStyle: props.session.penStyle,
+      appearance: props.appearance,
       hit,
       ids,
       viewId: frameId,
@@ -766,12 +756,12 @@ export function Viewport(
         e.altKey,
       );
     if (
-      cad?.points.length && gesture.current.state === 'pressed' &&
+      cad?.points.length &&
+      gesture.current.state === 'pressed' &&
       (cad.commandId === 'segment' || cad.commandId === 'line') &&
       (e.pointerType === 'touch' || e.pointerType === 'pen')
     ) {
-      // Touch and contact-only pens cannot hover. Show the candidate while the
-      // tip is down, before pointerup can accept it or a second touch can take over.
+      // 手指和无悬停的笔在按下时就显示落点，松开才接受，第二指仍可接管导航。
       updateCadCursor(cad, p, gesture.current, !!gesture.current.pausedSnap);
     }
     setState(gesture.current.state);
@@ -780,23 +770,28 @@ export function Viewport(
       props.dispatch({ type: 'patch', patch: { active: gesture.current.viewId } });
     }
   }
-  function move(e: ReactPointerEvent<SVGSVGElement>) {
+  function move(e: ReactPointerEvent<Element>) {
     if (gesture.current?.penOwnsInput && e.pointerType === 'touch') return;
     if (!pointers.current.has(e.pointerId)) {
       const frameId = drawingFrame(local(e));
-      showCursor(inputPoint(e),frameId);
+      showCursor(inputPoint(e), frameId);
       setHoverView(frameId);
       if (placingGrip && !readOnly) {
-        const entity=doc.entities.find(e=>e.id===placingGrip.entityId);
+        const entity = doc.entities.find((e) => e.id === placingGrip.entityId);
         if (entity) {
-          const p=sheetToLocal(doc,entity.viewId,local(e));
-          try {setPreviewDoc(previewCadGrip(doc,placingGrip,p,role));}
-          catch {setPreviewDoc(null);}
+          const p = sheetToLocal(doc, entity.viewId, local(e));
+          try {
+            setPreviewDoc(previewCadGrip(doc, placingGrip, p, role));
+          } catch {
+            setPreviewDoc(null);
+          }
         }
         return;
       }
       if (readOnly)
-        setInspectId(hitTargets(doc,local(e),cssScale(),box,props.hiddenLayers,[],false,9)[0]?.id);
+        setInspectId(
+          hitTargets(doc, local(e), cssScale(), box, props.hiddenLayers, [], false, 9)[0]?.id,
+        );
       if (cad) {
         const pick = locate(
           cad,
@@ -810,23 +805,10 @@ export function Viewport(
         setCadCursor({ op: cad, pick });
         return;
       }
-      if (
-        props.session.construction?.phase === 'position' &&
-        props.session.construction.reference
-      ) {
+      if (props.session.construction) {
         try {
-          const c = props.session.construction,
-            p = local(e),
-            a = sheetToLocal(doc, frameId, p),
-            d = referenceDirection(doc, frameId, c.reference!, c.spec.directionMode);
-          setPreview([
-            p,
-            localToSheet(
-              doc,
-              frameId,
-              add(a, multiply(d, c.spec.geometryExtent === 'segment' ? c.spec.length : 100)),
-            ),
-          ]);
+          const path = constructionGuide(doc, props.session.construction, frameId, local(e));
+          if (path) setPreview(path);
         } catch (error) {
           setPreview([]);
           fail(error);
@@ -843,7 +825,7 @@ export function Viewport(
       return;
     }
     const p = inputPoint(e, g.inverse);
-    showCursor(p,g.viewId);
+    showCursor(p, g.viewId);
     if (g.state === 'movingRuler') {
       props.onRulerChange({
         ...props.ruler,
@@ -865,7 +847,7 @@ export function Viewport(
       if (g.grip) {
         g.last = p;
         updateGrip(g, p);
-        if(g.next) setDragMeasure(dragMeasurement(g,g.next,sheetToLocal(doc,g.viewId,p)));
+        if (g.next) setDragMeasure(dragMeasurement(g, g.next, sheetToLocal(doc, g.viewId, p)));
         return;
       }
       if (cad) {
@@ -874,16 +856,8 @@ export function Viewport(
         return;
       }
       if (props.session.construction) {
-        const c = props.session.construction;
-        if (c.phase === 'position' && c.reference) {
-          const start = sheetToLocal(doc, g.viewId, p),
-            d = referenceDirection(doc, g.viewId, c.reference, c.spec.directionMode),
-            end = add(
-              start,
-              multiply(d, c.spec.geometryExtent === 'segment' ? c.spec.length : 100),
-            );
-          setPreview([localToSheet(doc, g.viewId, start), localToSheet(doc, g.viewId, end)]);
-        }
+        const path = constructionGuide(doc, props.session.construction, g.viewId, p);
+        if (path) setPreview(path);
         return;
       }
       if (g.tool === 'box' || (g.tool === 'select' && !g.hit)) {
@@ -910,7 +884,7 @@ export function Viewport(
         setState(g.state);
         props.select(g.ids);
         drag(g, p);
-        if(g.next) setDragMeasure(dragMeasurement(g,g.next,sheetToLocal(doc,g.viewId,p)));
+        if (g.next) setDragMeasure(dragMeasurement(g, g.next, sheetToLocal(doc, g.viewId, p)));
       } else if (g.tool === 'pen') {
         setPreview([...g.samples]);
         setCandidate(
@@ -941,23 +915,25 @@ export function Viewport(
     appendStrokeSample(g.samples, { ...p, pressure }, 0.1 / g.scale);
   }
   function flushPinch() {
-    const before=pinchPair.current;
-    if(!before || pointers.current.size!==2) return;
-    const after=[...pointers.current.values()];
-    const initial=distance(before[0],before[1]);
-    if(initial>1) {
-      const oldMid={x:(before[0].x+before[1].x)/2,y:(before[0].y+before[1].y)/2};
-      const mid={x:(after[0].x+after[1].x)/2,y:(after[0].y+after[1].y)/2};
-      const ratio=distance(after[0],after[1])/initial;
-      if (ratio!==1 || mid.x!==oldMid.x || mid.y!==oldMid.y) zoomAt(ratio,oldMid,sub(mid,oldMid));
+    const before = pinchPair.current;
+    if (!before || pointers.current.size !== 2) return;
+    const after = [...pointers.current.values()];
+    const initial = distance(before[0], before[1]);
+    if (initial > 1) {
+      const oldMid = { x: (before[0].x + before[1].x) / 2, y: (before[0].y + before[1].y) / 2 };
+      const mid = { x: (after[0].x + after[1].x) / 2, y: (after[0].y + after[1].y) / 2 };
+      const ratio = distance(after[0], after[1]) / initial;
+      if (ratio !== 1 || mid.x !== oldMid.x || mid.y !== oldMid.y)
+        zoomAt(ratio, oldMid, sub(mid, oldMid));
     }
-    pinchPair.current=after;
+    pinchPair.current = after;
   }
-  function queueMove(e: ReactPointerEvent<SVGSVGElement>) {
+  function queueMove(e: ReactPointerEvent<Element>) {
+    discardHover();
     if (pinchPair.current) {
-      if(!pointers.current.has(e.pointerId)) return;
-      pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
-      if(frame.current===null) frame.current=requestAnimationFrame(()=>{frame.current=null;flushPinch();});
+      if (!pointers.current.has(e.pointerId)) return;
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      queueMotion(flushPinch);
       return;
     }
     if (tool === 'pen' && gesture.current?.state === 'drawingStroke') {
@@ -967,41 +943,48 @@ export function Viewport(
       for (const sample of events?.length ? events : [e.nativeEvent])
         appendSample(g, local(sample, g.inverse), sample.pressure);
     }
-    pending.current = e;
-    if (frame.current !== null) return;
-    frame.current = requestAnimationFrame(() => {
-      frame.current = null;
-      const event = pending.current;
-      pending.current = null;
-      if (event) move(event);
+    queueMotion(() => move(e));
+  }
+  function resumeCoveredHover(e: ReactPointerEvent<HTMLElement>) {
+    if (
+      !cad ||
+      gesture.current ||
+      e.pointerType === 'touch' ||
+      !(e.target instanceof Element) ||
+      !e.target.closest('.cad-dynamic-input')
+    )
+      return;
+    recheckHover(() => {
+      if (
+        !gesture.current &&
+        svg.current?.contains(document.elementFromPoint(e.clientX, e.clientY))
+      ) {
+        queueMove(e);
+      }
     });
   }
   function up(e: ReactPointerEvent<SVGSVGElement>) {
-    if (frame.current !== null) {
-      cancelAnimationFrame(frame.current);
-      frame.current = null;
-    }
-    if (pinchPair.current) { flushPinch(); pinchPair.current=null; }
-    else if (pending.current) {
-      move(pending.current);
-      pending.current = null;
-    }
+    if (pinchPair.current) {
+      discardMotion();
+      flushPinch();
+      pinchPair.current = null;
+    } else flushMotion();
     const g = gesture.current;
     const wasPinching = pointers.current.size >= 2 || state === 'pinching';
     pointers.current.delete(e.pointerId);
     if (g && g.id !== e.pointerId) return;
     gesture.current = null;
     setPreview([]);
-    if(!dragFields) setPreviewDoc(null);
+    if (!dragFields) setPreviewDoc(null);
     setCandidate(null);
     setState('idle');
-    // Clear the transaction before releasing capture: the normal lostcapture event is not cancellation.
+    // 先清空手势再释放捕获。正常松手触发的 lostpointercapture 不算意外中断。
     if (svg.current?.hasPointerCapture(e.pointerId)) svg.current.releasePointerCapture(e.pointerId);
     if (wasPinching) return;
-    // Numerical input takes ownership of the operation. Releasing its originating
-    // pointer keeps the preview for explicit confirmation instead of committing twice.
+    // 已填写的精确尺寸由用户确认。松手仅保留预览，避免再次提交。
     if (g && dragMeasure && dragFields) return;
-    setDragMeasure(undefined); setDragFields(undefined);
+    setDragMeasure(undefined);
+    setDragFields(undefined);
     if (g)
       try {
         if (g.revision !== props.revision || g.tool !== tool || g.cadId !== cad?.commandId)
@@ -1015,65 +998,59 @@ export function Viewport(
   }
   function finishFromCanvas() {
     if (gesture.current || readOnly) return false;
-    if (!cad) return tool === 'select' && !props.session.construction &&
-      !axisDraft && !props.session.panel && props.cad.repeat();
-    if (cad.commandId === 'compass' && cad.parameters.opening && cad.points.length === 1 && activeCursor) {
+    if (!cad)
+      return (
+        tool === 'select' &&
+        !props.session.construction &&
+        !axisDraft &&
+        !props.session.panel &&
+        props.cad.repeat()
+      );
+    if (cad.phase === 'setup') return false;
+    if (
+      cad.commandId === 'compass' &&
+      cad.parameters.opening &&
+      cad.points.length === 1 &&
+      activeCursor
+    ) {
       props.cad.send({ type: 'stamp', position: activeCursor.position });
     } else props.cad.send({ type: 'confirm' });
     return true;
   }
   const scale = size.width / box.width;
-  const shownCandidate = drawingLine ? lineSnap : candidate;
-  const relationEnd = drawingLine ? lineEnd : activeCursor?.position;
+  const shownCandidate = precision.drawingLine ? precision.linePreview?.snap : candidate;
   const shownDrag = exactPreview?.document ?? previewDoc;
-  const gripDoc=shownDrag ?? doc;
-  const grips = !cad && !readOnly && tool==='select'
-    ? gripDoc.entities.filter(e=>props.selected.includes(e.id)).flatMap(e=>cadGrips(gripDoc,e,role).map(grip=>({...grip,viewId:e.viewId})))
-    : [];
-  const cadPoints = (cad?.points ?? []).map((p) => localToSheet(doc, cad!.viewId, p));
-  const cursorSheet = activeCursor && localToSheet(doc, activeCursor.viewId, activeCursor.position);
-  const lineSheet = lineEnd && cad && localToSheet(doc,cad.viewId,lineEnd);
-  const scalarPoint = cad && scalarMode ? activeCursor?.position ?? cad.points[0] : undefined;
-  const scalarSheet = scalarPoint && cad && localToSheet(doc,cad.viewId,scalarPoint);
+  const activeConstruction =
+    constructionPreview?.revision === props.revision ? constructionPreview.next : undefined;
+  const sceneDocument =
+    (props.session.construction?.phase === 'confirm' ? activeConstruction : undefined) ??
+    shownDrag ??
+    precision.commandPreview ??
+    doc;
+  const points = cad
+    ? cad.points.map((p) => localToSheet(doc, cad.viewId, p))
+    : tool === 'box'
+      ? steps
+      : steps.map((p) => localToSheet(doc, operationView ?? viewId, p));
   const gripTip = exactPreview?.tip ?? dragMeasure?.tip;
-  const gripSheet = dragMeasure && gripTip && localToSheet(doc,dragMeasure.viewId,gripTip);
-  const drawingPreview = previewDoc ?? cadDisplay;
-  const previewLeaf = drawingPreview?.entities.at(-1);
-  const measured =
-    previewLeaf && drawingPreview && (previewLeaf.kind === 'arc' || previewLeaf.kind === 'circle')
-      ? [0, previewLeaf.radius].map((dx) => {
-          const c = point(drawingPreview, previewLeaf.center);
-          return localToSheet(drawingPreview, previewLeaf.viewId, { x: c.x + dx, y: c.y });
-        })
-      : preview.length >= 2
-        ? preview
-        : cursorSheet && cadPoints.length
-          ? [cadPoints.at(-1)!, cursorSheet]
-          : [];
+  const gripSheet = dragMeasure && gripTip && localToSheet(doc, dragMeasure.viewId, gripTip);
   return (
-    <section className={`geo-view geo-active${cad ? ' cad-active' : ''}`}>
+    <section
+      className={`geo-view geo-active${cad ? ' cad-active' : ''}`}
+      onPointerMoveCapture={resumeCoveredHover}
+    >
       {overlaps.length > 1 &&
         props.selected.length > 0 &&
         state === 'idle' &&
         tool === 'select' &&
         !props.session.construction &&
         !cad && (
-          <select
-            className="geo-overlaps"
-            aria-label="重叠对象"
-            value={props.selected[0]}
-            onChange={(e) => props.select([e.target.value])}
-          >
-            {overlaps.map((h, i) => {
-              const entity=doc.entities.find(e=>e.id===h.id);
-              return (
-              <option key={h.id} value={h.id}>
-                {h.kind === 'reference'
-                  ? resolveReference(doc, targetFromKey(h.id)).name
-                  : `对象 ${i + 1} · ${entity ? entityNames[entity.kind] : '图形'}`}
-              </option>
-            );})}
-          </select>
+          <OverlappingTargets
+            doc={doc}
+            hits={overlaps}
+            selectedId={props.selected[0]}
+            select={props.select}
+          />
         )}
       <svg
         ref={svg}
@@ -1093,40 +1070,54 @@ export function Viewport(
         viewBox={`${box.x} ${-box.y - box.height} ${box.width} ${box.height}`}
         onPointerDown={down}
         onPointerMove={queueMove}
+        onPointerEnter={(e) => {
+          if (cad && !gesture.current && e.pointerType !== 'touch') queueMove(e);
+        }}
         onPointerUp={up}
         onDoubleClick={(event) => {
           if (readOnly || cad || tool !== 'select' || placingGrip || props.session.construction)
             return;
           const id = filtered(
-            hitTargets(doc, local(event), cssScale(), box, props.hiddenLayers, props.selected, false),
+            hitTargets(
+              doc,
+              local(event),
+              cssScale(),
+              box,
+              props.hiddenLayers,
+              props.selected,
+              false,
+            ),
           )[0]?.id;
           const entity = doc.entities.find((e) => e.id === id);
           if (
             !entity ||
             !['text', 'dimension', 'engineeringAnnotation', 'symbol'].includes(entity.kind) ||
             !editable(doc, entity, role)
-          ) return;
+          )
+            return;
           props.select([entity.id]);
           props.dispatch({ type: 'patch', patch: { panel: 'properties' } });
         }}
-        onPointerLeave={()=>{
+        onPointerLeave={() => {
           tracking.leave();
           if (readOnly) setInspectId(undefined);
-          if (!gesture.current && crosshair.current) crosshair.current.style.visibility='hidden';
+          if (!gesture.current && crosshair.current) crosshair.current.style.visibility = 'hidden';
         }}
-        onContextMenu={e=>{
+        onContextMenu={(e) => {
           if (finishFromCanvas()) e.preventDefault();
         }}
-        onKeyDown={e=>{
+        onKeyDown={(e) => {
           if (e.ctrlKey || e.metaKey || e.altKey || e.nativeEvent.isComposing) return;
           if (e.code === 'Space' && !e.repeat && finishFromCanvas()) {
             e.preventDefault();
             e.stopPropagation();
             return;
           }
-          if (!drawingLine && !dragMeasure && !scalarMode) return;
-          if (e.key==='Tab' || /^[\d+.-]$/.test(e.key)) {
-            e.preventDefault(); e.stopPropagation(); dynamicInput.current?.start(e.key==='Tab'?undefined:e.key);
+          if (!precision.input && !dragMeasure) return;
+          if (e.key === 'Tab' || /^[\d+.-]$/.test(e.key)) {
+            e.preventDefault();
+            e.stopPropagation();
+            dynamicInput.current?.start(e.key === 'Tab' ? undefined : e.key);
           }
         }}
         onPointerCancel={(e) => {
@@ -1136,179 +1127,80 @@ export function Viewport(
           if (gesture.current?.id === e.pointerId) cancel();
         }}
       >
-        <ViewportDrawing
-          controls={{
-            ...props,
-            document:
-              (props.session.construction?.phase === 'confirm' &&
-              constructionPreview?.revision === props.revision
-                ? constructionPreview.next
-                : null) ??
-              shownDrag ??
-              cadDisplay ??
-              doc,
-            highlighted: [...props.highlighted, ...(marquee?.ids ?? []), ...(cad?.ids ?? [])],
-          }}
+        <ViewportScene
+          controls={props}
           box={box}
           scale={scale}
-          preview={cad ? [] : preview}
-          steps={
-            cad
-              ? cadPoints
-              : tool === 'box'
-                ? steps
-                : steps.map((p) => localToSheet(doc, operationView ?? viewId, p))
-          }
-          candidate={shownCandidate ? localToSheet(doc, candidateView, shownCandidate.position) : null}
-          axisDraft={
-            axisDraft && ['side', 'confirm'].includes(axisDraft.phase) ? axisDraft.spec : null
-          }
+          crosshair={crosshair}
+          interaction={state}
+          marquee={marquee}
+          axis={axisDraft}
+          preview={{
+            document: sceneDocument,
+            gripDocument: shownDrag ?? doc,
+            measurementDocument: previewDoc ?? precision.commandPreview,
+            path: preview,
+            points,
+          }}
+          draft={{
+            cursor: activeCursor,
+            lineEnd: precision.linePreview?.position,
+            candidate: shownCandidate,
+            viewId: candidateView,
+            bases: tracking.active,
+          }}
         />
-        {grips.map((grip) => {
-          const q = localToSheet(doc, grip.viewId, grip.position);
-          return (
-            <g key={grip.entityId+':'+grip.key} data-transient="grip" data-grip-entity={grip.entityId} transform={`translate(${q.x} ${-q.y})`}>
-              <rect
-                data-cad-grip={grip.key}
-                x={-4 / scale}
-                y={-4 / scale}
-                width={8 / scale}
-                height={8 / scale}
-                fill="white"
-                stroke="#0369a1"
-                strokeWidth={1.5 / scale}
-              />
-              <circle data-cad-grip={grip.key} r={12 / scale} fill="transparent">
-                <title>{grip.label}</title>
-              </circle>
-            </g>
-          );
-        })}
-        {cad?.commandId === 'trim' && !cad.pointIds[0] && cadPoints.length && cursorSheet && state !== 'pinching' ? (
-          <rect data-transient="trim-box" x={Math.min(cadPoints[0].x,cursorSheet.x)}
-            y={-Math.max(cadPoints[0].y,cursorSheet.y)}
-            width={Math.abs(cadPoints[0].x-cursorSheet.x)} height={Math.abs(cadPoints[0].y-cursorSheet.y)}
-            stroke="var(--cad-relation)" strokeWidth={1/scale} strokeDasharray={`${4/scale} ${3/scale}`}
-            fill="var(--cad-relation)" fillOpacity={0.09} pointerEvents="none" />
-        ) : null}
-        {drawingLine && lineSheet && state!=='pinching' && <line data-transient="rubber-band" pointerEvents="none"
-          x1={cadPoints[0].x} y1={-cadPoints[0].y} x2={lineSheet.x} y2={-lineSheet.y}
-          stroke={props.appearance.color ?? 'var(--cad-accent,#087c72)'} strokeWidth={1.4} vectorEffect="non-scaling-stroke" strokeDasharray="6 3" />}
-        {cad && relationEnd && shownCandidate?.guide && state !== 'pinching' &&
-          <RelationGuide doc={doc} viewId={cad.viewId} candidate={shownCandidate} end={relationEnd} box={box} pixels={scale} />}
-        <g ref={crosshair} aria-hidden="true" data-transient="crosshair" pointerEvents="none"
-          style={{visibility:'hidden'}} fill="none" stroke="var(--cad-axis,#638894)" strokeWidth={1}>
-          <rect x={-3.5} y={-3.5} width={7} height={7}/>
-          <path d="M-20 0H-6 M6 0H20 M0 -20V-6 M0 6V20"/>
-        </g>
-        {cad && props.tracking && state !== 'pinching' && tracking.active.map(({viewId, position}) => {
-          const base = localToSheet(doc, viewId, position);
-          return <circle key={viewId + ':' + position.x + ',' + position.y}
-            data-transient="tracking-base" cx={base.x} cy={-base.y} r={4 / scale}
-            fill="none" stroke="var(--cad-relation)" strokeWidth={1 / scale} pointerEvents="none" />;
-        })}
-        {cad && cursorSheet && state !== 'pinching' && shownCandidate?.tracks?.map(({point, direction}) => {
-          const from = localToSheet(doc, candidateView, point);
-          return <line key={point.x+','+point.y+','+direction.x+','+direction.y}
-            data-transient="tracking" x1={from.x} y1={-from.y} x2={cursorSheet.x} y2={-cursorSheet.y}
-            pointerEvents="none" stroke="var(--cad-relation)" strokeWidth={1 / scale}
-            strokeDasharray={`${4 / scale} ${3 / scale}`} />;
-        })}
-        {cad &&
-          drawingPreview &&
-          ['segment', 'line', 'circle', 'arc'].includes(cad.commandId) && (
-            <MeasurementOverlay
-              doc={drawingPreview}
-              ids={previewLeaf?.kind === 'segment' ? [previewLeaf.id] : []}
-              path={measured}
-              tool={cad.commandId}
-              box={box}
-              scale={scale}
-            />
-          )}
-        <SketchOverlays marquee={marquee} scale={scale} />
-        {!cad && state !== 'idle' && state !== 'drawingStroke' && !marquee && (
-          <MeasurementOverlay
-            doc={previewDoc ?? doc}
-            ids={state.startsWith('dragging') ? props.selected : []}
-            path={preview}
-            tool={tool}
-            box={box}
-            scale={scale}
-          />
-        )}
       </svg>
-      {cad && scalarMode && scalarSheet && scalarPoint && state!=='pinching' && <DynamicLineInput
-        key={cad.prefix+scalarMode} measure={scalarMode} size={size}
-        anchor={{x:(scalarSheet.x-box.x)*scale,y:(box.y+box.height-scalarSheet.y)*scale}}
-        length={scalarMode==='angle' ? angle(sub(scalarPoint,cad.points[0])) : distance(scalarPoint,cad.points[0])}
-        angle={0} fields={{length:scalar}} error={scalar!==undefined ? lineError : ''} handle={dynamicInput}
-        confirmLabel={scalarMode==='angle'?'应用旋转角':'应用开度'}
-        change={draft=>{setScalarDraft({prefix:cad.prefix,value:draft.length ?? ''});setLineError('');}}
-        cancel={()=>{props.cad.send({type:'cancel'});setScalarDraft(undefined);setLineError('');svg.current?.focus();}}
-        commit={()=>{
-          const delta=sub(scalarPoint,cad.points[0]);
-          const value=scalar ?? String(scalarMode==='angle'?angle(delta):distance(scalarPoint,cad.points[0]));
-          try {
-            if (scalarMode==='angle') {
-              const degrees=cadNumber(value,'旋转角','°');
-              if (Math.abs(degrees)>360) throw Error('旋转角需在 −360° 至 360° 内');
-              props.cad.send({type:'parameters',values:{angle:value}},{type:'confirm'});
-            } else {
-              cadLength(value,'开度');
-              props.cad.send({type:'parameters',values:{opening:value}});
-            }
-            setScalarDraft(undefined);setLineError('');svg.current?.focus({preventScroll:true});
-          } catch (error) {setLineError(error instanceof Error ? error.message : '输入无效');}
-        }} />}
-      {inspected && <output className="cad-hover-style">
-        {entityNames[inspected.kind]} · {inspected.appearance?.pattern
-          ? {SOLID:'实线',DASHED:'虚线',CENTER:'点划线',PHANTOM:'双点划线',GUIDE:'辅助线'}[inspected.appearance.pattern]
-          : inspected.lineStyle==='CONSTRUCTION' ? '辅助线' : inspected.lineStyle.endsWith('HIDDEN')?'虚线':'实线'}
-        {' · '}{inspected.appearance?.widthMm ?? 0.42} mm · {inspected.appearance?.color ?? '图层默认颜色'}
-      </output>}
-      {!cad && dragMeasure && gripSheet && gripTip && <DynamicLineInput
-        anchor={{x:(gripSheet.x-box.x)*scale,y:(box.y+box.height-gripSheet.y)*scale}}
-        size={size} length={distance(dragMeasure.anchor,gripTip)} angle={angle(sub(gripTip,dragMeasure.anchor))}
-        fields={dragFields??{}} change={v=>{setDragFields(v);setLineError('');}} measure={dragMeasure.target.kind==='radius'?'radius':'line'}
-        commit={commitDrag} confirmLabel="确认调整" cancel={()=>{cancel();svg.current?.focus();}}
-        handle={dynamicInput} error={dragFields?lineError:''} />}
-      {drawingLine && lineSheet && lineEnd && state!=='pinching' && <DynamicLineInput key={cad.prefix}
-        anchor={{x:(lineSheet.x-box.x)*scale,y:(box.y+box.height-lineSheet.y)*scale}}
-        from={{x:(cadPoints[0].x-box.x)*scale,y:(box.y+box.height-cadPoints[0].y)*scale}}
-        size={size} length={distance(cad.points[0],lineEnd)} angle={angle(sub(lineEnd,cad.points[0]))}
-        fields={fields??{}} change={next=>{setTypedLine({prefix:cad.prefix,fields:next});setLineError('');}}
-        commit={commitLine} cancel={()=>{props.cad.send({type:'cancel'});setLineError('');svg.current?.focus();}}
-        handle={dynamicInput} error={fields?lineError:''} />}
+      {precision.input &&
+        state !== 'pinching' &&
+        (() => {
+          const { key, anchor, from, ...input } = precision.input;
+          return (
+            <DynamicLineInput
+              key={key}
+              {...input}
+              anchor={sheetToViewport(anchor, box, scale)}
+              from={from && sheetToViewport(from, box, scale)}
+              size={size}
+              handle={dynamicInput}
+            />
+          );
+        })()}
+      {inspected && <EntityStyleHint entity={inspected} />}
+      {!cad && dragMeasure && gripSheet && gripTip && (
+        <DynamicLineInput
+          anchor={sheetToViewport(gripSheet, box, scale)}
+          size={size}
+          length={distance(dragMeasure.anchor, gripTip)}
+          angle={angle(sub(gripTip, dragMeasure.anchor))}
+          fields={dragFields ?? {}}
+          change={(v) => {
+            setDragFields(v);
+            setDragError('');
+          }}
+          measure={dragMeasure.target.kind === 'radius' ? 'radius' : 'line'}
+          commit={commitDrag}
+          confirmLabel="确认调整"
+          cancel={() => {
+            cancel();
+            svg.current?.focus();
+          }}
+          handle={dynamicInput}
+          error={dragFields ? dragError : ''}
+        />
+      )}
       {(shownCandidate || (cad?.phase === 'points' && activeCursor && props.snapping)) && (
-        <div className="geo-snap-feedback" data-snap-feedback={shownCandidate ? 'true' : undefined}>
-          {shownCandidate && <>吸附：
-          {shownCandidate.label ??
-            {
-              COINCIDENT: '端点',
-              MIDPOINT: '中点',
-              INTERSECTION: '交点',
-              POINT_ON_LINE: '线上点',
-              AXIS_DIRECTION: '沿轴方向',
-              GRID: '网格',
-              PROJECTION_ALIGNMENT: '投影对齐',
-            }[shownCandidate.kind as 'COINCIDENT'] ??
-            shownCandidate.kind}</>}
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() => {
-              if (gesture.current) {
-                gesture.current.pausedSnap = true;
-                refreshSnap(true);
-              } else if (cad) setSkippedPick(skippedPick === cad.prefix ? null : cad.prefix);
-              svg.current?.focus({ preventScroll: true });
-            }}
-          >
-            {cad && skippedPick === cad.prefix ? '恢复当前吸附' : '暂停当前吸附'}
-          </button>
-          <span>按 Alt 暂停</span>
-        </div>
+        <SnapFeedback
+          candidate={shownCandidate}
+          paused={!!cad && skippedPick === cad.prefix}
+          toggle={() => {
+            if (gesture.current) {
+              gesture.current.pausedSnap = true;
+              refreshSnap(true);
+            } else if (cad) setSkippedPick(skippedPick === cad.prefix ? null : cad.prefix);
+            svg.current?.focus({ preventScroll: true });
+          }}
+        />
       )}
       {state === 'idle' &&
         !dragMeasure &&
@@ -1329,21 +1221,6 @@ export function Viewport(
             }}
           />
         )}
-      {props.session.construction && (
-        <ConstructionPanel
-          construction={props.session.construction}
-          document={doc}
-          dispatch={props.dispatch}
-          validPreview={!!constructionPreview && constructionPreview.revision === props.revision}
-          confirm={() => {
-            if (constructionPreview?.revision === props.revision) accept(constructionPreview.next);
-          }}
-          clearPreview={() => {
-            setConstructionPreview(null);
-            setPreview([]);
-          }}
-        />
-      )}
       {!readOnly && (
         <OperationRecovery
           doc={doc}
@@ -1359,58 +1236,18 @@ export function Viewport(
           setInterrupted={setInterrupted}
         />
       )}
-      {axisDraft && (
-        <div className="geo-snap" role="status">
-          新轴 {axisDraft.spec.name} ·{' '}
-          {axisDraft.phase === 'confirm' ? '检查展开侧后确认' : '在图纸上定位'}
-          <button
-            type="button"
-            disabled={axisDraft.phase !== 'confirm'}
-            onClick={() => {
-              try {
-                accept(addProjectionAxis(doc, axisDraft.spec, role));
-                setAxisDraft(null);
-                props.report('新轴已创建；学生投影点由学生自行作图');
-              } catch (e) {
-                fail(e);
-              }
-            }}
-          >
-            确认新轴
-          </button>
-          <button type="button" onClick={() => setAxisDraft(null)}>
-            取消新轴
-          </button>
-        </div>
-      )}
-      {!readOnly && orthographic(doc) && props.session.panel === 'axis' && (
-        <div className="geo-panel" role="dialog" aria-label="新增投影轴">
-          <button
-            type="button"
-            onClick={() => props.dispatch({ type: 'patch', patch: { panel: null } })}
-          >
-            关闭面板
-          </button>
-          <AxisTools
-            doc={doc}
-            role={role}
-            commit={props.commit}
-            report={props.report}
-            initialSystemId={
-              props.selected.map((id) => targetFromKey(id)).find((r) => r.kind === 'projectionAxis')
-                ?.systemId
-            }
-            start={(spec) => {
-              cancel();
-              props.dispatch({ type: 'patch', patch: { panel: null } });
-              setAxisDraft({ spec, phase: spec.method === 'FREE' ? 'anchor' : 'reference' });
-              props.report(
-                spec.method === 'FREE' ? '点击新轴的第一点' : '点击保留面中的参考线或投影轴',
-              );
-            }}
-          />
-        </div>
-      )}
+      <ViewportProjection
+        controls={props}
+        axis={axisDraft}
+        setAxis={setAxisDraft}
+        preview={activeConstruction}
+        accept={accept}
+        cancelGesture={cancel}
+        clearPreview={() => {
+          setConstructionPreview(null);
+          setPreview([]);
+        }}
+      />
     </section>
   );
 }

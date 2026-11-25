@@ -11,6 +11,8 @@ export { LegacyGeometryDocument };
 
 export const EditorType = z.enum(['VHW_PROJECTION', 'THREE_VIEW', 'ISOMETRIC', 'OBLIQUE_DIMETRIC']);
 export type EditorType = z.infer<typeof EditorType>;
+export const GEOMETRY_DOCUMENT_VERSION = 'tuheng.geometry/3.0.0';
+export const GEOMETRY_DOCUMENT_MAX_BYTES = 2_000_000;
 export const LayerRole = z.enum(['PROBLEM_STEM', 'STUDENT_ANSWER', 'CONSTRUCTION']);
 export const LineStyle = z.enum([
   'CONSTRUCTION',
@@ -398,7 +400,7 @@ export const GeometryDocument = z
       'tuheng.geometry/2.0.0',
       'tuheng.geometry/2.1.0',
       'tuheng.geometry/2.2.0',
-      'tuheng.geometry/3.0.0',
+      GEOMETRY_DOCUMENT_VERSION,
     ]),
     editorType: EditorType,
     units: z.literal('mm'),
@@ -450,7 +452,8 @@ export const GeometryDocument = z
   .strict()
   .superRefine((doc, ctx) => {
     const fail = (message: string) => ctx.addIssue({ code: 'custom', message });
-    if (new TextEncoder().encode(JSON.stringify(doc)).length > 2_000_000) fail('几何文档超过 2MB');
+    if (new TextEncoder().encode(JSON.stringify(doc)).length > GEOMETRY_DOCUMENT_MAX_BYTES)
+      fail('几何文档超过 2MB');
     if (doc.schemaVersion === 'tuheng.geometry/1.0.0') {
       const legacy = LegacyGeometryDocument.safeParse(doc);
       if (!legacy.success) fail('v1 文档不允许使用 v2 字段');

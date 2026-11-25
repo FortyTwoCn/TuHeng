@@ -1,8 +1,21 @@
 import type { GeometryDocument } from '@tuheng/contracts';
 import { exportCadPackage, exportSheetSvg, type Bounds } from '@tuheng/geometry-core';
 
+/** 浏览器完成取用后释放临时 URL。JSON、图片和图纸包共用下载入口。 */
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 async function rasterize(doc: GeometryDocument, view?: Bounds): Promise<Blob> {
-  const svg = new DOMParser().parseFromString(exportSheetSvg(doc,view), 'image/svg+xml').documentElement;
+  const svg = new DOMParser().parseFromString(
+    exportSheetSvg(doc, view),
+    'image/svg+xml',
+  ).documentElement;
   const [, , w, h] = (svg.getAttribute('viewBox') ?? '').split(/\s+/).map(Number);
   if (!(w > 0 && h > 0)) throw new Error('图纸边界无效');
   const scale = 2048 / Math.max(w, h);
@@ -37,13 +50,8 @@ export async function downloadCadFile(
   view?: Bounds,
 ) {
   try {
-    const blob = format === 'png' ? await rasterize(doc,view) : await exportCadPackage(doc);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = view ? 'tuheng-view.png' : `tuheng.${format}`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const blob = format === 'png' ? await rasterize(doc, view) : await exportCadPackage(doc);
+    downloadBlob(blob, view ? 'tuheng-view.png' : `tuheng.${format}`);
   } catch (error) {
     report(error instanceof Error ? error.message : '导出失败');
   }

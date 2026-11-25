@@ -36,7 +36,7 @@ interface SettingsProps {
   settings: ReturnType<typeof initialSettings>;
   setSettings: Dispatch<SetStateAction<ReturnType<typeof initialSettings>>>;
   doc: GeometryDocument;
-  history: DocumentHistory;
+  history: Pick<DocumentHistory, 'operations'>;
   setZoom: Dispatch<SetStateAction<number>>;
   fit: () => void;
   setFocusKey: Dispatch<SetStateAction<number>>;

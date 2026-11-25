@@ -33,6 +33,7 @@ export function useCadCommand(
   report: (message: string) => void,
   appearance: Appearance,
 ): CadController {
+  // 命令须使用启动或上一段提交对应的文档。外部换图和权限变化会使它失效。
   const session =
     activity.kind === 'cad' &&
     activity.version === fingerprint &&
@@ -67,6 +68,7 @@ export function useCadCommand(
         if (!operation) break;
         const result = cadStep(operation, base, event);
         if (result.document) {
+          // 连续作图以这次真正写入历史的结果为下一步基线。
           const applied = commit(
             result.document,
             CAD_COMMANDS.find((c) => c.id === current.commandId)?.name,

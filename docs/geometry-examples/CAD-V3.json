@@ -4,10 +4,7 @@
   "units": "mm",
   "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
   "sheet": {
-    "origin": {
-      "x": 0,
-      "y": 0
-    },
+    "origin": { "x": 0, "y": 0 },
     "allowAuxiliaryViews": true
   },
   "auxiliarySystems": [],
@@ -35,79 +32,34 @@
       "id": "view-0",
       "name": "V",
       "transform": {
-        "origin": {
-          "x": 0,
-          "y": 0
-        },
-        "xAxis": {
-          "x": -1,
-          "y": 0
-        },
-        "yAxis": {
-          "x": 0,
-          "y": 1
-        }
+        "origin": { "x": 0, "y": 0 },
+        "xAxis": { "x": -1, "y": 0 },
+        "yAxis": { "x": 0, "y": 1 }
       },
-      "mapping": [
-        "x",
-        "z"
-      ],
-      "signs": [
-        1,
-        1
-      ]
+      "mapping": ["x", "z"],
+      "signs": [1, 1]
     },
     {
       "id": "view-1",
       "name": "H",
       "transform": {
-        "origin": {
-          "x": 0,
-          "y": 0
-        },
-        "xAxis": {
-          "x": -1,
-          "y": 0
-        },
-        "yAxis": {
-          "x": 0,
-          "y": 1
-        }
+        "origin": { "x": 0, "y": 0 },
+        "xAxis": { "x": -1, "y": 0 },
+        "yAxis": { "x": 0, "y": 1 }
       },
-      "mapping": [
-        "x",
-        "y"
-      ],
-      "signs": [
-        1,
-        -1
-      ]
+      "mapping": ["x", "y"],
+      "signs": [1, -1]
     },
     {
       "id": "view-2",
       "name": "W",
       "transform": {
-        "origin": {
-          "x": 0,
-          "y": 0
-        },
-        "xAxis": {
-          "x": 1,
-          "y": 0
-        },
-        "yAxis": {
-          "x": 0,
-          "y": 1
-        }
+        "origin": { "x": 0, "y": 0 },
+        "xAxis": { "x": 1, "y": 0 },
+        "yAxis": { "x": 0, "y": 1 }
       },
-      "mapping": [
-        "y",
-        "z"
-      ],
-      "signs": [
-        1,
-        1
-      ]
+      "mapping": ["y", "z"],
+      "signs": [1, 1]
     }
   ],
   "layers": [
@@ -127,47 +79,41 @@
   "entities": [
     {
       "id": "p0",
+      "kind": "point",
       "viewId": "view-0",
       "layerId": "stem",
       "lineStyle": "PROBLEM_VISIBLE",
-      "kind": "point",
-      "position": {
-        "x": 4,
-        "y": 8
-      },
+      "position": { "x": 4, "y": 8 },
       "name": "A",
       "spatial": null,
       "labelVisible": true
     },
     {
       "id": "p1",
+      "kind": "point",
       "viewId": "view-0",
       "layerId": "stem",
       "lineStyle": "PROBLEM_VISIBLE",
-      "kind": "point",
-      "position": {
-        "x": 14,
-        "y": 8
-      },
+      "position": { "x": 14, "y": 8 },
       "name": "B",
       "spatial": null,
       "labelVisible": true
     },
     {
       "id": "edge",
+      "kind": "segment",
       "viewId": "view-0",
       "layerId": "stem",
       "lineStyle": "PROBLEM_VISIBLE",
-      "kind": "segment",
       "startPoint": "p0",
       "endPoint": "p1"
     },
     {
       "id": "cad.ellipse",
+      "kind": "ellipse",
       "viewId": "view-0",
       "layerId": "answer",
       "lineStyle": "ANSWER_VISIBLE",
-      "kind": "ellipse",
       "center": "p0",
       "majorRadius": 8,
       "minorRadius": 5,
@@ -177,49 +123,36 @@
     },
     {
       "id": "cad.bore",
+      "kind": "circle",
       "viewId": "view-0",
       "layerId": "answer",
       "lineStyle": "ANSWER_VISIBLE",
-      "kind": "circle",
       "center": "p0",
       "radius": 2
     },
     {
       "id": "cad.hatch",
+      "kind": "hatch",
       "viewId": "view-0",
       "layerId": "answer",
       "lineStyle": "ANSWER_VISIBLE",
-      "kind": "hatch",
       "loops": [
-        [
-          "cad.ellipse"
-        ],
-        [
-          "cad.bore"
-        ]
+        ["cad.ellipse"],
+        ["cad.bore"]
       ],
-      "origin": {
-        "x": 4,
-        "y": 8
-      },
+      "origin": { "x": 4, "y": 8 },
       "angle": 45,
       "spacing": 1.2
     },
     {
       "id": "cad.size",
+      "kind": "dimension",
       "viewId": "view-0",
       "layerId": "answer",
       "lineStyle": "ANSWER_VISIBLE",
-      "kind": "dimension",
       "dimensionType": "ALIGNED",
-      "referenceIds": [
-        "p0",
-        "p1"
-      ],
-      "position": {
-        "x": 6,
-        "y": 14
-      },
+      "referenceIds": ["p0", "p1"],
+      "position": { "x": 6, "y": 14 },
       "precision": 2,
       "textOverride": "",
       "textSize": 2.5,
@@ -227,50 +160,37 @@
     },
     {
       "id": "cad.note",
+      "kind": "text",
       "viewId": "view-0",
       "layerId": "answer",
       "lineStyle": "ANSWER_VISIBLE",
-      "kind": "text",
-      "position": {
-        "x": 4,
-        "y": 20
-      },
+      "position": { "x": 4, "y": 20 },
       "angle": 0,
       "size": 3,
       "content": "剖面 A"
     },
     {
       "id": "cad.symbol",
+      "kind": "symbol",
       "viewId": "view-0",
       "layerId": "answer",
       "lineStyle": "ANSWER_VISIBLE",
-      "kind": "symbol",
-      "position": {
-        "x": 20,
-        "y": 10
-      },
+      "position": { "x": 20, "y": 10 },
       "angle": 45,
       "size": 3,
       "symbolType": "RIGHT_ROTATION"
     },
     {
       "id": "cad.tolerance",
+      "kind": "engineeringAnnotation",
       "viewId": "view-0",
       "layerId": "answer",
       "lineStyle": "ANSWER_VISIBLE",
-      "kind": "engineeringAnnotation",
-      "position": {
-        "x": 18,
-        "y": 15
-      },
+      "position": { "x": 18, "y": 15 },
       "angle": 0,
       "size": 2,
       "annotationType": "GEOMETRIC_TOLERANCE",
-      "fields": [
-        "∥",
-        "0.02",
-        "A"
-      ]
+      "fields": ["∥", "0.02", "A"]
     }
   ],
   "constraints": [],

@@ -1,5 +1,10 @@
 import type { CadEntity, GeometryDocument } from '@tuheng/contracts';
-import { dimensionValue, roughnessAccessories, roughnessExtents, roughnessTextures } from '@tuheng/geometry-core';
+import {
+  dimensionValue,
+  roughnessAccessories,
+  roughnessExtents,
+  roughnessTextures,
+} from '@tuheng/geometry-core';
 import { ToleranceRows } from './ToleranceRows';
 import type { ReactNode } from 'react';
 
@@ -65,23 +70,38 @@ export function CadFields({
     );
   if (e.kind === 'dimension') {
     let measured = '已失效';
-    try { measured=dimensionValue(doc,e).toFixed(e.precision)+(e.dimensionType==='ANGULAR'?'°':' mm'); } catch {}
+    try {
+      measured =
+        dimensionValue(doc, e).toFixed(e.precision) + (e.dimensionType === 'ANGULAR' ? '°' : ' mm');
+    } catch {}
     return (
       <>
-        <span>
-          实际测量 {measured}
-        </span>
+        <span>实际测量 {measured}</span>
         {field('textOverride', '覆盖文字（可留空）')}
         {e.dimensionType === 'LINEAR' && field('linearAngle', '线性测量方向 (°)')}
         <details>
           <summary>尺寸公差</summary>
-          {field('toleranceCode','公差代号')}
-          {field('toleranceUpper','上偏差')}
-          {field('toleranceLower','下偏差')}
-          <label><input type="checkbox" disabled={locked} checked={values.showToleranceCode!=='false'}
-            onChange={event=>change('showToleranceCode',String(event.target.checked))}/>显示公差代号</label>
-          <label><input type="checkbox" disabled={locked} checked={values.showToleranceDeviation!=='false'}
-            onChange={event=>change('showToleranceDeviation',String(event.target.checked))}/>显示上下偏差</label>
+          {field('toleranceCode', '公差代号')}
+          {field('toleranceUpper', '上偏差')}
+          {field('toleranceLower', '下偏差')}
+          <label>
+            <input
+              type="checkbox"
+              disabled={locked}
+              checked={values.showToleranceCode !== 'false'}
+              onChange={(event) => change('showToleranceCode', String(event.target.checked))}
+            />
+            显示公差代号
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              disabled={locked}
+              checked={values.showToleranceDeviation !== 'false'}
+              onChange={(event) => change('showToleranceDeviation', String(event.target.checked))}
+            />
+            显示上下偏差
+          </label>
         </details>
         <details>
           <summary>尺寸显示</summary>
@@ -107,15 +127,17 @@ export function CadFields({
           ['LEFT_ROTATION', '左旋'],
           ['RIGHT_ROTATION', '右旋'],
         ])}
-      {e.kind === 'symbol' && <>
-        {field('label','向视字母')}
-        {e.symbolType==='DIRECTION' && field('arrowLength','箭杆长度（mm，留空使用默认值）')}
-        <details>
-          <summary>向视字母位置</summary>
-          {field('labelU','字母 u（mm）')}
-          {field('labelV','字母 v（mm）')}
-        </details>
-      </>}
+      {e.kind === 'symbol' && (
+        <>
+          {field('label', '向视字母')}
+          {e.symbolType === 'DIRECTION' && field('arrowLength', '箭杆长度（mm，留空使用默认值）')}
+          <details>
+            <summary>向视字母位置</summary>
+            {field('labelU', '字母 u（mm）')}
+            {field('labelV', '字母 v（mm）')}
+          </details>
+        </>
+      )}
       {e.kind === 'engineeringAnnotation' && (
         <>
           {e.annotationType === 'ROUGHNESS' &&
@@ -124,32 +146,45 @@ export function CadFields({
               ['REMOVAL_REQUIRED', '要求去除材料'],
               ['REMOVAL_PROHIBITED', '禁止去除材料'],
             ])}
-          {e.annotationType==='ROUGHNESS' && <details>
-            <summary>加工与纹理</summary>
-            {select('accessory','附加符号',roughnessAccessories)}
-            {select('texture','加工纹理',roughnessTextures)}
-            {select('extent','适用范围',roughnessExtents)}
-            {field('method','加工方法')}
-          </details>}
-          {e.annotationType==='GEOMETRIC_TOLERANCE' && <ToleranceRows value={values.toleranceRows}
-            first={fields} locked={locked} change={value=>change('toleranceRows',value)} />}
-          {e.annotationType!=='TOLERANCE_TEXT' && <details>
-            <summary>引线接触点</summary>
-            {field('leaderU','接触 u（mm）')}
-            {field('leaderV','接触 v（mm）')}
-          </details>}
-          {!values.toleranceRows && fields.map((v, i) => (
-            <label key={i}>
-              {e.annotationType === 'TOLERANCE_TEXT'
-                ? ['基本尺寸', '上偏差', '下偏差'][i]
-                : `标注字段 ${i + 1}`}
-              <input
-                value={v}
-                disabled={locked}
-                onChange={(ev) => setFields(fields.map((s, j) => (j === i ? ev.target.value : s)))}
-              />
-            </label>
-          ))}
+          {e.annotationType === 'ROUGHNESS' && (
+            <details>
+              <summary>加工与纹理</summary>
+              {select('accessory', '附加符号', roughnessAccessories)}
+              {select('texture', '加工纹理', roughnessTextures)}
+              {select('extent', '适用范围', roughnessExtents)}
+              {field('method', '加工方法')}
+            </details>
+          )}
+          {e.annotationType === 'GEOMETRIC_TOLERANCE' && (
+            <ToleranceRows
+              value={values.toleranceRows}
+              first={fields}
+              locked={locked}
+              change={(value) => change('toleranceRows', value)}
+            />
+          )}
+          {e.annotationType !== 'TOLERANCE_TEXT' && (
+            <details>
+              <summary>引线接触点</summary>
+              {field('leaderU', '接触 u（mm）')}
+              {field('leaderV', '接触 v（mm）')}
+            </details>
+          )}
+          {!values.toleranceRows &&
+            fields.map((v, i) => (
+              <label key={i}>
+                {e.annotationType === 'TOLERANCE_TEXT'
+                  ? ['基本尺寸', '上偏差', '下偏差'][i]
+                  : `标注字段 ${i + 1}`}
+                <input
+                  value={v}
+                  disabled={locked}
+                  onChange={(ev) =>
+                    setFields(fields.map((s, j) => (j === i ? ev.target.value : s)))
+                  }
+                />
+              </label>
+            ))}
           {e.annotationType !== 'TOLERANCE_TEXT' && !values.toleranceRows && (
             <button
               type="button"

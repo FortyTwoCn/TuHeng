@@ -61,8 +61,8 @@ const primitives: [CadCommandId, CadEvent[], GeometryEntity['kind']][] = [
   ['arc3', [p(1, 0), p(0, -1), p(-1, 0)], 'arc'],
   ['ellipse', [p(0, 0), p(4, 0), p(3, 2)], 'ellipse'],
   ['spline', [p(0, 0), p(2, 4), p(6, 0), confirm], 'curve'],
-  ['polygon', [p(0, 0), p(4, 0)], 'segment'],
-  ['text', [param({ content: '孔口 <不能注入>' }), p(1, 1)], 'text'],
+  ['polygon', [param({ sides: '6' }), confirm, p(0, 0), p(4, 0)], 'segment'],
+  ['text', [param({ content: '孔口 <不能注入>' }), confirm, p(1, 1)], 'text'],
   ['direction', [p(2, 2), p(5,2)], 'symbol'],
   ['leftDirection', [p(2, 2)], 'symbol'],
   ['rightDirection', [p(2, 2)], 'symbol'],
@@ -104,7 +104,7 @@ describe('shared CAD command and immutable document workflows', () => {
     const lines = d.entities.filter((e) => e.kind === 'segment');
     expect(lines.length).toBe(4);
     lines.forEach((line, i) => expect(line.endPoint).toBe(lines[(i + 1) % 4].startPoint));
-    const poly = run('polygon', [param({ sides: '3', mode: '外切于圆' }), p(0, 0), p(5, 0)]);
+    const poly = run('polygon', [param({ sides: '3', mode: '外切于圆' }), confirm, p(0, 0), p(5, 0)]);
     const vertex = poly.entities.find((e) => e.kind === 'point')!;
     expect(Math.hypot(vertex.position.x, vertex.position.y)).toBeCloseTo(10);
   });

@@ -23,7 +23,9 @@ A=(30,20,40) 的纸面位置为 V=(-30,40)、H=(-30,-20)、W=(20,40)。学生实
 - `references.ts`：类型化目标、实际参考几何、selectable/snappable/referenceable/editable/deletable；渲染、命中、吸附和构造共享。基准射线、原点与偏移新轴不伪造成答案线。
 - `interaction-controller.ts`、`marquee.ts`：点/端点/线身命中、重叠候选、Window/Crossing 精确几何；多选共享节点只移动一次。
 - `commands.ts`（core）：构造、精确参数、方向调整与显式轴绑定的纯命令；浮层/详细属性使用同一参数描述。
-- `Viewport.tsx`：固定 pointerdown 基线，移动时渲染 previewDocument，松手提交一次历史；Escape、cancel、异常丢失捕获及受控文档更新取消未提交操作。
+- `Viewport.tsx`：根据工具和手势派发指针事件。按下固定文档基线和坐标变换，移动时更新预览，松手提交。Escape、意外丢失指针捕获或外部换图会结束未提交操作。
+- `usePointerFrames.ts`：合并每帧的移动预览，组件卸载时清理待处理任务。笔迹原始采样由视口单独保留。
+- `ViewportScene.tsx` 和 `ViewportDrawing.tsx`：按统一图纸坐标绘制实体、选择、吸附和测量提示。`ViewportProjection.tsx` 与 `ViewportFeedback.tsx` 负责投影面板与可点击反馈。
 - `drawing-session.ts`：分步绘图与笔迹应用；`OperationRecovery.tsx`：取消吸附、恢复原笔迹及恢复中断笔迹。
 - `topology.ts`：合并点引用、别名和来源、单个对象端点解除连接。不同投影不合并；题干点可作为只读锚点。
 - `dependencies.ts` / `reference-relations.ts`：显式交点、贴轴、通过点与有向平行/垂直绑定；拒绝循环或共享端点冲突。交互求解与只读分析分离，声明按实际几何校验。
@@ -31,13 +33,13 @@ A=(30,20,40) 的纸面位置为 V=(-30,40)、H=(-30,-20)、W=(20,40)。学生实
 
 ## 会话、预览和界面
 
-文档只保存正式几何。`WorkspaceSession.activity` 互斥表示 CAD 取点、教学构造、换面轴或普通选择/导航/电子笔。`useCadCommand` 通过同一个 reducer 更新会话，`DocumentHistory` 保存所有提交。geometry-core/sheet.drawingViewAt 按图纸位置与现有对象解析新操作归属，Viewport 固定每次手势及多步命令的 viewId；不再通过下拉选择作图框架。开始操作固定 revision 与 CTM，外部更换文档取消旧操作；受控父级同内容回传不重置历史。
+文档存储正式几何。`WorkspaceSession.activity` 互斥表示 CAD 取点、教学构造、换面轴或选择、导航与电子笔。`useCadCommand` 通过同一 reducer 更新会话。`useDrawingDocument.ts` 负责宿主值回传、正式提交、题干保护及撤销历史。`sheet.drawingViewAt` 按图纸位置解析操作归属，视口在一次手势或多步命令期间锁定 `viewId`。外部换图会取消旧操作。宿主回传同一文档内容时保留历史。
 
-`preview.ts` 只更新受影响点及必要依赖，不在每次 move 做完整 Zod、分析/自然语言导出或 JSON.stringify。`cadStep` 与 `cadPreview` 让显示的吸附几何和最终提交共用计算结果。完整验证在提交边界，一次操作一条历史。OperationRecovery 用原始结果与自动调整结果替换当前命令；新编辑使旧恢复入口失效。
+`preview.ts` 局部更新拖动涉及的点和依赖。`useCadPrecision.ts` 保存数值草稿，计算可用于确认的精确落点。`cadStep` 与 `cadPreview` 共用几何计算。完整验证发生在正式提交时。每次操作对应一个历史项。`OperationRecovery` 可将当前历史项替换为未吸附或未拟合结果。
 
 `commands.ts`（editor）为工具栏和对象卡提供统一有类型注册表与可用性原因。`workspace-controls.tsx` 和 `workspace-rails.tsx` 负责五个区域的布局及命令入口；快捷键限定当前编辑器并避开文本输入。`FloatingInspector` 的紧凑摘要与展开属性共用 `PropertyFields`，不复制属性命令。单一 `@floating-ui/dom`（MIT）处理 SVG 虚拟锚点及尺寸/滚动更新，关闭清理订阅。
 
-CSS 使用容器宽度和剩余高度布局；手机摘要保留在对象旁，详细属性抽屉占用内部网格空间。文件、图层、显示和吸附细项按需展开，不重新引入三套独立画板。
+`CommandParameters.tsx` 呈现文字、多边形设置和精确坐标表单。统一样式入口 `styles.css` 按工作区、浮动面板和响应式覆盖的顺序加载。手机摘要保留在对象旁，详细属性抽屉占用内部网格空间。
 
 ## 版本和教学边界
 
@@ -53,7 +55,7 @@ CAD 命令目录位于 `cad-registry.ts`。每个命令声明工具组、别名�
 
 登录后访问 `/geometry` 独立作图，JSON 保存到本地；教学页面通过既有草稿/提交用例保存。未登录或会话失效会先登录，再回到编辑器。
 
-`GeometryEditor` 仍支持 value/onChange、defaultValue、role、readOnly、problemDocument、highlightedEntityIds。ref 提供 getDocument、exportJSON、exportNarrative、undo、redo、fitToContent。非法加载保留当前文档并反馈错误；外部 value 变化不能被旧拖动覆盖。SVG 导出整张展开图，与当前镜头无关，不含选中柄或吸附候选。
+`GeometryEditor` 支持 `value` / `onChange`、`defaultValue`、`role`、`readOnly`、`problemDocument` 和 `highlightedEntityIds`。ref 提供 `getDocument`、`exportJSON`、`exportNarrative`、`undo`、`redo` 和 `fitToContent`。文件输入、预览和导出走 `DrawingFiles.tsx` 与核心 `document-json.ts`。面向用户的 JSON 排版与评分证据分开。非法加载保留当前文档并反馈出错字段。SVG 导出默认覆盖整张展开图。
 
 照片识别导入留待下一轮，届时仍通过同一 GeometryDocument 校验入口；当前不调用识别模型。已有图片作答保持兼容。
 

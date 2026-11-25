@@ -91,7 +91,7 @@ export const CAD_COMMANDS = [
     '绘图',
     ['选择中心', '选择半径与方向'],
     [
-      field('sides', '边数', '6'),
+      field('sides', '边数'),
       field('mode', '圆与多边形', '内接于圆', ['内接于圆', '外切于圆']),
       radius,
       rotation,
@@ -292,7 +292,7 @@ export interface CadSession {
   hatchSpans?: Extract<GeometryEntity, {kind:'hatch'}>['spans'];
   pointSnaps?: (SnapCandidate | undefined)[];
   ids: string[];
-  phase: 'selection' | 'points' | 'confirm';
+  phase: 'setup' | 'selection' | 'points' | 'confirm';
   parameters: Record<string, string>;
   appearance?: GeometryEntity['appearance'];
 }

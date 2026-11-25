@@ -4,14 +4,34 @@ import {
   constructLine,
   adjustDirection,
   sheetToLocal,
+  localToSheet,
+  referenceDirection,
   axisDirection,
   targetFromKey,
   sub,
+  add,
+  scale,
   distance,
   type AxisConstruction,
 } from '@tuheng/geometry-core';
 import type { EditorControls } from './types';
 import type { Hit } from './interaction-controller';
+import type { ConstructionSession } from './session';
+
+/** 悬停和按住移动使用同一个构造预览，真正创建由确认步骤处理。 */
+export function constructionGuide(
+  doc: GeometryDocument,
+  draft: ConstructionSession,
+  viewId: string,
+  sheetPosition: Vec2,
+) {
+  if (draft.phase !== 'position' || !draft.reference) return;
+  const from = sheetToLocal(doc, viewId, sheetPosition);
+  const direction = referenceDirection(doc, viewId, draft.reference, draft.spec.directionMode);
+  const length = draft.spec.geometryExtent === 'segment' ? draft.spec.length : 100;
+  return [sheetPosition, localToSheet(doc, viewId, add(from, scale(direction, length)))];
+}
+
 export function constructionClick(
   props: EditorControls,
   p: Vec2,

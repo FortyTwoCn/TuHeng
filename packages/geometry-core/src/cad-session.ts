@@ -1,6 +1,6 @@
 import { createId, type GeometryDocument, type GeometryEntity, type Vec2 } from '@tuheng/contracts';
 import { cadDefinition, type CadSession } from './cad-registry';
-import { cadLength, cadNumber, parseCadCoordinate } from './cad-input';
+import { cadLength, cadNumber, cadPolygonSides, cadText, parseCadCoordinate } from './cad-input';
 import { cadPrimitiveEntities } from './cad-primitives';
 import { hatchFaceAt } from './cad-faces';
 import { hatchStrokes } from './hatch';
@@ -35,6 +35,7 @@ export interface CadStepResult {
   message: string;
 }
 const isChain = (id: string) => id === 'segment';
+const needsSetup = (id: string) => id === 'text' || id === 'polygon';
 function supportedSelection(
   e: GeometryEntity,
   mode: ReturnType<typeof cadDefinition>['selection'],
@@ -87,12 +88,14 @@ export function startCadSession(
     pointIds: [],
     ids,
     parameters: Object.fromEntries(def.fields.map((f) => [f.key, f.defaultValue])),
-    phase: def.id === 'erase' && ids.length ? 'confirm' : phase,
+    phase: needsSetup(def.id) ? 'setup' : def.id === 'erase' && ids.length ? 'confirm' : phase,
   };
 }
 
 export function cadPrompt(s: CadSession) {
   const def = cadDefinition(s.commandId);
+  if (s.phase === 'setup')
+    return s.commandId === 'text' ? '输入文字后在图纸上定位' : '输入边数后在图纸上构造';
   if (s.phase === 'confirm') return '检查预览，确认或退一步';
   if (s.phase === 'selection') {
     if (def.selection === 'radial') return '选择被标注的圆或圆弧';
@@ -346,6 +349,7 @@ export function cadPreview(
 ): GeometryDocument | null {
   if (
     session.baseDocument !== doc ||
+    session.phase === 'setup' ||
     (session.phase === 'selection' && session.commandId !== 'hatch')
   )
     return null;
@@ -394,6 +398,14 @@ export function cadStep(
       }
       return progress({ ...session, parameters });
     }
+    if (session.phase === 'setup') {
+      if (event.type !== 'confirm') return progress(session);
+      if (session.commandId === 'text') {
+        cadText(session.parameters.content);
+        cadLength(session.parameters.size, '字高');
+      } else cadPolygonSides(session.parameters.sides);
+      return progress({ ...session, phase: 'points' });
+    }
     if (event.type === 'back') {
       if (session.points.length)
         return progress({
@@ -406,6 +418,7 @@ export function cadStep(
         });
       if (session.ids.length)
         return progress({ ...session, ids: session.hatchSpans ? [] : session.ids.slice(0, -1), hatchSpans:undefined, phase: session.commandId==='angularDimension' ? 'points' : 'selection' });
+      if (needsSetup(session.commandId)) return progress({ ...session, phase: 'setup' });
       return progress(session);
     }
     if (event.type === 'stamp') {

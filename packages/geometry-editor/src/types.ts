@@ -30,7 +30,7 @@ export interface EditorControls {
   tool: Tool;
   selected: string[];
   select: (ids: string[]) => void;
-  commit: (doc: GeometryDocument) => void;
+  commit: (doc: GeometryDocument) => GeometryDocument | undefined;
   report: (message: string) => void;
   snapping: boolean;
   gridSnap: boolean;

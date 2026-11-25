@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { setup, at, activateCommand as choose, openParameters } from './editor-fixture';
+import { distance, point } from '@tuheng/geometry-core';
 
 async function open(page: Page) {
   await setup(page);
@@ -48,12 +49,11 @@ test('Chinese text survives JSON reload and produces real PNG and packaged downl
   await page.setViewportSize({ width: 1366, height: 768 });
   const e = await open(page),
     svg = e.locator('.geo-view svg');
-  await svg.focus();
-  await page.keyboard.type('t');
-  const panel = await openParameters(e);
-  await panel.getByLabel('文字内容').fill('剖切面 A—A');
-  await panel.getByRole('textbox', { name: '精确输入' }).fill('23,32');
-  await panel.getByRole('button', { name: '输入', exact: true }).click();
+  await choose(e, 'text');
+  await e.getByLabel('文字内容').fill('剖切面 A—A');
+  await e.getByRole('button', { name: '定位文字', exact: true }).click();
+  const p = await at(svg, -23, 32);
+  await page.mouse.click(p.x, p.y);
   const original = await read(page);
   expect(original.entities.at(-1)).toMatchObject({ kind: 'text', content: '剖切面 A—A' });
   for (const [action, name, magic] of [
@@ -78,6 +78,35 @@ test('Chinese text survives JSON reload and produces real PNG and packaged downl
   }
 });
 
+test('sets the polygon side count before choosing a center and commits a closed pentagon', async ({ page }) => {
+  const e = await open(page), svg = e.locator('.geo-view svg');
+  const initial = await read(page);
+  await choose(e, 'polygon');
+  const sides = e.getByLabel('边数', { exact: true });
+  const confirm = e.getByRole('button', { name: '确定边数', exact: true });
+  await expect(sides).toBeFocused();
+  await sides.fill('2');
+  await confirm.click();
+  await expect(e.getByRole('status').filter({ hasText: '边数必须' })).toBeVisible();
+  expect(await read(page)).toEqual(initial);
+  await sides.fill('5');
+  await confirm.click();
+  for (const [x, y] of [[-28, 25], [-15, 22]]) {
+    const screen = await at(svg, x, y);
+    await page.mouse.click(screen.x, screen.y);
+  }
+  const saved = await read(page);
+  const edges = saved.entities.slice(initial.entities.length).filter((entity) => entity.kind === 'segment');
+  expect(edges).toHaveLength(5);
+  const lengths = edges.map((edge, i) => {
+    expect(edge.endPoint).toBe(edges[(i + 1) % edges.length].startPoint);
+    return distance(point(saved, edge.startPoint), point(saved, edge.endPoint));
+  });
+  lengths.forEach((value) => expect(value).toBeCloseTo(lengths[0], 8));
+  await e.getByRole('button', { name: '撤销', exact: true }).click();
+  expect(await read(page)).toEqual(initial);
+});
+
 test('precise local input creates splines, text, annotations and ellipses; a radius grip previews and undoes', async ({
   page,
 }) => {
@@ -93,8 +122,12 @@ test('precise local input creates splines, text, annotations and ellipses; a rad
     ['arc3', ['20,9', '26,13', '32,9'], 'arc'],
   ] as const) {
     await choose(e, command);
+    if (command === 'text') {
+      const content = e.getByLabel('文字内容');
+      await content.fill('左视图');
+      await content.press('Enter');
+    }
     const panel = await openParameters(e);
-    if (command === 'text') await panel.getByLabel('文字内容').fill('左视图');
     for (const p of points) {
       const field = panel.getByRole('textbox', { name: '精确输入' });
       await field.fill(p);

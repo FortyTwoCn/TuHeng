@@ -1,6 +1,7 @@
 export * from './projections';
 export * from './math';
 export * from './document';
+export * from './document-json';
 export * from './analysis';
 export * from './pen';
 export * from './snapping';

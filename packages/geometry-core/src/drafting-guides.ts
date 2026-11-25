@@ -8,7 +8,7 @@ import {
   type Conic,
 } from './parametric-geometry';
 import { nearbyEntries, snapIndex, objectSnapEnabled } from './snap-geometry';
-import type { SnapCandidate, SnapOptions } from './snapping';
+import { segmentSatisfiesGuide, type SnapCandidate, type SnapOptions } from './snapping';
 
 export interface TrackingBase {
   position: Vec2;
@@ -133,6 +133,84 @@ export function trackingCandidate(
         }
       }
   return intersection ?? alignment;
+}
+
+/** Solve a tracking line or a copied length on the active drafting direction. */
+export function combinedLineCandidate(
+  doc: GeometryDocument,
+  viewId: string,
+  origin: Vec2,
+  pointer: Vec2,
+  directions: readonly SnapCandidate[],
+  bases: readonly TrackingBase[],
+  radius: number,
+  options: SnapOptions,
+  accepts: (q: Vec2) => boolean,
+): SnapCandidate | undefined {
+  const rays = directions.filter((c) =>
+    (c.guide || c.kind === 'AXIS_DIRECTION') && !close(c.position, origin),
+  );
+  if (!rays.length) return;
+  const guides = guideSet(bases).filter(
+    (g) => Math.abs(cross(sub(pointer, g.point), g.direction)) <= radius,
+  );
+  const span = distance(pointer, origin);
+  const segments = snapIndex(doc, viewId).entries.flatMap(({ entity, shape }) => {
+    if (
+      entity?.kind !== 'segment' || entity.viewId !== viewId || shape.kind !== 'line' ||
+      options.hiddenLayers?.includes(entity.layerId) || options.exclude?.includes(entity.id)
+    ) return [];
+    return [{
+      id: entity.id,
+      start: shape.line.a,
+      end: add(shape.line.a, shape.line.d),
+      length: length(shape.line.d),
+    }];
+  });
+  let best: SnapCandidate | undefined;
+  let bestScore = Infinity;
+  for (const ray of rays) {
+    const along = unit(sub(ray.position, origin));
+    const connected = ray.guide?.kind === 'perpendicular' && close(ray.guide.contact, origin)
+      ? segments.find(({ id }) => id === ray.guide?.sourceId)
+      : undefined;
+    const anchors = [origin, ...bases.map((b) => b.position)];
+    if (connected) anchors.push(connected.start, connected.end);
+    const lengths = segments.filter((s) => Math.abs(s.length - span) <= radius &&
+      anchors.some((a) => close(a, s.start) || close(a, s.end)),
+    );
+    function offer(end: Vec2, tracks: Guide[]) {
+      const gap = distance(end, pointer);
+      if (
+        gap > (tracks.length ? radius : radius * 0.7) || !accepts(end) ||
+        dot(sub(end, origin), along) <= 1e-7 ||
+        (ray.guide && !segmentSatisfiesGuide(origin, end, ray.guide))
+      ) return;
+      const len = distance(origin, end);
+      const reference = lengths.find((s) => Math.abs(s.length - len) < 1e-7);
+      const score = gap / radius - (reference ? 0.12 : 0) - (connected ? 0.06 : 0);
+      if (score >= bestScore || (!tracks.length && !reference)) return;
+      bestScore = score;
+      best = {
+        kind: 'TRACKING',
+        position: end,
+        positionOnly: true,
+        label: reference ? '等长' : '追踪交点',
+        distance: gap,
+        guide: ray.guide,
+        tracks,
+        entityIds: [...new Set([...ray.entityIds, ...(reference ? [reference.id] : [])])],
+        equalLength: reference ? { sourceId: reference.id, length: reference.length } : undefined,
+      };
+    }
+    for (const g of guides) {
+      const det = cross(along, g.direction);
+      if (Math.abs(det) > 1e-8)
+        offer(add(origin, scale(along, cross(sub(g.point, origin), g.direction) / det)), [g]);
+    }
+    for (const source of lengths) offer(add(origin, scale(along, source.length)), []);
+  }
+  return best;
 }
 
 export function nearestDraftingCandidate(

@@ -40,12 +40,12 @@ import {
 } from 'lucide-react';
 import type { GeometryDocument } from '@tuheng/contracts';
 import type { KeyboardEvent } from 'react';
-import { CAD_COMMANDS, type PenStrokeStyle } from '@tuheng/geometry-core';
+import { CAD_COMMANDS } from '@tuheng/geometry-core';
 import { commandRegistry, commandUnavailable, type CommandId } from './commands';
 import { EditorPopover } from './EditorPopover';
 import type { CadId } from './useCadCommand';
 
-type RailId = CommandId | CadId;
+type RailId = Exclude<CommandId, 'construct-parallel' | 'construct-perpendicular'> | CadId;
 export interface RailControls {
   active: string;
   editorType: GeometryDocument['editorType'];
@@ -54,11 +54,9 @@ export interface RailControls {
   start: (id: CadId) => void;
   selectionMode: 'replace' | 'add' | 'remove';
   setSelectionMode: (mode: RailControls['selectionMode']) => void;
-  penStyle: PenStrokeStyle;
-  setPenStyle: (value: PenStrokeStyle) => void;
 }
 
-// Use the actual boundary shape for tools whose drawing differs by a single geometric detail.
+// 对相近的工具用不同轮廓显示关键几何差别，便于辨认。
 const arcIcon = createLucideIcon('CadArc', [
   ['path', { key: 'contour', d: 'M3 20A16 16 0 0 1 19 4' }],
 ]);
@@ -119,8 +117,6 @@ const icons: Record<RailId, LucideIcon> = {
   clear: Eraser,
   connect: CircleDot,
   projection: Layers2,
-  'construct-parallel': ScanLine,
-  'construct-perpendicular': Axis3D,
   'relation-parallel': ScanLine,
   'relation-perpendicular': Axis3D,
   'new-axis': Crosshair,
@@ -221,18 +217,8 @@ const dimensions: RailId[] = [
   'radiusDimension',
   'diameterDimension',
 ];
-const construction: RailId[] = [
-  'line',
-  'construct-parallel',
-  'construct-perpendicular',
-  'new-axis',
-];
-const symbols: RailId[] = [
-  'datum',
-  'roughness',
-  'toleranceFrame',
-  'toleranceText',
-];
+const construction: RailId[] = ['line', 'new-axis'];
+const symbols: RailId[] = ['datum', 'roughness', 'toleranceFrame', 'toleranceText'];
 const transforms: RailId[] = ['move', 'copy', 'rotate', 'mirror'];
 const editing: RailId[] = ['trim', 'extend', 'chamfer', 'fillet', 'hatch'];
 const relations: RailId[] = [
@@ -241,32 +227,6 @@ const relations: RailId[] = [
   'relation-perpendicular',
   'projection',
 ];
-function PenChoices({ controls }: { controls: RailControls }) {
-  const styles = [
-    ['visible', '实线笔迹'],
-    ['hidden', '虚线笔迹'],
-    ['construction', '辅助线笔迹'],
-  ] as const;
-  return (
-    <div className="cad-choice-list">
-      {styles.map(([style, label]) => (
-        <button
-          key={style}
-          type="button"
-          disabled={controls.readOnly}
-          data-command={'pen-' + style}
-          aria-pressed={controls.penStyle === style && controls.active === 'pen'}
-          onClick={() => {
-            controls.setPenStyle(style);
-            controls.run('pen');
-          }}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
 function SelectionChoices({ controls }: { controls: RailControls }) {
   const modes = [
     ['replace', '替换选集'],
@@ -339,14 +299,38 @@ function navigateRail(e: KeyboardEvent<HTMLElement>) {
   buttons[next].focus();
 }
 
-function FamilyTool({ label, ids, controls }: { label:string; ids:CadId[]; controls:RailControls }) {
-  const [chosen,setChosen]=useState(ids[0]);
-  return <div className="cad-family-tool">
-    <ToolButton id={chosen} controls={controls} />
-    <EditorPopover label={label} trigger={<span>{label}</span>} buttonClass="cad-rail-more cad-family-more">
-      <ToolList ids={ids} controls={{...controls,start:id=>{setChosen(id);controls.start(id);}}} fullName/>
-    </EditorPopover>
-  </div>;
+function FamilyTool({
+  label,
+  ids,
+  controls,
+}: {
+  label: string;
+  ids: CadId[];
+  controls: RailControls;
+}) {
+  const [chosen, setChosen] = useState(ids[0]);
+  return (
+    <div className="cad-family-tool">
+      <ToolButton id={chosen} controls={controls} />
+      <EditorPopover
+        label={label}
+        trigger={<span>{label}</span>}
+        buttonClass="cad-rail-more cad-family-more"
+      >
+        <ToolList
+          ids={ids}
+          controls={{
+            ...controls,
+            start: (id) => {
+              setChosen(id);
+              controls.start(id);
+            },
+          }}
+          fullName
+        />
+      </EditorPopover>
+    </div>
+  );
 }
 
 export function DrawingRail(controls: RailControls) {
@@ -374,25 +358,22 @@ export function DrawingRail(controls: RailControls) {
         </EditorPopover>
         <h3>绘图</h3>
         <div className="cad-tool-grid">
-          {sketch.map(id=>id==='arc'
-            ? <FamilyTool key={id} label="圆弧工具" ids={['arc','arc3']} controls={controls}/>
-            : id==='direction'
-              ? <FamilyTool key={id} label="向视符号" ids={['direction','leftDirection','rightDirection']} controls={controls}/>
-              : <ToolButton key={id} id={id} controls={controls}/>)}
+          {sketch.map((id) =>
+            id === 'arc' ? (
+              <FamilyTool key={id} label="圆弧工具" ids={['arc', 'arc3']} controls={controls} />
+            ) : id === 'direction' ? (
+              <FamilyTool
+                key={id}
+                label="向视符号"
+                ids={['direction', 'leftDirection', 'rightDirection']}
+                controls={controls}
+              />
+            ) : (
+              <ToolButton key={id} id={id} controls={controls} />
+            ),
+          )}
         </div>
         <ToolGroup label="构造" icon={DraftingCompass} ids={construction} controls={controls} />
-        <EditorPopover
-          label="电子笔线型"
-          trigger={
-            <>
-              <PenLine size={16} aria-hidden="true" />
-              <span>笔迹线型</span>
-            </>
-          }
-          buttonClass="cad-rail-more"
-        >
-          <PenChoices controls={controls} />
-        </EditorPopover>
         <h3>标注</h3>
         <ToolList ids={dimensions} controls={controls} />
         <ToolGroup label="工程符号" icon={Hash} ids={symbols} controls={controls} />

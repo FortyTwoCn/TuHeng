@@ -9,6 +9,7 @@ import {
   scale as multiply,
   unit,
   axisDirection,
+  drawingStyle,
   type AxisConstruction,
   type Bounds,
 } from '@tuheng/geometry-core';
@@ -33,6 +34,10 @@ export function ViewportDrawing({
   axisDraft: AxisConstruction | null;
 }) {
   const doc = useMemo(() => sheetDrawingDocument(props.document), [props.document]);
+  const strokeAppearance = props.tool === 'pen' ? props.appearance : undefined;
+  const strokeStyle =
+    strokeAppearance &&
+    drawingStyle({ lineStyle: 'ANSWER_VISIBLE', appearance: strokeAppearance }, scale);
   const sheetPoints = useMemo(
     () => new Map(doc.entities.filter((e) => e.kind === 'point').map((e) => [e.id, e.position])),
     [doc],
@@ -71,8 +76,7 @@ export function ViewportDrawing({
     props.highlighted,
     props.hiddenLayers,
   ]);
-  // Retain the original paint order while sharing the entire immutable layer when a
-  // camera gesture only changes the SVG viewBox and the common point marker radius.
+  // 镜头变化时复用图形层，保留实体绘制顺序。可视范围和点标记半径单独更新。
   const geometry = useMemo(() => {
     if (!layer.clip.length && !layer.sized.length) return layer.elements;
     const elements = layer.elements.slice();
@@ -81,8 +85,10 @@ export function ViewportDrawing({
     return elements;
   }, [layer, box, scale]);
   const gridId = useId().replaceAll(':', '');
-  // Coarsen only the visible grid when distant lines would merge into the same pixels.
-  const minor = props.gridSpacing * 5 ** Math.max(0, Math.ceil(Math.log(5 / (props.gridSpacing * scale)) / Math.log(5)));
+  // 缩小时减少过密的可见网格线，实际吸附间距仍使用文档设置。
+  const minor =
+    props.gridSpacing *
+    5 ** Math.max(0, Math.ceil(Math.log(5 / (props.gridSpacing * scale)) / Math.log(5)));
   const major = minor * 5;
   const references = referenceGeometry(props.document);
   return (
@@ -103,7 +109,8 @@ export function ViewportDrawing({
         </marker>
         <pattern
           id={gridId}
-          x="0" y="0"
+          x="0"
+          y="0"
           width={minor}
           height={minor}
           data-world-grid="minor"
@@ -116,9 +123,22 @@ export function ViewportDrawing({
             strokeWidth={1 / scale}
           />
         </pattern>
-        <pattern id={gridId+'-major'} x="0" y="0" width={major} height={major} patternUnits="userSpaceOnUse" data-world-grid="major">
+        <pattern
+          id={gridId + '-major'}
+          x="0"
+          y="0"
+          width={major}
+          height={major}
+          patternUnits="userSpaceOnUse"
+          data-world-grid="major"
+        >
           <rect width={major} height={major} fill={`url(#${gridId})`} />
-          <path d={`M ${major} 0 L 0 0 0 ${major}`} fill="none" stroke="var(--cad-grid-major,#bfd1d4)" strokeWidth={1.6 / scale}/>
+          <path
+            d={`M ${major} 0 L 0 0 0 ${major}`}
+            fill="none"
+            stroke="var(--cad-grid-major,#bfd1d4)"
+            strokeWidth={1.6 / scale}
+          />
         </pattern>
       </defs>
       <g
@@ -132,7 +152,16 @@ export function ViewportDrawing({
           height={box.height}
           fill="var(--cad-paper,#f8fbfc)"
         />
-        {props.grid && <rect aria-hidden="true" x={box.x} y={box.y} width={box.width} height={box.height} fill={`url(#${gridId}-major)`} />}
+        {props.grid && (
+          <rect
+            aria-hidden="true"
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            fill={`url(#${gridId}-major)`}
+          />
+        )}
         {props.axes &&
           references.map((r) => {
             const key = referenceKey(r.ref),
@@ -271,17 +300,10 @@ export function ViewportDrawing({
           <polyline
             data-transient="preview"
             points={preview.map((p) => `${p.x},${p.y}`).join(' ')}
-            stroke={
-              props.tool === 'pen' && props.session.penStyle === 'construction'
-                ? '#64748b'
-                : '#0f766e'
-            }
-            strokeDasharray={
-              props.tool === 'pen' && props.session.penStyle !== 'visible'
-                ? `${5 / scale} ${3 / scale}`
-                : undefined
-            }
-            strokeWidth={2 / scale}
+            stroke={strokeAppearance?.color ?? 'var(--cad-accent,#0f766e)'}
+            strokeDasharray={strokeStyle?.strokeDasharray}
+            strokeWidth={strokeStyle?.strokeWidth ?? 2}
+            vectorEffect="non-scaling-stroke"
             fill="none"
           />
         )}

@@ -49,8 +49,9 @@ async function stroke(page: Page, points: Vec2[]) {
   await page.mouse.up();
 }
 async function style(page: Page, name: string) {
-  await choose(page, '电子笔线型');
-  await page.getByRole('button', { name: `${name}笔迹`, exact: true }).click();
+  await choose(page, '电子笔');
+  const patterns: Record<string, string> = { 实线: 'SOLID', 虚线: 'DASHED', 辅助线: 'GUIDE' };
+  await page.getByLabel('绘图线型', { exact: true }).selectOption(patterns[name]);
 }
 
 test.use({ viewport: { width: 1366, height: 768 } });
@@ -214,15 +215,15 @@ for (const width of [1366, 390])
     await load(page);
     await style(page, '虚线');
     await stroke(page, [
-      { x: 0, y: 0 },
-      { x: 16, y: 0 },
+      { x: 0, y: 24 },
+      { x: 16, y: 24 },
     ]);
-    expect((await json(page)).entities.at(-1)).toMatchObject({
+    const dashed = await json(page);
+    expect(dashed.entities.at(-1)).toMatchObject({
       kind: 'segment',
       lineStyle: 'ANSWER_HIDDEN',
     });
-    await choose(page, '撤销');
-    await style(page, '辅助线');
+    await page.getByLabel('绘图线型', { exact: true }).selectOption('GUIDE');
     await stroke(page, [
       { x: 0, y: 0 },
       { x: 8, y: 0 },
@@ -236,7 +237,7 @@ for (const width of [1366, 390])
       layerId: 'construction',
     });
     if (line.kind !== 'line') throw Error('Expected an infinite line');
-    expect(doc.entities).toHaveLength(1);
+    expect(doc.entities.slice(0, -1)).toEqual(dashed.entities);
     expect(line.samples?.length).toBeGreaterThanOrEqual(2);
     const visual = page.locator('[data-kind=line] line');
     expect((await visual.boundingBox())!.width).toBeGreaterThan(width === 390 ? 200 : 700);
@@ -252,7 +253,7 @@ for (const width of [1366, 390])
       samples: line.samples,
     });
     await choose(page, '撤销');
-    expect((await json(page)).entities).toHaveLength(0);
+    expect(await json(page)).toEqual(dashed);
     await choose(page, '恢复');
     expect((await json(page)).entities.at(-1)?.kind).toBe('polyline');
     await load(page, doc);

@@ -114,13 +114,15 @@ export function DynamicLineInput({
       viewport?.removeEventListener('scroll', measure);
     };
   }, [size.height]);
-  const left = anchor.x - 16 - panelSize.width, right = anchor.x + 16;
-  const above = anchor.y - 16 - panelSize.height, below = anchor.y + 16;
-  // Keep a passive field out of the projected path of the drawing point.
+  const left = anchor.x - 16 - panelSize.width,
+    right = anchor.x + 16;
+  const above = anchor.y - 16 - panelSize.height,
+    below = anchor.y + 16;
+  // 未编辑的数值框避开指针前方。获得输入焦点后固定位置。
   const roomRight = right + panelSize.width <= size.width;
   const roomBelow = below + panelSize.height <= usableHeight;
   const nearby = {
-    x: left >= 0 && (!roomRight || !!from && anchor.x > from.x) ? left : right,
+    x: left >= 0 && (!roomRight || (!!from && anchor.x > from.x)) ? left : right,
     y: above >= 0 && (!roomBelow || !from || anchor.y >= from.y) ? above : below,
   };
   const position = pin ?? nearby;
@@ -130,7 +132,7 @@ export function DynamicLineInput({
       if (text !== undefined) change({ ...fields, length: text });
     },
   }));
-  const title={line:'长度',radius:'半径',angle:'旋转角',opening:'圆规开度'}[measure];
+  const title = { line: '长度', radius: '半径', angle: '旋转角', opening: '圆规开度' }[measure];
   const lockPosition = () => setPin((current) => current ?? nearby);
   return (
     <div
@@ -147,7 +149,7 @@ export function DynamicLineInput({
         inputRef={lengthInput}
         label={title}
         value={fields.length ?? length.toFixed(2)}
-        suffix={measure==='angle' ? '°' : 'mm'}
+        suffix={measure === 'angle' ? '°' : 'mm'}
         pin={lockPosition}
         change={(text) => change({ ...fields, length: text })}
         commit={commit}

@@ -60,5 +60,20 @@ it('accepts a rotated curve with a small isolated tremor without changing its so
   });
   const c = doc.entities.at(-1)!;
   expect(c).toMatchObject({ kind: 'curve', samples });
-  expect(c.kind === 'curve' && c.pointIds.length).toBeLessThan(samples.length / 2);
+  expect(c.kind === 'curve' && c.pointIds.length).toBeLessThanOrEqual(18);
+});
+
+it('keeps a long noisy stroke editable with few knots regardless of sample density', () => {
+  const sample = (x: number) => ({
+    x: x / 4,
+    y: (52 * Math.sin(x / 105) + 1.25 * Math.sin(x * 0.9)) / 4,
+  });
+  for (const count of [241, 721]) {
+    const samples = Array.from({ length: count }, (_, i) => sample(720 * i / (count - 1)));
+    const fit = fitStroke(samples, { cssPixelsPerMm: 4 });
+    if (fit.kind !== 'curve') throw Error('expected a fitted curve');
+    expect(fit.points.length).toBeLessThanOrEqual(14);
+    expect(fit.points[0]).toEqual(samples[0]);
+    expect(fit.points.at(-1)).toEqual(samples.at(-1));
+  }
 });

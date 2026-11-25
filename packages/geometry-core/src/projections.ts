@@ -1,5 +1,11 @@
 import { defaultTransform } from './sheet';
-import type { EditorType, GeometryDocument, Vec2, Vec3 } from '@tuheng/contracts';
+import {
+  GEOMETRY_DOCUMENT_VERSION,
+  type EditorType,
+  type GeometryDocument,
+  type Vec2,
+  type Vec3,
+} from '@tuheng/contracts';
 export const editorRegistry = {
   VHW_PROJECTION: { name: 'VHW 面投影', labels: true, views: ['V', 'H', 'W'] },
   THREE_VIEW: { name: '三视图', labels: false, views: ['主视图', '俯视图', '左视图'] },
@@ -19,7 +25,7 @@ export function viewAxes(doc: GeometryDocument, viewId: string): Record<string, 
 export function createDocument(editorType: EditorType): GeometryDocument {
   const def = editorRegistry[editorType];
   const doc: GeometryDocument = {
-    schemaVersion: 'tuheng.geometry/3.0.0',
+    schemaVersion: GEOMETRY_DOCUMENT_VERSION,
     editorType,
     units: 'mm',
     coordinateSystem: 'VIEW_LOCAL_WITH_SHEET_TRANSFORM',

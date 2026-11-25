@@ -70,11 +70,14 @@ export function hitTargets(
     selected.includes(id) ||
     doc.entities.some((e) => selected.includes(e.id) && pointReferences(e).includes(id));
   points.sort((a, b) => Number(preferred(b.e.id)) - Number(preferred(a.e.id)) || a.d - b.d);
-  const pointHits = points.map(({ e, d }) => ({d:d*scale,hit:{
-    id: e.id,
-    viewId: e.viewId,
-    kind: doc.entities.some((v) => pointReferences(v).includes(e.id)) ? 'endpoint' : 'point',
-  } satisfies Hit}));
+  const pointHits = points.map(({ e, d }) => ({
+    d: d * scale,
+    hit: {
+      id: e.id,
+      viewId: e.viewId,
+      kind: doc.entities.some((v) => pointReferences(v).includes(e.id)) ? 'endpoint' : 'point',
+    } satisfies Hit,
+  }));
   const body = visible
     .filter((e) => e.kind !== 'point')
     .map((e) => ({
@@ -83,16 +86,15 @@ export function hitTargets(
     }))
     .filter((v) => v.d * scale < threshold)
     .sort((a, b) => a.d - b.d);
-  // Preserve a generous pick area on touch. Inside that area a precise line-body
-  // hit outranks distant end handles, so short segments can still be moved whole.
+  // 触摸命中区较大。明确命中线身时，优先允许整段移动，避免被较远的端点抢占。
   const coreRadius = Math.max(4, threshold * 0.42);
   const nearBody = body.length && body[0].d * scale <= 2;
-  const first = pointHits.filter(v=>!nearBody || v.d<=coreRadius);
-  const others = pointHits.filter(v=>nearBody && v.d>coreRadius);
+  const first = pointHits.filter((v) => !nearBody || v.d <= coreRadius);
+  const others = pointHits.filter((v) => nearBody && v.d > coreRadius);
   const hits: Hit[] = [
-    ...first.map(v=>v.hit),
-    ...body.map(({e})=>({id:e.id,viewId:e.viewId,kind:'body' as const})),
-    ...others.map(v=>v.hit),
+    ...first.map((v) => v.hit),
+    ...body.map(({ e }) => ({ id: e.id, viewId: e.viewId, kind: 'body' as const })),
+    ...others.map((v) => v.hit),
   ];
   if (axes)
     hits.push(
@@ -121,7 +123,7 @@ export function dragDocument(
   delta: Vec2,
   role: 'teacher' | 'student',
 ) {
-  // One point is transformed once, even if selected through several incident lines.
+  // 多根选中线段引用同一点时，只变换一次该节点。
   const targets = new Set(ids);
   for (const e of base.entities.filter((e) => targets.has(e.id)))
     for (const p of pointReferences(e)) targets.add(p);

@@ -1,0 +1,268 @@
+/* 保留覆盖顺序。容器尺寸与触摸能力独立决定布局。 */
+@container (max-width:700px) {
+  .geo-floating-inspector {
+    width: min(318px, calc(100% - 16px));
+    padding: 6px;
+    max-height: 50%;
+  }
+  .geo-card-details {
+    display: none;
+  }
+  .geo-compact-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    font-size: 12px;
+  }
+  .geo-properties-expanded {
+    position: relative !important;
+    grid-row: 2;
+    top: auto !important;
+    left: auto !important;
+    width: auto;
+    height: clamp(152px, 42vh, 340px);
+    height: clamp(152px, 42dvh, 340px);
+    margin: 4px;
+    max-width: none;
+    max-height: none !important;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    bottom: auto !important;
+    right: auto !important;
+  }
+
+  .geo-properties-expanded .geo-compact-summary {
+    display: none;
+  }
+  .geo-properties-expanded .geo-card-details {
+    display: block;
+    min-height: 0;
+    overflow: auto;
+    flex: 1;
+  }
+  .geo-properties-expanded .geo-form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 0;
+    padding: 6px 0;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+  }
+  .geo-panel {
+    top: auto;
+    bottom: 28px;
+    left: 6px;
+    right: 6px;
+    width: auto;
+    max-height: 65%;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  .geo-snap-feedback span {
+    display: none;
+  }
+  .geo-snap-feedback button {
+    min-height: 32px;
+  }
+  .geo-card-heading button {
+    min-width: 44px;
+  }
+}
+
+@container (max-width: 820px) {
+  .geo-workspace-body {
+    grid-template-columns: var(--cad-rail-width, 46px) minmax(0, 1fr) var(--cad-rail-width, 46px);
+  }
+  .cad-rail-desktop {
+    padding-inline: var(--cad-rail-inset, 0);
+  }
+  .cad-rail h3 {
+    text-align: center;
+  }
+  .geometry-editor .cad-rail :is(.cad-tool, .cad-rail-more) {
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 3px;
+  }
+  .cad-rail :is(.cad-tool, .cad-rail-more) span:not(.cad-menu-arrow) {
+    display: none;
+  }
+  .cad-rail-more .cad-menu-arrow {
+    margin: 0;
+  }
+  .cad-rail :is(.cad-tool, .cad-rail-more) svg {
+    width: 19px;
+    height: 19px;
+  }
+  .cad-topbar {
+    gap: 4px;
+    padding: 3px 4px;
+  }
+  .cad-top-styles {
+    gap: 4px;
+  }
+  .cad-mode-toggle span {
+    display: none;
+  }
+}
+@container (max-width: 560px) {
+  .cad-topbar {
+    flex-wrap: wrap;
+  }
+  .cad-history-actions {
+    padding-inline: 2px;
+    border-right: 0;
+  }
+  .cad-top-styles {
+    order: 1;
+    flex: 1 0 100%;
+  }
+  .cad-top-styles label {
+    font-size: 10px;
+  }
+  .cad-top-styles:empty {
+    display: none;
+  }
+  .cad-sheet-mark {
+    display: none;
+  }
+  .cad-sheet-control {
+    max-width: 36%;
+  }
+  .cad-sheet-control select {
+    max-width: 100%;
+  }
+  .cad-sheet-control strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cad-view-actions button span:not(.cad-menu-arrow) {
+    display: none;
+  }
+  .cad-view-actions {
+    gap: 0;
+  }
+  .cad-statusbar {
+    padding: 2px 4px env(safe-area-inset-bottom);
+  }
+  .cad-command-state {
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+  .cad-command-state[role='region'] .cad-step-message {
+    flex: 1;
+  }
+  .cad-steps {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+  .cad-status-modes {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+  .cad-mode-list {
+    gap: 0;
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  .cad-coordinate-readout {
+    width: 100%;
+  }
+  .cad-coordinate-readout small {
+    margin-left: auto;
+  }
+}
+.geo-touch :is(button, select, input:not([type='checkbox']), summary) {
+  min-height: 44px;
+}
+.geo-touch {
+  --cad-rail-width: 47px;
+  --cad-rail-scrollbar: none;
+  --cad-rail-inset: 1px;
+}
+.geo-touch :is(.cad-action, .cad-tool, .cad-mode-toggle, .cad-rail-more) {
+  min-width: 44px;
+  min-height: 44px !important;
+}
+@media (any-pointer: coarse) {
+  .geometry-editor:not([data-input-layout='mouse']) {
+    --cad-rail-width: 47px;
+    --cad-rail-scrollbar: none;
+    --cad-rail-inset: 1px;
+  }
+  .geometry-editor:not([data-input-layout='mouse'])
+    :is(button, select, input:not([type='checkbox']), summary) {
+    min-height: 44px;
+  }
+  .geometry-editor:not([data-input-layout='mouse'])
+    :is(.cad-action, .cad-tool, .cad-mode-toggle, .cad-rail-more) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+.geometry-editor .cad-grid-spacing input {
+  width: 4.6ch;
+  min-width: 42px;
+  padding: 2px 5px;
+  color: var(--cad-ink);
+  background: var(--cad-paper);
+  border: 1px solid var(--cad-line);
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.geometry-editor .cad-history-more {
+  min-width: 26px;
+}
+.geometry-editor .cad-history-menu {
+  max-height: min(60vh, 400px);
+  overflow: auto;
+}
+
+.cad-family-tool {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  min-width: 0;
+}
+.geometry-editor .cad-family-tool > .cad-tool {
+  min-width: 0;
+}
+.geometry-editor .cad-rail .cad-family-more {
+  padding: 0;
+  min-width: 0;
+  color: var(--cad-ink);
+  background: var(--cad-rail);
+}
+.geometry-editor .cad-family-more .cad-menu-arrow {
+  display: inline;
+}
+.geo-touch .cad-family-tool {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (any-pointer: coarse) {
+  .geometry-editor:not([data-input-layout='mouse']) .cad-family-tool {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.geometry-editor:fullscreen {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+.cad-hover-style {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 3px 6px;
+  background: var(--cad-chrome);
+  color: var(--cad-tool-text);
+  pointer-events: none;
+}

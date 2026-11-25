@@ -43,10 +43,12 @@ export const EntityShape = memo(function EntityShape({
   sheetPoints: ReadonlyMap<string, Vec2>;
 }) {
   const source = sourceDocument ?? doc;
-  const baseStyle=drawingStyle(e,scale);
-  const runLength=useMemo(()=>baseStyle.strokeDasharray ? drawingRunLength(source,e) : undefined,
-    [source,e,baseStyle.strokeDasharray]);
-  const appearance = runLength!==undefined ? drawingStyle(e,scale,runLength) : baseStyle;
+  const baseStyle = drawingStyle(e, scale);
+  const runLength = useMemo(
+    () => (baseStyle.strokeDasharray ? drawingRunLength(source, e) : undefined),
+    [source, e, baseStyle.strokeDasharray],
+  );
+  const appearance = runLength !== undefined ? drawingStyle(e, scale, runLength) : baseStyle;
   if (!e.appearance?.color) {
     if (e.lineStyle.startsWith('ANSWER')) appearance.stroke = 'var(--cad-ink,#253b47)';
     if (e.lineStyle === 'CONSTRUCTION') appearance.stroke = 'var(--cad-axis,#638894)';
@@ -118,8 +120,7 @@ export const EntityShape = memo(function EntityShape({
       </>
     );
   else if (e.kind === 'segment' || e.kind === 'line') {
-    // The SVG clips finite primitives to its viewport. Only infinite construction lines
-    // require camera-dependent clipping, so zooming does not reconstruct every finite edge.
+    // 有限图形由 SVG 裁切。无限辅助线才按可见范围计算端点，避免缩放重建所有边。
     const ends =
       e.kind === 'segment'
         ? [sheetPoints.get(e.startPoint)!, sheetPoints.get(e.endPoint)!]

@@ -1,16 +1,15 @@
-import { createId } from '@tuheng/contracts';
-import { GeometryDocument, type GeometryEntity, type Vec2 } from '@tuheng/contracts';
+import {
+  createId,
+  GEOMETRY_DOCUMENT_VERSION,
+  GeometryDocument,
+  type GeometryEntity,
+  type Vec2,
+} from '@tuheng/contracts';
 import { upgradeGeometryDocument } from './sheet';
 import { evaluateDependencies } from './dependencies';
 import { add } from './math';
 import { spatialTranslation } from './projections';
-export const validateGeometryDocument = (input: unknown) => GeometryDocument.safeParse(input);
-export function loadGeometryDocument(text: string) {
-  if (new TextEncoder().encode(text).length > 2_000_000) throw new Error('几何文档超过 2MB');
-  return GeometryDocument.parse(JSON.parse(text));
-}
-export const serializeGeometryDocument = (doc: GeometryDocument) =>
-  JSON.stringify(GeometryDocument.parse(doc), null, 2);
+
 export function editable(doc: GeometryDocument, e: GeometryEntity, role: 'teacher' | 'student') {
   return (
     !(e.kind === 'plane' && e.legacyReadOnly) &&
@@ -22,8 +21,7 @@ export function combineAnswer(stem: GeometryDocument, input: unknown): GeometryD
   const answer = GeometryDocument.parse(input);
   if (answer.schemaVersion !== 'tuheng.geometry/1.0.0') {
     stem = upgradeGeometryDocument(stem);
-    // Derived statuses are recomputed on new copies, never trusted or compared to absent v1 fields.
-    // Submission validation must not silently move a student's point to satisfy a declared binding.
+    // 在副本上重新校验派生状态。提交校验保留学生的实际坐标，即使绑定尚未满足。
     evaluateDependencies(stem, { resolveBindings: false });
     evaluateDependencies(answer, { resolveBindings: false });
   }
@@ -98,7 +96,7 @@ export function transact(
 ) {
   doc = upgradeGeometryDocument(doc);
   const draft = structuredClone(doc);
-  draft.schemaVersion = 'tuheng.geometry/3.0.0';
+  draft.schemaVersion = GEOMETRY_DOCUMENT_VERSION;
   change(draft);
   evaluateDependencies(draft);
   const next = GeometryDocument.parse(draft);
@@ -137,8 +135,8 @@ export function moveEntities(
           e.kind === 'engineeringAnnotation'
         )
           e.position = add(e.position, delta);
-        if (e.kind==='engineeringAnnotation' && e.leader) e.leader=add(e.leader,delta);
-        if (e.kind==='symbol' && e.labelPosition) e.labelPosition=add(e.labelPosition,delta);
+        if (e.kind === 'engineeringAnnotation' && e.leader) e.leader = add(e.leader, delta);
+        if (e.kind === 'symbol' && e.labelPosition) e.labelPosition = add(e.labelPosition, delta);
         if (e.kind === 'hatch') e.origin = add(e.origin, delta);
         if (e.kind === 'point') {
           e.position = add(e.position, delta);
@@ -300,7 +298,10 @@ export function appendSelectionCopies(
     if (e.kind === 'dimension') e.referenceIds = e.referenceIds.map((id) => mapping.get(id) ?? id);
     if (e.kind === 'hatch') {
       e.loops = e.loops.map((loop) => loop.map((id) => mapping.get(id) ?? id));
-      if (e.spans) e.spans=e.spans.map(ring=>ring.map(span=>({...span,entityId:mapping.get(span.entityId) ?? span.entityId})));
+      if (e.spans)
+        e.spans = e.spans.map((ring) =>
+          ring.map((span) => ({ ...span, entityId: mapping.get(span.entityId) ?? span.entityId })),
+        );
     }
     if (e.kind === 'curve') e.pointIds = e.pointIds.map((id) => mapping.get(id)!);
     if (e.kind === 'line' && e.referenceEntityId)
@@ -341,6 +342,7 @@ export function appendSelectionCopies(
     });
   return mapping;
 }
+/** 历史仅保存确认后的文档。一个命令的复合几何变化作为同一次事务。 */
 export class DocumentHistory {
   private past: { document: GeometryDocument; label: string }[] = [];
   private future: { document: GeometryDocument; label: string }[] = [];

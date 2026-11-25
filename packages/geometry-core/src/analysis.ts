@@ -3,7 +3,7 @@ import { changedPlaneProjection } from './projection-systems';
 import { evaluateDependencies } from './dependencies';
 import {
   GEOMETRY_EVIDENCE_NARRATIVE_LIMIT,
-  type GeometryDocument,
+  GeometryDocument,
   type GeometryEntity,
   type GeometryRelation,
 } from '@tuheng/contracts';
@@ -22,7 +22,7 @@ import {
   scale,
 } from './math';
 import { editorRegistry } from './projections';
-import { serializeGeometryDocument } from './document';
+import { serializeGeometryDocument } from './document-json';
 import { dimensionValue } from './cad-geometry';
 export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation[] {
   const relations: GeometryRelation[] = [];
@@ -213,12 +213,17 @@ export function exportGeometryNarrative(
       );
     if (e.kind === 'symbol')
       lines.push(
-        `${prefix} 方向符号 ${e.symbolType}，位置 ${JSON.stringify(e.position)}，尺寸 ${e.size} mm，角度 ${e.angle}°，向视字母 ${JSON.stringify(e.label ?? "")}。`,
+        `${prefix} 方向符号 ${e.symbolType}，位置 ${JSON.stringify(e.position)}，尺寸 ${e.size} mm，角度 ${e.angle}°，向视字母 ${JSON.stringify(e.label ?? '')}。`,
       );
     if (e.kind === 'dimension') {
-      let measurement='未知（引用几何失效）';
-      try { measurement=String(dimensionValue(doc,e))+(e.dimensionType==='ANGULAR'?'°':' mm'); } catch {}
-      lines.push(`${prefix} 尺寸标注 ${e.dimensionType}，测量对象 ${e.referenceIds.join('、')}，实际测量值 ${measurement}，用户覆盖文字 ${JSON.stringify(e.textOverride)}，公差标注 ${JSON.stringify(e.tolerance ?? null)}。`);
+      let measurement = '未知（引用几何失效）';
+      try {
+        measurement =
+          String(dimensionValue(doc, e)) + (e.dimensionType === 'ANGULAR' ? '°' : ' mm');
+      } catch {}
+      lines.push(
+        `${prefix} 尺寸标注 ${e.dimensionType}，测量对象 ${e.referenceIds.join('、')}，实际测量值 ${measurement}，用户覆盖文字 ${JSON.stringify(e.textOverride)}，公差标注 ${JSON.stringify(e.tolerance ?? null)}。`,
+      );
     }
     if (e.kind === 'engineeringAnnotation')
       lines.push(
@@ -226,7 +231,7 @@ export function exportGeometryNarrative(
       );
     if (e.kind === 'hatch')
       lines.push(
-        `${prefix} 剖面线，边界环 ${JSON.stringify(e.loops)}${e.spans ? '，局部区间 '+JSON.stringify(e.spans) : ''}，角度 ${e.angle}°，间距 ${e.spacing} mm，图案基点 ${JSON.stringify(e.origin)}。`,
+        `${prefix} 剖面线，边界环 ${JSON.stringify(e.loops)}${e.spans ? '，局部区间 ' + JSON.stringify(e.spans) : ''}，角度 ${e.angle}°，间距 ${e.spacing} mm，图案基点 ${JSON.stringify(e.origin)}。`,
       );
     if (e.kind === 'polyline') lines.push(`${prefix} 未拟合笔迹，共 ${e.points.length} 个轨迹点。`);
     if (e.kind === 'plane')
@@ -244,7 +249,8 @@ export function exportGeometryNarrative(
   return lines.join('\n');
 }
 export function exportGeometryBundle(doc: GeometryDocument) {
-  const document = JSON.parse(serializeGeometryDocument(doc)) as GeometryDocument;
+  // 评分证据使用校验后的原始字段，文件排版只用于面向用户的导出。
+  const document = JSON.parse(JSON.stringify(GeometryDocument.parse(doc))) as GeometryDocument;
   const derivedRelations = analyzeGeometryDocument(document);
   let narrative = exportGeometryNarrative(document, derivedRelations);
   if (narrative.length > GEOMETRY_EVIDENCE_NARRATIVE_LIMIT) {

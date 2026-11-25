@@ -1,7 +1,6 @@
-import { useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useRef, type ReactNode, type RefObject } from 'react';
 import {
   Check,
-  CornerDownLeft,
   CornerUpLeft,
   Crosshair,
   FileJson,
@@ -22,7 +21,6 @@ import {
   Ruler,
   ScanLine,
   Settings2,
-  SlidersHorizontal,
   Square,
   Sun,
   Undo2,
@@ -34,7 +32,8 @@ import { CAD_COMMANDS, cadPrompt, type ObjectSnapType } from '@tuheng/geometry-c
 import { ObjectSnapChoices } from './CadPreferences';
 import { EditorPopover } from './EditorPopover';
 import type { CadController, CadId } from './useCadCommand';
-export { DrawingRail, ModifyRail, type RailControls } from './workspace-rails';
+import { WorkspaceAction } from './WorkspaceAction';
+import { CommandParameters, CommandSetup } from './CommandParameters';
 
 interface TopbarProps {
   title: string;
@@ -54,38 +53,10 @@ interface TopbarProps {
   redo: () => void;
   fit: () => void;
   toggleExpanded: () => void;
-  openSettings: () => void;
   fileActions: Record<
-    'importJson' | 'json' | 'svg' | 'png' | 'viewPng' | 'zip' | 'narrative' | 'inspect',
+    'importJson' | 'json' | 'schema' | 'svg' | 'png' | 'viewPng' | 'zip' | 'narrative' | 'inspect',
     () => void
   >;
-}
-function Action({
-  label,
-  icon: Icon,
-  onClick,
-  disabled,
-  className = '',
-}: {
-  label: string;
-  icon: LucideIcon;
-  onClick: () => void;
-  disabled?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      className={`cad-action ${className}`}
-      title={label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <Icon size={17} strokeWidth={1.8} aria-hidden="true" />
-      <span>{label}</span>
-    </button>
-  );
 }
 export function WorkspaceTopbar(p: TopbarProps) {
   return (
@@ -95,24 +66,51 @@ export function WorkspaceTopbar(p: TopbarProps) {
         {p.sheetControl ?? <strong>{p.title}</strong>}
       </div>
       <div className="cad-history-actions" aria-label="历史">
-        <Action label="撤销" icon={Undo2} disabled={p.readOnly || !p.canUndo} onClick={p.undo} />
-        <Action label="恢复" icon={Redo2} disabled={p.readOnly || !p.canRedo} onClick={p.redo} />
-        {!p.readOnly && (p.canUndo || p.canRedo) && <EditorPopover
-          label="撤销与恢复历史"
-          buttonClass="cad-action cad-history-more"
-          panelClass="cad-history-menu"
-          trigger={<CornerUpLeft size={15} aria-hidden="true" />}
-        >
-          {p.operations.filter(item => item.applied).reverse().map((item, index) =>
-            <button key={'undo-' + index} type="button" onClick={() => p.jumpHistory('undo', index+1)}>
-              撤销 {index+1} 步 · {item.label}
-            </button>)}
-          {p.operations.filter(item => !item.applied).map((item, index) =>
-            <button key={'redo-' + index} type="button" onClick={() => p.jumpHistory('redo', index+1)}>
-              恢复 {index+1} 步 · {item.label}
-            </button>)}
-        </EditorPopover>}
-        <Action
+        <WorkspaceAction
+          label="撤销"
+          icon={Undo2}
+          disabled={p.readOnly || !p.canUndo}
+          onClick={p.undo}
+        />
+        <WorkspaceAction
+          label="恢复"
+          icon={Redo2}
+          disabled={p.readOnly || !p.canRedo}
+          onClick={p.redo}
+        />
+        {!p.readOnly && (p.canUndo || p.canRedo) && (
+          <EditorPopover
+            label="撤销与恢复历史"
+            buttonClass="cad-action cad-history-more"
+            panelClass="cad-history-menu"
+            trigger={<CornerUpLeft size={15} aria-hidden="true" />}
+          >
+            {p.operations
+              .filter((item) => item.applied)
+              .reverse()
+              .map((item, index) => (
+                <button
+                  key={'undo-' + index}
+                  type="button"
+                  onClick={() => p.jumpHistory('undo', index + 1)}
+                >
+                  撤销 {index + 1} 步 · {item.label}
+                </button>
+              ))}
+            {p.operations
+              .filter((item) => !item.applied)
+              .map((item, index) => (
+                <button
+                  key={'redo-' + index}
+                  type="button"
+                  onClick={() => p.jumpHistory('redo', index + 1)}
+                >
+                  恢复 {index + 1} 步 · {item.label}
+                </button>
+              ))}
+          </EditorPopover>
+        )}
+        <WorkspaceAction
           label="清空可编辑图形"
           icon={Eraser}
           disabled={p.readOnly}
@@ -123,7 +121,7 @@ export function WorkspaceTopbar(p: TopbarProps) {
         {p.styleControls}
       </div>
       <div className="cad-view-actions">
-        <Action label="完整展开图" icon={Focus} onClick={p.fit} />
+        <WorkspaceAction label="完整展开图" icon={Focus} onClick={p.fit} />
         <EditorPopover
           label="文件"
           buttonClass="cad-action cad-file-trigger"
@@ -134,24 +132,32 @@ export function WorkspaceTopbar(p: TopbarProps) {
             </>
           }
         >
-          <Action
+          <WorkspaceAction
             label="打开 JSON 或图纸包 ZIP"
             icon={Upload}
             onClick={p.fileActions.importJson}
             disabled={p.readOnly}
           />
-          <Action label="导出 JSON" icon={FileJson} onClick={p.fileActions.json} />
-          <Action label="导出展开图 SVG" icon={ScanLine} onClick={p.fileActions.svg} />
-          <Action label="下载预览 PNG" icon={Image} onClick={p.fileActions.png} />
-          <Action label="下载当前视图 PNG" icon={Image} onClick={p.fileActions.viewPng} />
-          <Action label="下载图纸包 ZIP" icon={Package} onClick={p.fileActions.zip} />
-          <Action label="导出关系描述" icon={FileText} onClick={p.fileActions.narrative} />
-          <Action label="查看文档" icon={FileJson} onClick={p.fileActions.inspect} />
+          <WorkspaceAction label="导出 JSON" icon={FileJson} onClick={p.fileActions.json} />
+          <WorkspaceAction
+            label="下载图纸 JSON Schema"
+            icon={FileJson}
+            onClick={p.fileActions.schema}
+          />
+          <WorkspaceAction label="导出展开图 SVG" icon={ScanLine} onClick={p.fileActions.svg} />
+          <WorkspaceAction label="下载预览 PNG" icon={Image} onClick={p.fileActions.png} />
+          <WorkspaceAction label="下载当前视图 PNG" icon={Image} onClick={p.fileActions.viewPng} />
+          <WorkspaceAction label="下载图纸包 ZIP" icon={Package} onClick={p.fileActions.zip} />
+          <WorkspaceAction label="导出关系描述" icon={FileText} onClick={p.fileActions.narrative} />
+          <WorkspaceAction label="查看文档" icon={FileJson} onClick={p.fileActions.inspect} />
         </EditorPopover>
-        <Action label={p.fullscreen ? '退出全屏' : '全屏'}
-          icon={p.fullscreen ? Minimize2 : Maximize2} onClick={p.toggleFullscreen} />
+        <WorkspaceAction
+          label={p.fullscreen ? '退出全屏' : '全屏'}
+          icon={p.fullscreen ? Minimize2 : Maximize2}
+          onClick={p.toggleFullscreen}
+        />
         {!p.standalone && (
-          <Action
+          <WorkspaceAction
             label={p.expanded ? '退出展开' : '展开编辑'}
             icon={p.expanded ? Minimize2 : Maximize2}
             onClick={p.toggleExpanded}
@@ -222,93 +228,6 @@ function Toggle({
     </button>
   );
 }
-function Parameters({ cad, viewName }: { cad: CadController; viewName: string }) {
-  const [input, setInput] = useState('');
-  const session = cad.session;
-  const command = CAD_COMMANDS.find((c) => c.id === session?.commandId);
-  if (!session || !command) return null;
-  const submitCoordinate = () => {
-    if (!input.trim()) return;
-    cad.send({ type: 'input', value: input });
-    setInput('');
-  };
-  return (
-    <EditorPopover
-      label="精确输入与参数"
-      buttonClass="cad-action cad-parameter-trigger"
-      panelClass="cad-parameter-menu"
-      trigger={
-        <>
-          <SlidersHorizontal size={16} />
-          <span>参数</span>
-        </>
-      }
-    >
-      <h4>{command.name}参数</h4>
-      <div className="cad-coordinate-form">
-        <label>
-          {viewName} 局部坐标 · mm
-          <input
-            autoComplete="off"
-            aria-label="精确输入"
-            placeholder="100,50 / @20,0 / @30<45"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return;
-              e.preventDefault();
-              e.stopPropagation();
-              if (!e.nativeEvent.isComposing) submitCoordinate();
-            }}
-          />
-        </label>
-        <button type="button" data-keep-open disabled={!input.trim()} onClick={submitCoordinate}>
-          <CornerDownLeft size={14} /> 输入
-        </button>
-        <div className="cad-symbol-keys" aria-label="坐标符号">
-          {['@', ',', '<', '-', '.'].map((symbol) => (
-            <button
-              type="button"
-              key={symbol}
-              data-keep-open
-              onClick={() => setInput((v) => v + symbol)}
-            >
-              {symbol}
-            </button>
-          ))}
-        </div>
-      </div>
-      {command.fields.length > 0 && (
-        <div className="cad-parameters">
-          {command.fields.map((field) => (
-            <label key={field.key}>
-              {field.label}
-              {field.options ? (
-                <select
-                  value={session.parameters[field.key] ?? field.defaultValue}
-                  onChange={(e) =>
-                    cad.send({ type: 'parameters', values: { [field.key]: e.target.value } })
-                  }
-                >
-                  {field.options.map((option) => (
-                    <option key={option}>{option}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  value={session.parameters[field.key] ?? field.defaultValue}
-                  onChange={(e) =>
-                    cad.send({ type: 'parameters', values: { [field.key]: e.target.value } })
-                  }
-                />
-              )}
-            </label>
-          ))}
-        </div>
-      )}
-    </EditorPopover>
-  );
-}
 export function WorkspaceStatus({ cursorStatusRef, ...p }: StatusProps) {
   const snapMenu = useRef<HTMLButtonElement>(null);
   const session = p.cad.session;
@@ -319,27 +238,36 @@ export function WorkspaceStatus({ cursorStatusRef, ...p }: StatusProps) {
         className="cad-command-state"
         role={session ? 'region' : undefined}
         aria-label={session ? 'CAD 命令' : undefined}
+        data-setup={session?.phase === 'setup' || undefined}
       >
         <strong>{label}</strong>
         <span className="cad-step-message" role="status">
           {p.message || (session ? cadPrompt(session) : '')}
         </span>
-        {session && (
-          <div className="cad-steps">
-            <Parameters key={session.commandId} cad={p.cad} viewName={p.viewName} />
-            <Action
-              label="退一步"
-              icon={CornerUpLeft}
-              onClick={() => p.cad.send({ type: 'back' })}
-            />
-            <Action label="取消" icon={X} onClick={() => p.cad.send({ type: 'cancel' })} />
-            <Action
-              label="完成"
-              icon={Check}
-              className="cad-accept"
-              onClick={() => p.cad.send({ type: 'confirm' })}
-            />
-          </div>
+        {session?.phase === 'setup' ? (
+          <CommandSetup key={session.prefix} cad={p.cad} />
+        ) : (
+          session && (
+            <div className="cad-steps">
+              <CommandParameters key={session.commandId} cad={p.cad} viewName={p.viewName} />
+              <WorkspaceAction
+                label="退一步"
+                icon={CornerUpLeft}
+                onClick={() => p.cad.send({ type: 'back' })}
+              />
+              <WorkspaceAction
+                label="取消"
+                icon={X}
+                onClick={() => p.cad.send({ type: 'cancel' })}
+              />
+              <WorkspaceAction
+                label="完成"
+                icon={Check}
+                className="cad-accept"
+                onClick={() => p.cad.send({ type: 'confirm' })}
+              />
+            </div>
+          )
         )}
       </div>
       <div className="cad-status-modes">
@@ -408,8 +336,8 @@ export function WorkspaceStatus({ cursorStatusRef, ...p }: StatusProps) {
             onClick={p.toggleOrthogonal}
             shortcut="F8"
           />
-          <Action label="视图/设置" icon={Settings2} onClick={p.openSettings} />
-          <Action
+          <WorkspaceAction label="视图/设置" icon={Settings2} onClick={p.openSettings} />
+          <WorkspaceAction
             label={p.theme === 'dark' ? '切换浅色画布' : '切换深色画布'}
             icon={p.theme === 'dark' ? Sun : Moon}
             onClick={p.toggleTheme}

@@ -1,18 +1,27 @@
 import type { RefObject } from 'react';
-import type { GeometryDocument } from '@tuheng/contracts';
+import {
+  GEOMETRY_DOCUMENT_MAX_BYTES,
+  geometryDocumentJsonSchema,
+  type GeometryDocument,
+} from '@tuheng/contracts';
 import {
   serializeGeometryDocument,
   exportSheetSvg,
   exportGeometryNarrative,
-  loadGeometryDocument,
+  readGeometryJson,
+  parseGeometryDocument,
   importPenStroke,
   readCadPackage,
   cadPackageLimit,
 } from '@tuheng/geometry-core';
+import { downloadBlob } from './cad-download';
+
+export type DrawingTextKind = 'json' | 'narrative' | 'svg';
+
 export function downloadDrawingText(
   doc: GeometryDocument,
-  kind: 'json' | 'narrative' | 'svg',
-  onExport?: (text: string, kind: 'json' | 'narrative' | 'svg') => void,
+  kind: DrawingTextKind,
+  onExport?: (text: string, kind: DrawingTextKind) => void,
 ) {
   const text =
     kind === 'json'
@@ -21,17 +30,16 @@ export function downloadDrawingText(
         ? exportSheetSvg(doc)
         : exportGeometryNarrative(doc);
   onExport?.(text, kind);
-  const url = URL.createObjectURL(
-      new Blob([text], {
-        type:
-          kind === 'svg' ? 'image/svg+xml' : kind === 'json' ? 'application/json' : 'text/plain',
-      }),
-    ),
-    a = document.createElement('a');
-  a.href = url;
-  a.download = `tuheng.${kind === 'narrative' ? 'txt' : kind}`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const mime = { json: 'application/json', narrative: 'text/plain', svg: 'image/svg+xml' }[kind];
+  downloadBlob(new Blob([text], { type: mime }), `tuheng.${kind === 'narrative' ? 'txt' : kind}`);
+}
+
+export function downloadDrawingSchema() {
+  const text = JSON.stringify(geometryDocumentJsonSchema(), null, 2) + '\n';
+  downloadBlob(
+    new Blob([text], { type: 'application/schema+json' }),
+    'tuheng.geometry.schema.json',
+  );
 }
 
 export function DrawingFileInput({
@@ -69,13 +77,22 @@ export function DrawingFileInput({
         if (!file || readOnly) return;
         try {
           const packaged = file.name.toLowerCase().endsWith('.zip');
-          if (!packaged && file.size > 2_000_000) throw Error('文档超过 2MB');
+          if (!packaged && file.size > GEOMETRY_DOCUMENT_MAX_BYTES) throw Error('几何文档超过 2MB');
           if (packaged && file.size > cadPackageLimit) throw Error('图纸包超过 8MB');
-          const text = packaged ? await readCadPackage(await file.arrayBuffer()) : await file.text();
-          const data = JSON.parse(text);
-          if (!packaged && data?.schemaVersion === 'tuheng.stroke/1.0.0') {
+          const text = packaged
+            ? await readCadPackage(await file.arrayBuffer())
+            : await file.text();
+          const data = readGeometryJson(text);
+          // 笔迹附加到当前图纸。完整图纸和 ZIP 则通过同一契约校验后替换文档。
+          if (
+            !packaged &&
+            data &&
+            typeof data === 'object' &&
+            'schemaVersion' in data &&
+            data.schemaVersion === 'tuheng.stroke/1.0.0'
+          ) {
             if (!importStroke(importPenStroke(doc, data, activeView, role))) return;
-          } else replaceDocument(loadGeometryDocument(text));
+          } else replaceDocument(parseGeometryDocument(data));
           loaded();
           report('图纸已载入');
         } catch (error) {

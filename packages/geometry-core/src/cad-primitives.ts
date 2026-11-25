@@ -5,7 +5,7 @@ import {
   type Vec2,
 } from '@tuheng/contracts';
 import { add, sub, angle, distance, cross, length, unit, dot, arcPoint } from './math';
-import { cadLength, cadNumber } from './cad-input';
+import { cadLength, cadNumber, cadPolygonSides, cadText } from './cad-input';
 import { angleMeasurement, automaticLinearAxis } from './cad-dimensions';
 import { readRoughnessDetails } from './engineering-parameters';
 import type { CadSession } from './cad-registry';
@@ -165,9 +165,7 @@ export function cadPrimitiveEntities(doc: GeometryDocument, s: CadSession): Geom
       break;
     }
     case 'polygon': {
-      const count = cadNumber(p.sides, '边数');
-      if (!Number.isInteger(count) || count < 3 || count > 256)
-        throw Error('边数必须为 3 至 256 的整数');
+      const count = cadPolygonSides(p.sides);
       const inscribed = p.mode !== '外切于圆';
       const r = optionalRadius() ?? distance(a, b),
         theta = angle(sub(b, a));
@@ -315,8 +313,7 @@ export function cadPrimitiveEntities(doc: GeometryDocument, s: CadSession): Geom
         angle: cadNumber(p.angle || '0', '方向角', '°'),
       };
       if (cmd === 'text') {
-        if (!p.content.trim()) throw Error('请输入文字内容');
-        created.push({ ...textBase, kind: 'text', content: p.content });
+        created.push({ ...textBase, kind: 'text', content: cadText(p.content) });
       } else if (cmd === 'direction' || cmd === 'leftDirection' || cmd === 'rightDirection') {
         created.push({
           ...textBase,

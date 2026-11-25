@@ -37,6 +37,42 @@ const lineA = { x: -26, y: 4 },
 const obliqueLine = () =>
   addDrawing(createDocument('ISOMETRIC'), 'segment', 'view-0', [lineA, lineB], 'teacher');
 
+test('the third side of an open rectangle captures perpendicular and equal length together', async ({
+  page,
+}, info) => {
+  const left = { x: -38, y: 28 }, right = { x: 28, y: 28 }, corner = { x: 28, y: 9 };
+  const top = addDrawing(createDocument('ISOMETRIC'), 'segment', 'view-0', [left, right], 'teacher');
+  const doc = addDrawing(top, 'segment', 'view-0', [right, corner], 'teacher');
+  const { svg } = await startDrawing(page, doc, corner);
+  const guide = svg.locator('[data-relation-guide=perpendicular]');
+  await hover(page, svg, { x: left.x + 0.3, y: corner.y - 0.25 });
+  await expect(guide).toHaveAttribute('data-equal-length-source-id', top.entities.at(-1)!.id);
+  await page.keyboard.press('F11');
+  await hover(page, svg, left);
+  await expect(svg.locator('[data-transient=tracking-base]')).toHaveCount(1);
+  const target = await hover(page, svg, { x: left.x + 0.65, y: corner.y - 0.75 });
+  await expect(guide).toHaveAttribute('data-source-id', doc.entities.at(-1)!.id);
+  await expect(guide).toHaveAttribute('data-equal-length-source-id', top.entities.at(-1)!.id);
+  await expect(guide.locator('[data-perpendicular-vertex]')).toHaveAttribute(
+    'data-perpendicular-vertex', '28,-9',
+  );
+  const track = svg.locator('[data-transient=tracking]');
+  await expect(track).toHaveAttribute('x1', '-38');
+  await expect(track).toHaveAttribute('x2', '-38');
+  await expect(track).toHaveAttribute('y2', '-9');
+  await svg.screenshot({ path: info.outputPath('perpendicular-equal-length.png') });
+  expect(await read(page)).toEqual(doc);
+  await page.mouse.click(target.x, target.y);
+  const saved = await read(page);
+  const line = saved.entities.at(-1)!;
+  if (line.kind !== 'segment') throw Error('Expected a straight third side');
+  const start = point(saved, line.startPoint), end = point(saved, line.endPoint);
+  expect(start).toEqual(corner);
+  expect(end).toEqual({ x: left.x, y: corner.y });
+  expect(distance(start, end)).toBe(distance(left, right));
+  expect(saved.entities.slice(0, doc.entities.length)).toEqual(doc.entities);
+});
+
 for (const [kind, anchor, target, delta] of [
   ['parallel', { x: -24, y: -12 }, { x: 8, y: 12.4 }, { x: 0.8, y: 0.6 }],
   ['perpendicular', { x: 16, y: -15 }, { x: -2.3, y: 9 }, { x: -0.6, y: 0.8 }],

@@ -40,7 +40,11 @@ export function drawingRunLength(doc:GeometryDocument,e:GeometryEntity) {
     return visibleCurveSegments(e.pointIds.map(id=>point(doc,id)),e.parameterRange,e.interpolation)
       .reduce((total,s)=>total+(distance(s.start,s.end)+pathLength([s.start,s.c1,s.c2,s.end]))/2,0);
 }
-export function drawingStyle(e: GeometryEntity, pixelsPerMm: number, lengthMm?:number) {
+export function drawingStyle(
+  e: Pick<GeometryEntity, 'lineStyle' | 'appearance'>,
+  pixelsPerMm: number,
+  lengthMm?: number,
+) {
   const base = semanticLineStyles[e.lineStyle];
   const patterns = { SOLID: undefined, DASHED: '7 4', CENTER: '12 3 2 3', PHANTOM: '12 3 2 3 2 3', GUIDE: '3 3' };
   const dash=e.appearance?.pattern ? patterns[e.appearance.pattern] : 'strokeDasharray' in base ? base.strokeDasharray : undefined;

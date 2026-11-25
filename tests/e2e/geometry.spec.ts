@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { choose, settings, closePanels, properties } from './editor-controls';
 import { performanceDocument } from '../geometry-fixtures';
+import { loadGeometryDocument } from '@tuheng/geometry-core';
 async function login(page: Page, who = 'teacher') {
   const identifier = await prepareLogin(page, who);
   await identifier.fill(`${who}@tuheng.local`);
@@ -68,6 +69,41 @@ test('external login return URLs stay inside the application', async ({ page }) 
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/student/dashboard');
+});
+
+test('the file menu downloads the current schema and round-trips an editable JSON example', async ({
+  page,
+}) => {
+  await login(page, 'student');
+  await page.goto('/geometry');
+  const schemaDownload = page.waitForEvent('download');
+  await choose(page, '下载图纸 JSON Schema');
+  const schema = await schemaDownload;
+  expect(schema.suggestedFilename()).toBe('tuheng.geometry.schema.json');
+  expect(JSON.parse(readFileSync(await schema.path(), 'utf8')).properties.schemaVersion.const).toBe(
+    'tuheng.geometry/3.0.0',
+  );
+
+  const input = page.getByLabel('加载几何 JSON');
+  const example = readFileSync('docs/geometry-examples/AI-LINE-V3.json', 'utf8');
+  await input.setInputFiles({
+    name: 'example.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(example),
+  });
+  const canvas = page.getByLabel('统一展开图绘图区');
+  await expect(canvas.locator('[data-kind=segment]')).toHaveCount(1);
+  const drawingDownload = page.waitForEvent('download');
+  await choose(page, '导出 JSON');
+  const drawing = await drawingDownload;
+  const text = readFileSync(await drawing.path(), 'utf8');
+  expect(text).toContain('"position": { "x": 15, "y": 10 }');
+  expect(loadGeometryDocument(text)).toEqual(loadGeometryDocument(example));
+
+  await page.reload();
+  await expect(canvas.locator('[data-kind=segment]')).toHaveCount(0);
+  await input.setInputFiles(await drawing.path());
+  await expect(canvas.locator('[data-kind=segment]')).toHaveCount(1);
 });
 
 test('JSON validation, projection links, touch zoom and the multi-object mobile fixture', async ({
@@ -298,6 +334,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await expect(teacher).toHaveURL(/\/teacher\/assignments\/[a-f0-9-]{36}$/);
   const assignment = new URL(teacher.url()).pathname.replace('/teacher/', '/student/');
   await teacher.getByRole('button', { name: '确认名单并正式发布' }).click();
+  await expect(teacher.getByText('已发布', { exact: true })).toBeVisible();
   await login(student, 'student');
   await student.setViewportSize({ width: 1440, height: 900 });
   await student.goto(assignment);
@@ -320,8 +357,8 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await axisPoint(0.22, 0.57);
   await student.getByRole('button', { name: '确认新轴', exact: true }).click();
   await expect(student.locator('[data-axis-id]')).toHaveCount(1);
-  await choose(student, '平行线');
   await selectSegment(student, 'PROBLEM_VISIBLE');
+  await choose(student, '平行线');
   await sheet.click({ position: { x: 300, y: 180 } });
   await choose(student, '确认创建');
   await expect(task.getByText('有未保存修改', { exact: true })).toBeVisible();

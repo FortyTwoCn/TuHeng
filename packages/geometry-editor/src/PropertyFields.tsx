@@ -88,7 +88,11 @@ export function PropertyFields({
       <input
         aria-label={label}
         type="text"
-        inputMode={['name', 'content', 'textOverride', 'label', 'toleranceCode', 'method'].includes(key) ? 'text' : 'decimal'}
+        inputMode={
+          ['name', 'content', 'textOverride', 'label', 'toleranceCode', 'method'].includes(key)
+            ? 'text'
+            : 'decimal'
+        }
         value={values[key] ?? ''}
         disabled={locked}
         onChange={(event) => setValues((v) => ({ ...v, [key]: event.target.value }))}

@@ -11,7 +11,10 @@ export const objectSnaps: { id: ObjectSnapType; name: string }[] = [
   { id: 'quadrant', name: '象限点' },
   { id: 'nearest', name: '轮廓就近点' },
 ];
-export function ObjectSnapChoices({ selected, change }: {
+export function ObjectSnapChoices({
+  selected,
+  change,
+}: {
   selected: readonly ObjectSnapType[];
   change: (types: ObjectSnapType[]) => void;
 }) {
@@ -19,9 +22,14 @@ export function ObjectSnapChoices({ selected, change }: {
     <div className="cad-snap-choices" role="group" aria-label="对象捕捉类型">
       {objectSnaps.map(({ id, name }, index) => (
         <label key={id}>
-          <input type="checkbox" data-initial-focus={index === 0 ? true : undefined}
+          <input
+            type="checkbox"
+            data-initial-focus={index === 0 ? true : undefined}
             checked={selected.includes(id)}
-            onChange={(e) => change(e.target.checked ? [...selected, id] : selected.filter((v) => v !== id))} />
+            onChange={(e) =>
+              change(e.target.checked ? [...selected, id] : selected.filter((v) => v !== id))
+            }
+          />
           {name}
         </label>
       ))}
@@ -29,6 +37,14 @@ export function ObjectSnapChoices({ selected, change }: {
   );
 }
 export type Appearance = NonNullable<GeometryEntity['appearance']>;
+export const patternNames = {
+  SOLID: '实线',
+  DASHED: '虚线',
+  CENTER: '点划线',
+  PHANTOM: '双点划线',
+  GUIDE: '辅助线',
+} satisfies Record<NonNullable<Appearance['pattern']>, string>;
+
 export const linePresets = {
   SOLID: { widthMm: 0.5 },
   DASHED: { widthMm: 0.25 },
@@ -62,7 +78,7 @@ export function DrawingAppearance({
   change,
   report,
 }: {
-  theme:'dark'|'light';
+  theme: 'dark' | 'light';
   initial: Appearance;
   doc: GeometryDocument;
   selected: string[];
@@ -77,15 +93,24 @@ export function DrawingAppearance({
     !readOnly &&
     selected.length === entities.length &&
     entities.every((e) => editable(doc, e, role));
-  const defaultInk=theme==='dark' ? '#e7f1f4' : '#253b47';
-  const defaultColor=(style:GeometryEntity['lineStyle'])=>style.startsWith('PROBLEM') ? '#4585dd' : style==='CONSTRUCTION' ? (theme==='dark' ? '#7198a8' : '#638894') : defaultInk;
+  const defaultInk = theme === 'dark' ? '#e7f1f4' : '#253b47';
+  const defaultColor = (style: GeometryEntity['lineStyle']) =>
+    style.startsWith('PROBLEM')
+      ? '#4585dd'
+      : style === 'CONSTRUCTION'
+        ? theme === 'dark'
+          ? '#7198a8'
+          : '#638894'
+        : defaultInk;
   const resolve = (entity: GeometryEntity, key: keyof Appearance) =>
     entity.appearance?.[key] ??
-    (key==='color' ? defaultColor(entity.lineStyle) : key === 'pattern'
-      ? entity.lineStyle.includes('HIDDEN') || entity.lineStyle.includes('CONSTRUCTION')
-        ? 'DASHED'
-        : 'SOLID'
-      : undefined);
+    (key === 'color'
+      ? defaultColor(entity.lineStyle)
+      : key === 'pattern'
+        ? entity.lineStyle.includes('HIDDEN') || entity.lineStyle.includes('CONSTRUCTION')
+          ? 'DASHED'
+          : 'SOLID'
+        : undefined);
   function value(key: keyof Appearance) {
     if (!entities.length) return String(initial[key] ?? '');
     const first = resolve(entities[0], key);
@@ -119,7 +144,11 @@ export function DrawingAppearance({
           type="color"
           aria-label="绘图颜色"
           disabled={!allowed}
-          value={color && color !== 'mixed' ? color : defaultColor(role==='teacher' ? 'PROBLEM_VISIBLE':'ANSWER_VISIBLE')}
+          value={
+            color && color !== 'mixed'
+              ? color
+              : defaultColor(role === 'teacher' ? 'PROBLEM_VISIBLE' : 'ANSWER_VISIBLE')
+          }
           onChange={(e) => apply({ color: e.target.value })}
         />
       </label>
@@ -138,11 +167,11 @@ export function DrawingAppearance({
             线型混合
           </option>
         )}
-        <option value="SOLID">实线</option>
-        <option value="DASHED">虚线</option>
-        <option value="CENTER">点划线</option>
-        <option value="PHANTOM">双点划线</option>
-        <option value="GUIDE">辅助线</option>
+        {Object.entries(patternNames).map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
       </select>
       <select
         aria-label="绘图线宽"
@@ -176,7 +205,8 @@ export function DrawingAppearance({
           .sort((a, b) => a - b)
           .map((n) => (
             <option key={n} value={n}>
-              {n === 0.25 ? '细线 · ' : n === 0.5 ? '粗线 · ' : ''}{n} mm
+              {n === 0.25 ? '细线 · ' : n === 0.5 ? '粗线 · ' : ''}
+              {n} mm
             </option>
           ))}
       </select>

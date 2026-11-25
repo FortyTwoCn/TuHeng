@@ -61,6 +61,7 @@ export interface SnapCandidate {
     | 'PROJECTION_ALIGNMENT';
   distance: number;
   guide?: SnapGuide;
+  equalLength?: { sourceId: string; length: number };
   pairedTangent?: { sourceId: string; contact: Vec2 };
 }
 export interface SnapOptions {
@@ -90,26 +91,26 @@ const pointFeatureOrder: Partial<Record<SnapCandidate['kind'], number>> = {
   GRID: 7,
 };
 
-function acceptsGuide(start: Vec2, end: Vec2, candidate: SnapCandidate): boolean {
-  const g = candidate.guide;
+export function segmentSatisfiesGuide(start: Vec2, end: Vec2, g: SnapGuide): boolean {
   const v = sub(end, start),
     size = length(v);
-  if (!g || size <= samePosition) return false;
-  if (g.kind === 'perpendicular') {
-    return (
-      Math.abs(dot(v, g.direction)) <= samePosition &&
-      (candidate.kind !== 'FOOT' || distance(end, g.contact) <= samePosition)
-    );
-  }
-  if (Math.abs(cross(v, g.direction)) > samePosition) return false;
+  if (size <= samePosition) return false;
+  const direction = scale(v, 1 / size);
+  if (g.kind === 'perpendicular') return Math.abs(dot(direction, g.direction)) <= 1e-8;
+  if (Math.abs(cross(direction, g.direction)) > 1e-8) return false;
   if (g.kind === 'parallel') return true;
   const fromStart = sub(g.contact, start);
-  const along = dot(fromStart, v) / size;
+  const along = dot(fromStart, direction);
   return (
     Math.abs(cross(fromStart, g.direction)) <= samePosition &&
     along >= -samePosition &&
     along <= size + samePosition
   );
+}
+
+function acceptsGuide(start: Vec2, end: Vec2, candidate: SnapCandidate): boolean {
+  return !!candidate.guide && segmentSatisfiesGuide(start, end, candidate.guide) &&
+    (candidate.kind !== 'FOOT' || distance(end, candidate.guide.contact) <= samePosition);
 }
 
 export function snapCandidates(
@@ -267,7 +268,7 @@ export function snapCandidates(
               kind: kind === 'PARALLEL' ? 'parallel' : 'perpendicular',
               sourceId: e.id,
               origin: a.a,
-              contact: foot(origin, a),
+              contact: foot(origin, kind === 'PERPENDICULAR' ? { ...a, finite: false } : a),
               direction: sourceDirection,
             }
           : undefined;

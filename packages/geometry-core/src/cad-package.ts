@@ -1,10 +1,10 @@
 import type JSZip from 'jszip';
-import type { GeometryDocument } from '@tuheng/contracts';
-import { serializeGeometryDocument } from './document';
+import { GEOMETRY_DOCUMENT_MAX_BYTES, type GeometryDocument } from '@tuheng/contracts';
+import { serializeGeometryDocument } from './document-json';
 import { exportSheetSvg } from './svg';
 import { exportGeometryNarrative } from './analysis';
 
-/** Self-contained export. JSON is authoritative; previews cover the full sheet. */
+/** 图纸包使用同一份正式 JSON，附带覆盖整张图纸的预览和文字说明。 */
 export async function exportCadPackage(document: GeometryDocument): Promise<Blob> {
   const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
@@ -14,7 +14,6 @@ export async function exportCadPackage(document: GeometryDocument): Promise<Blob
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
 }
 
-const documentLimit = 2_000_000;
 export const cadPackageLimit = 8_000_000;
 
 export async function readCadPackage(bytes: ArrayBuffer): Promise<string> {
@@ -22,18 +21,22 @@ export async function readCadPackage(bytes: ArrayBuffer): Promise<string> {
   const { default: JSZip } = await import('jszip');
   const zip = await JSZip.loadAsync(bytes);
   const entry = zip.file('drawing.json');
-  if (!entry || entry.unsafeOriginalName !== 'drawing.json') throw Error('图纸包内没有 drawing.json');
-  // JSZip 3.10 exposes this stream but its JSZipObject type omits it.
-  const stream = (entry as JSZip.JSZipObject & {
-    internalStream(type: 'uint8array'): JSZip.JSZipStreamHelper<Uint8Array>;
-  }).internalStream('uint8array');
+  if (!entry || entry.unsafeOriginalName !== 'drawing.json')
+    throw Error('图纸包内没有 drawing.json');
+  // JSZip 3.10 的类型未声明这个流接口。按解压字节计数，过大时直接停止。
+  const stream = (
+    entry as JSZip.JSZipObject & {
+      internalStream(type: 'uint8array'): JSZip.JSZipStreamHelper<Uint8Array>;
+    }
+  ).internalStream('uint8array');
   const decoder = new TextDecoder('utf-8', { fatal: true });
-  let size = 0, json = '';
+  let size = 0,
+    json = '';
   return new Promise((resolve, reject) => {
     stream.on('data', (part: Uint8Array) => {
       size += part.length;
       try {
-        if (size > documentLimit) throw Error('几何文档超过 2MB');
+        if (size > GEOMETRY_DOCUMENT_MAX_BYTES) throw Error('几何文档超过 2MB');
         json += decoder.decode(part, { stream: true });
       } catch (error) {
         stream.pause();

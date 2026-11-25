@@ -1,5 +1,13 @@
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
-import { point, localToSheet, distance, sub, angle, formatCadAngle, type Bounds } from '@tuheng/geometry-core';
+import {
+  point,
+  localToSheet,
+  distance,
+  sub,
+  angle,
+  formatCadAngle,
+  type Bounds,
+} from '@tuheng/geometry-core';
 export function MeasurementOverlay({
   doc,
   ids,

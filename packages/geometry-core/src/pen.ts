@@ -153,6 +153,24 @@ export function fitStroke(
 // A few jagged samples are not evidence of a corner in a freehand curve.
 // Work at a CSS-pixel scale, then bound the actual interpolated geometry against
 // the input. The source samples are never replaced by these denoised fit points.
+function smoothStroke(samples: Vec2[], sigma: number): Vec2[] {
+  const window = Math.min(32, Math.max(1, Math.ceil(2.5 * sigma)));
+  return samples.map((p, i) => {
+    if (i === 0 || i === samples.length - 1) return p;
+    let x = 0, y = 0, weight = 0;
+    // Keep the neighbourhood symmetric near the ends so the fit does not
+    // move in the direction of travel at the beginning or end of the stroke.
+    const reach = Math.min(window, i, samples.length - 1 - i);
+    for (let offset = -reach; offset <= reach; offset++) {
+      const w = Math.exp(-0.5 * (offset / sigma) ** 2);
+      x += samples[i + offset].x * w;
+      y += samples[i + offset].y * w;
+      weight += w;
+    }
+    return { x: x / weight, y: y / weight };
+  });
+}
+
 function fitFreeCurve(input: Vec2[], pixels: number): PenFit | undefined {
   if (input.length < 8) return;
   const travel = input.slice(1).reduce((n, p, i) => n + distance(p, input[i]), 0);
@@ -163,24 +181,7 @@ function fitFreeCurve(input: Vec2[], pixels: number): PenFit | undefined {
     Math.min(512, Math.max(16, Math.ceil((travel * pixels) / 2) + 1)),
   );
   const stepPixels = (travel * pixels) / (uniform.length - 1);
-  const halfWindow = Math.min(3, Math.max(1, Math.ceil(3 / stepPixels)));
-  const samples = uniform.map((p, i) => {
-    if (i === 0 || i === uniform.length - 1) return p;
-    let x = 0,
-      y = 0,
-      weights = 0;
-    for (
-      let j = Math.max(0, i - halfWindow);
-      j <= Math.min(uniform.length - 1, i + halfWindow);
-      j++
-    ) {
-      const w = Math.exp(-0.5 * ((j - i) / (halfWindow / 1.5)) ** 2);
-      x += uniform[j].x * w;
-      y += uniform[j].y * w;
-      weights += w;
-    }
-    return { x: x / weights, y: y / weights };
-  });
+  const samples = smoothStroke(uniform, Math.max(0.65, 2 / stepPixels));
   // A small number of long straight runs with an abrupt join is a polygonal
   // stroke (including a shallow elbow), not a smooth free curve.
   const polygon = simplifyStroke(samples, 1.25 / pixels);
@@ -207,43 +208,39 @@ function fitFreeCurve(input: Vec2[], pixels: number): PenFit | undefined {
       )
         return;
     }
-  // Start with sparse knots, then refine only intervals whose Hermite path
-  // misses the smoothed trajectory. Merely interpolating dense noisy points
-  // would preserve the same jagged stroke under a different entity kind.
-  const count = Math.min(80, Math.max(5, Math.ceil((travel * pixels) / 16) + 1));
-  const indices = [
-    ...new Set(
-      Array.from({ length: count }, (_, i) => Math.round((i * (samples.length - 1)) / (count - 1))),
-    ),
-  ];
-  while (true) {
-    if (indices.some((i, k) => k > 0 && distance(samples[i], samples[indices[k - 1]]) < 1e-8))
+  const trend = smoothStroke(uniform, Math.min(8, Math.max(3, travel * pixels * 0.012)) / stepPixels);
+  const indices = [0, Math.floor((trend.length - 1) / 2), trend.length - 1];
+  const minSpacing = Math.ceil(12 / stepPixels);
+  // Refine by geometric error. Uniformly spaced input samples do not
+  // correspond to uniformly spaced Bézier parameters.
+  while (indices.length < 18) {
+    if (indices.some((i, k) => k > 0 && distance(trend[i], trend[indices[k - 1]]) < 1e-8))
       return;
-    const segments = curveSegments(indices.map((i) => samples[i]));
-    let worst = 1.5 / pixels,
+    const segments = curveSegments(indices.map((i) => trend[i]));
+    let worst = 1.9 / pixels,
       insert = -1;
-    for (let j = 0; j < segments.length; j++)
-      for (let i = indices[j] + 1; i < indices[j + 1]; i++) {
-        const error = distance(
-          samples[i],
-          cubicAt(segments[j], (i - indices[j]) / (indices[j + 1] - indices[j])),
-        );
+    for (let j = 0; j < segments.length; j++) {
+      const count = Math.min(64, Math.max(8, Math.ceil((indices[j + 1] - indices[j]) * stepPixels / 5)));
+      const span = Array.from({ length: count + 1 }, (_, k) => cubicAt(segments[j], k / count));
+      for (let i = indices[j] + minSpacing; i <= indices[j + 1] - minSpacing; i++) {
+        const error = distanceToStroke(trend[i], span);
         if (error > worst) {
           worst = error;
           insert = i;
         }
       }
+    }
     if (insert < 0) break;
-    if (indices.length >= 96) return;
     indices.push(insert);
     indices.sort((a, b) => a - b);
   }
-  const points = indices.map((i) => samples[i]);
+  const points = indices.map((i) => trend[i]);
+  if (points.some((p, i) => i > 0 && distance(p, points[i - 1]) < 1e-8)) return;
   const fitted = flattenCurve(points, 0.15 / pixels);
   const errors = uniform.map((p) => distanceToStroke(p, fitted) * pixels);
   if (
     quantile(errors, 0.95) > 2.5 ||
-    input.some((p) => distanceToStroke(p, fitted) * pixels > 3.8) ||
+    input.some((p) => distanceToStroke(p, fitted) * pixels > 4) ||
     fitted.some((p) => distanceToStroke(p, uniform) * pixels > 3.8)
   )
     return;

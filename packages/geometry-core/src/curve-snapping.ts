@@ -1,7 +1,8 @@
 import { createId } from '@tuheng/contracts';
 import type { GeometryDocument } from '@tuheng/contracts';
 import { transact } from './document';
-import { distance, point, sub, dot } from './math';
+import { distance, point } from './math';
+import { boundaryShape, nearestOnShape } from './parametric-geometry';
 import {
   intersectionCandidates,
   confirmSnap,
@@ -10,7 +11,7 @@ import {
 } from './snapping';
 import { resampleStroke } from './pen';
 
-/** Snap a freehand curve's interior knots without changing its recorded input samples. */
+/** Keep the few intersections that best match the fitted path and preserve its samples. */
 export function snapPenCurve(
   base: GeometryDocument,
   raw: GeometryDocument,
@@ -20,6 +21,8 @@ export function snapPenCurve(
 ) {
   const curve = raw.entities.at(-1);
   if (curve?.kind !== 'curve' || !curve.samples) return raw;
+  const shape = boundaryShape(raw, curve);
+  if (!shape) return raw;
   const candidates = new Map<string, SnapCandidate>();
   for (const p of resampleStroke(curve.samples, 128))
     for (const c of intersectionCandidates(base, curve.viewId, p, pixels, options)) {
@@ -29,28 +32,32 @@ export function snapPenCurve(
   const original = curve.pointIds.map((id) => point(raw, id));
   const nodes = curve.pointIds.map((id, i) => ({
     id,
-    at: i,
+    at: i / (original.length - 1),
     position: original[i],
     candidate: undefined as SnapCandidate | undefined,
   }));
-  for (const c of [...candidates.values()].sort((a, b) => a.distance - b.distance)) {
-    if (nodes.some((n) => n.candidate && distance(n.position, c.position) < 1e-7)) continue;
-    let best = { distance: Infinity, at: 0 };
-    for (let i = 1; i < original.length; i++) {
-      const d = sub(original[i], original[i - 1]),
-        t = Math.max(0, Math.min(1, dot(sub(c.position, original[i - 1]), d) / dot(d, d)));
-      const q = { x: original[i - 1].x + t * d.x, y: original[i - 1].y + t * d.y };
-      if (distance(q, c.position) < best.distance)
-        best = { distance: distance(q, c.position), at: i - 1 + t };
-    }
-    const nearest = nodes.find((n) => n.id === curve.pointIds[Math.round(best.at)]);
-    if (nearest && !nearest.candidate) {
+  const radius = (options?.threshold ?? 10) / pixels;
+  const eligible = [...candidates.values()].map((candidate) => {
+    const fit = nearestOnShape(shape, candidate.position);
+    return { candidate, at: fit.t, gap: distance(fit.position, candidate.position) };
+  }).filter(({ gap }) => gap <= radius)
+    .sort((a, b) => a.gap - b.gap || a.candidate.distance - b.candidate.distance);
+  let accepted = 0;
+  for (const { candidate: c, at } of eligible) {
+    if (accepted >= 4) break;
+    if (nodes.some((n) => n.candidate && distance(n.position, c.position) < radius * 1.5)) continue;
+    const nearest = nodes.reduce((a, b) => Math.abs(a.at - at) <= Math.abs(b.at - at) ? a : b);
+    if (!nearest.candidate && distance(nearest.position, c.position) <= radius * 0.5) {
       nearest.position = c.position;
       nearest.candidate = c;
-    } else if (nodes.length < 128)
-      nodes.push({ id: createId(), at: best.at, position: c.position, candidate: c });
+    } else {
+      if (nodes.some((n) => Math.abs(n.at - at) < 1e-7 || distance(n.position, c.position) < radius * 0.5))
+        continue;
+      nodes.push({ id: createId(), at, position: c.position, candidate: c });
+    }
+    accepted++;
   }
-  if (!nodes.some((n) => n.candidate)) return raw;
+  if (!accepted) return raw;
   nodes.sort((a, b) => a.at - b.at);
   // Close intersections must not collapse neighbours or corrupt topology.
   if (nodes.some((n, i) => i > 0 && distance(n.position, nodes[i - 1].position) < 1e-8)) return raw;

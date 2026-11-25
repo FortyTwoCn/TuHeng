@@ -2,12 +2,12 @@ import type { Vec2 } from '@tuheng/contracts';
 import {
   sheetToLocal,
   snapCandidates,
+  combinedLineCandidate,
   commonTangentCandidates,
   nearestDraftingCandidate,
+  segmentSatisfiesGuide,
   trackingCandidate,
   type TrackingBase,
-  cross,
-  dot,
   distance,
   sub,
   unit,
@@ -28,29 +28,14 @@ export type CadPick = {
   snap?: SnapCandidate;
 };
 
-/** An explicit length may move the endpoint along the same direction. A tangent
- * still requires the finite segment to reach the actual point of contact. */
+/** 显式长度可以沿同一方向移动终点。保留相切预览时，有限线段必须仍覆盖切点。 */
 export function lineSnapAt(pick: CadPick, anchor: Vec2, end: Vec2): SnapCandidate | undefined {
   const snap = pick.snap;
   if (!snap || distance(anchor, end) < 1e-8) return;
   if (distance(end, snap.position) < 1e-8) return snap;
   const guide = snap.guide;
-  if (!guide) return;
-  const along = unit(sub(end, anchor));
-  const error =
-    guide.kind === 'perpendicular' ? dot(along, guide.direction) : cross(along, guide.direction);
-  if (Math.abs(error) > 1e-8) return;
-  if (guide.kind === 'tangent') {
-    const contact = sub(guide.contact, anchor);
-    if (
-      Math.abs(cross(contact, along)) > 1e-7 ||
-      dot(contact, along) < -1e-7 ||
-      dot(contact, along) > distance(end, anchor) + 1e-7
-    )
-      return;
-  }
-  // The adjusted end has left the original point feature. Keep only the
-  // verified direction, never the node/foot identity of that original pick.
+  if (!guide || !segmentSatisfiesGuide(anchor, end, guide)) return;
+  // 终点离开吸附位置后，只保留仍满足的方向关系，清除原来的点引用。
   const kind = {
     parallel: 'PARALLEL',
     perpendicular: 'PERPENDICULAR',
@@ -86,13 +71,25 @@ export function locateCadPoint(
   const straightCommand = session.commandId === 'segment' || session.commandId === 'line';
   const lineRelations = !!last && straightCommand;
   let position = raw;
-  const ortho = last && session.phase === 'points' && (
-    (session.commandId === 'ellipse' && session.points.length === 1) ||
-    (controls.ortho && [
-      'segment', 'line', 'move', 'copy', 'circle', 'arc', 'arc3',
-      'spline', 'polygon', 'linearDimension', 'alignedDimension', 'direction',
-    ].includes(session.commandId))
-  );
+  const ortho =
+    last &&
+    session.phase === 'points' &&
+    ((session.commandId === 'ellipse' && session.points.length === 1) ||
+      (controls.ortho &&
+        [
+          'segment',
+          'line',
+          'move',
+          'copy',
+          'circle',
+          'arc',
+          'arc3',
+          'spline',
+          'polygon',
+          'linearDimension',
+          'alignedDimension',
+          'direction',
+        ].includes(session.commandId)));
   const axisOrigin = session.commandId === 'arc' ? session.points[0] : last;
   const horizontal =
     !!axisOrigin && Math.abs(raw.x - axisOrigin.x) >= Math.abs(raw.y - axisOrigin.y);
@@ -115,7 +112,10 @@ export function locateCadPoint(
       threshold,
       previous,
     };
-    candidate = snapCandidates(doc, frame, position, scale, last, options).find(c => onAxis(c.position));
+    const ordinary = snapCandidates(doc, frame, position, scale, last, options).filter((c) =>
+      onAxis(c.position),
+    );
+    candidate = ordinary[0];
     const weak = !candidate || ['AXIS_DIRECTION', 'GRID'].includes(candidate.kind);
     const radius = threshold / scale;
     if (straightCommand && !last && (!candidate || weak || candidate.kind === 'FOOT')) {
@@ -124,10 +124,14 @@ export function locateCadPoint(
     }
     const paired = lineRelations ? session.pointSnaps?.[0]?.pairedTangent : undefined;
     if (
-      paired && last && controls.objectSnap && controls.objectTypes.includes('tangent') &&
-      distance(raw, paired.contact) <= radius && onAxis(paired.contact) &&
-      doc.entities.some(({ id, layerId }) =>
-        id === paired.sourceId && !controls.hiddenLayers.includes(layerId),
+      paired &&
+      last &&
+      controls.objectSnap &&
+      controls.objectTypes.includes('tangent') &&
+      distance(raw, paired.contact) <= radius &&
+      onAxis(paired.contact) &&
+      doc.entities.some(
+        ({ id, layerId }) => id === paired.sourceId && !controls.hiddenLayers.includes(layerId),
       )
     ) {
       candidate = {
@@ -145,26 +149,78 @@ export function locateCadPoint(
           direction: unit(sub(paired.contact, last)),
         },
       };
+    } else if (session.commandId === 'segment' && last && options.direction && options.objects) {
+      const combined = combinedLineCandidate(
+        doc,
+        frame,
+        last,
+        position,
+        ordinary,
+        controls.tracking ? tracked : [],
+        radius,
+        options,
+        onAxis,
+      );
+      if (combined) {
+        const precise =
+          candidate &&
+          candidate.distance <= radius * 0.4 &&
+          [
+            'COINCIDENT',
+            'ENDPOINT',
+            'CENTER',
+            'ORIGIN',
+            'INTERSECTION',
+            'MIDPOINT',
+            'QUADRANT',
+          ].includes(candidate.kind);
+        if (!precise) candidate = combined;
+        else if (candidate && distance(candidate.position, combined.position) < 1e-7) {
+          candidate = {
+            ...candidate,
+            guide: combined.guide ?? candidate.guide,
+            tracks: combined.tracks,
+            equalLength: combined.equalLength,
+          };
+        }
+      }
     }
-    if ((!candidate || (weak && candidate.kind !== 'TANGENT')) && session.phase === 'points') {
-      candidate = (controls.tracking ? trackingCandidate(doc, frame, position, tracked, radius, options, onAxis) : undefined)
-        ?? nearestDraftingCandidate(doc, frame, position, radius, options, onAxis)
-        ?? candidate;
+    if (
+      (!candidate || ['AXIS_DIRECTION', 'GRID'].includes(candidate.kind)) &&
+      session.phase === 'points'
+    ) {
+      candidate =
+        (controls.tracking
+          ? trackingCandidate(doc, frame, position, tracked, radius, options, onAxis)
+          : undefined) ??
+        nearestDraftingCandidate(doc, frame, position, radius, options, onAxis) ??
+        candidate;
     }
   }
-  const angularBody = session.commandId === 'angularDimension' && !session.points.length &&
-    session.ids.length < 2 && (session.parameters.angularMethod !== '三点' || session.ids.length > 0);
-  const needsBody = angularBody || [
-    'trim',
-    'extend',
-    'fillet',
-    'chamfer',
-    'radiusDimension',
-    'diameterDimension',
-    'hatch',
-  ].includes(session.commandId);
-  const hit = needsBody ? hits.find(h => h.kind === 'body' &&
-    (!angularBody || doc.entities.some(e=>e.id===h.id && (e.kind==='segment' || e.kind==='line')))) : hits[0];
+  const angularBody =
+    session.commandId === 'angularDimension' &&
+    !session.points.length &&
+    session.ids.length < 2 &&
+    (session.parameters.angularMethod !== '三点' || session.ids.length > 0);
+  const needsBody =
+    angularBody ||
+    [
+      'trim',
+      'extend',
+      'fillet',
+      'chamfer',
+      'radiusDimension',
+      'diameterDimension',
+      'hatch',
+    ].includes(session.commandId);
+  const hit = needsBody
+    ? hits.find(
+        (h) =>
+          h.kind === 'body' &&
+          (!angularBody ||
+            doc.entities.some((e) => e.id === h.id && (e.kind === 'segment' || e.kind === 'line'))),
+      )
+    : hits[0];
   const nodeId = candidate?.kind === 'COINCIDENT' ? candidate.entityIds[0] : undefined;
   const pick: CadPick = {
     type: 'point',
@@ -172,9 +228,13 @@ export function locateCadPoint(
     position: candidate?.position ?? position,
     rawPosition: raw,
     directionPosition:
-      candidate?.guide || candidate?.kind === 'AXIS_DIRECTION' || candidate?.kind === 'TRACKING' ? candidate.position : position,
+      candidate?.guide || candidate?.kind === 'AXIS_DIRECTION' || candidate?.kind === 'TRACKING'
+        ? candidate.position
+        : position,
     snap: candidate,
-    ...(['hatch','trim'].includes(session.commandId) ? { hiddenLayers: controls.hiddenLayers } : {}),
+    ...(['hatch', 'trim'].includes(session.commandId)
+      ? { hiddenLayers: controls.hiddenLayers }
+      : {}),
     entityId: needsBody ? hit?.id : (nodeId ?? (hit?.viewId === frame ? hit.id : undefined)),
   };
   return { candidate, pick };

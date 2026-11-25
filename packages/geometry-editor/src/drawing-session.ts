@@ -18,7 +18,11 @@ import {
 } from '@tuheng/geometry-core';
 import type { Ruler } from './types';
 import type { EditorControls } from './types';
+import type { Appearance } from './CadPreferences';
 export type StrokeSample = Vec2 & { pressure: number };
+export function penStrokeStyle({ pattern }: Appearance): PenStrokeStyle {
+  return pattern === 'GUIDE' ? 'construction' : pattern === 'DASHED' ? 'hidden' : 'visible';
+}
 export function rawStrokeDocument(
   base: GeometryDocument,
   viewId: string,

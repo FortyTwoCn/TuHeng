@@ -1,5 +1,4 @@
 import type { CadSession } from '@tuheng/geometry-core';
-import type { PenStrokeStyle } from '@tuheng/geometry-core';
 import type { Tool } from './types';
 import type { GeometryTargetRef } from '@tuheng/contracts';
 import type { ConstructionSpec } from '@tuheng/geometry-core';
@@ -21,13 +20,12 @@ type Activity =
 
 export interface WorkspaceSession {
   activity: Activity;
-  penStyle: PenStrokeStyle;
   selected: string[];
   panel: Exclude<EditorPanel, 'axis'>;
   active: string;
   expanded: boolean;
 }
-// The viewport reads a projection of the single active command.
+// 从唯一活动命令派生视口状态。绘图、构造、选取投影轴和选择工具互斥。
 export function viewportSession(state: WorkspaceSession) {
   const { activity } = state;
   return {
@@ -40,10 +38,7 @@ export function viewportSession(state: WorkspaceSession) {
 }
 export type EditorSession = ReturnType<typeof viewportSession>;
 type ViewPatch = Partial<
-  Pick<
-    EditorSession,
-    'penStyle' | 'selected' | 'panel' | 'construction' | 'active' | 'expanded' | 'tool'
-  >
+  Pick<EditorSession, 'selected' | 'panel' | 'construction' | 'active' | 'expanded' | 'tool'>
 >;
 export type SessionAction =
   | { type: 'patch'; patch: ViewPatch }

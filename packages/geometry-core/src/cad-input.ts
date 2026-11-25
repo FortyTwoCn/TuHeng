@@ -22,6 +22,18 @@ export function cadLength(value: string | undefined, label: string) {
   if (n <= 0 || n > 10000) throw Error(`${label}须大于 0 且不超过 10000 mm`);
   return n;
 }
+export function cadPolygonSides(value: string | undefined) {
+  const sides = cadNumber(value, '边数');
+  if (!Number.isInteger(sides) || sides < 3 || sides > 256)
+    throw Error('边数必须为 3 至 256 的整数');
+  return sides;
+}
+export function cadText(value: string | undefined) {
+  const content = value?.trim();
+  if (!content) throw Error('请输入文字内容');
+  if (content.length > 400) throw Error('文字内容最多 400 个字符');
+  return content;
+}
 /** Typed measurements are expressed in the active frame. The unspecified
  * component follows the located cursor (including orthogonal tracking). */
 export function cadLineEndpoint(anchor: Vec2, cursor: Vec2, fields: { length?: string; angle?: string }) {

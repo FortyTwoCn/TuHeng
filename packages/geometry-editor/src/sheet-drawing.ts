@@ -1,6 +1,6 @@
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import { localToSheet, viewTransform, add, sub, angle, planeOutline } from '@tuheng/geometry-core';
-// Rendering-only projection: the saved document always retains local coordinates and frame IDs.
+// 只为渲染转换到图纸坐标。正式文档保留局部坐标和所属视图 ID。
 export function sheetDrawingDocument(doc: GeometryDocument): GeometryDocument {
   return {
     ...doc,

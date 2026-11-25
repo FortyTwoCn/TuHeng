@@ -93,7 +93,11 @@ test('E01: drawing and editing rails expose commands directly and arc modes supp
   await expect(menu).not.toBeVisible();
   await expect(arrow).toBeFocused();
   await expect(drawing.getByRole('button', { name: '三点圆弧', exact: true })).toBeVisible();
-  await expect(drawing.getByRole('button', { name: '电子笔线型', exact: true })).toBeVisible();
+  await expect(drawing.getByRole('button', { name: '电子笔线型', exact: true })).toHaveCount(0);
+  await drawing.getByRole('button', { name: '构造', exact: true }).click();
+  const construction = page.getByRole('dialog', { name: '构造菜单', exact: true });
+  await expect(construction.getByRole('button', { name: '无限辅助线', exact: true })).toBeVisible();
+  await expect(construction.getByRole('button', { name: /^(平行线|垂直线)$/ })).toHaveCount(0);
 });
 test('UX05: a standalone point snaps to the actual Z axis', async ({ page }) => {
   await load(page, standardSheet());
@@ -151,7 +155,9 @@ test('UX30: construction is reachable from a named primary group', async ({ page
     timeout: 1500,
   });
   await page.getByRole('button', { name: '构造', exact: true }).click();
-  await expect(page.getByRole('button', { name: '平行线', exact: true })).toBeVisible();
+  const menu = page.getByRole('dialog', { name: '构造菜单', exact: true });
+  await expect(menu.getByRole('button', { name: '无限辅助线', exact: true })).toBeVisible();
+  await expect(menu.getByRole('button', { name: '新增投影轴', exact: true })).toBeVisible();
 });
 const evidence = 'test-results/geometry-ux-v2';
 test.beforeEach(() => mkdirSync(evidence, { recursive: true }));
@@ -689,8 +695,8 @@ test('UX18: teacher stem is a read-only reference for confirmed finite hidden co
   );
   const reference = d.entities.find((e) => e.kind === 'segment')!;
   await load(page, d);
-  await choose(page, '垂直线');
   await click(page, { x: -42.5, y: 45 });
+  await choose(page, '垂直线');
   const panel = page.getByRole('dialog', { name: '构造与关系' });
   await panel.getByLabel('几何范围').selectOption('segment');
   await panel.getByRole('combobox', { name: '线型', exact: true }).selectOption('hidden');

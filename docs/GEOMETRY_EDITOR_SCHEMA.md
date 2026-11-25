@@ -2,6 +2,14 @@
 
 新建图纸的版本是 `tuheng.geometry/3.0.0`。编辑、出题、作答与复核以同一份工程几何 JSON 为依据。单位是毫米，角度是度。打开已保存的快照保持其版本和内容。在编辑副本上提交几何命令时，新事务写入 3.0。数据库继续使用既有题目版本、草稿、提交与评分记录中的 JSON 字段。本轮无需数据库 DDL 或历史数据回填。[运行时契约](../packages/contracts/src/geometry.ts) · [可导入 CAD 示例](geometry-examples/CAD-V3.json)
 
+## 生成、阅读和校验 JSON
+
+从「文件 → 导出 JSON」取出实际图纸，从「文件 → 下载图纸 JSON Schema」取得新建图纸的字段定义。JSON Schema 使用 Draft 2020-12，直接由 Zod 契约生成。把图纸 JSON 和 Schema 一起交给 AI 时，可要求它只返回完整的 JSON 文件，通过 `id` 引用实体，并从示例沿用视图、图层、单位和投影配置。可用「文件 → 打开 JSON 或图纸包 ZIP」验证并重新编辑生成的图纸。[最小线段示例](geometry-examples/AI-LINE-V3.json)
+
+导出采用两空格缩进，实体先显示 `id` 和 `kind`，坐标、笔迹采样和简短数组按行排列。单独下载、文件预览和 ZIP 内的 `drawing.json` 共用这一排版。数字保持原精度，数组顺序及对象引用保持原样。接近 2 MB 上限时采用紧凑 JSON，确保文件仍可重新导入。[文件读写源码](../packages/geometry-core/src/document-json.ts)
+
+新画线段时，先定义两个 `point`，再在 `segment.startPoint` 和 `segment.endPoint` 引用它们的 ID。共享端点应复用同一个 ID。引用的对象和 `viewId`、`layerId` 都必须实际存在。JSON Schema 描述字段、范围和枚举。打开图纸时还会校验跨对象引用、视图归属、几何有效性及作答权限。字段错误会带 JSON 路径，例如 `$.entities[0].position.x`，数组下标从 0 开始。[Schema 生成源码](../packages/contracts/src/geometry-json-schema.ts)
+
 ## 坐标与身份
 
 每个 view 的 transform 有 origin、xAxis 和 yAxis。图纸坐标等于 origin + x·xAxis + y·yAxis。两个基向量互相垂直且长为 1。V 的局部 (x,z) 映射为图纸 (-x,z)，H 的局部 (x,-y) 映射为 (-x,-y)，W 的局部 (y,z) 映射为 (y,z)。图纸原点为 (0,0)。正等轴测和斜二等轴测各有一个作图框架。新建斜二等轴测图的深度方向为 -135°、比例为 0.5。
