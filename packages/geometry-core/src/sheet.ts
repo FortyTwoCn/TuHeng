@@ -100,25 +100,26 @@ export function drawingViewAt(
   return viewId;
 }
 export function sheetBounds(doc: GeometryDocument): Bounds {
-  const points = doc.entities
-    .filter((e) => e.kind !== 'line')
-    .flatMap((e) =>
-      entityPath(doc, e, { x: -10000, y: -10000, width: 20000, height: 20000 }).map((p) =>
-        localToSheet(doc, e.viewId, p),
-      ),
-    );
-  points.push(
-    { x: -60, y: -40 },
-    { x: 40, y: 60 },
-    ...(doc.auxiliarySystems ?? []).map((a) => a.anchor),
-  );
-  const xs = points.map((p) => p.x),
-    ys = points.map((p) => p.y),
-    minX = Math.min(...xs) - 10,
-    maxX = Math.max(...xs) + 10,
-    minY = Math.min(...ys) - 10,
-    maxY = Math.max(...ys) + 10;
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  let minX = -60,
+    maxX = 40,
+    minY = -40,
+    maxY = 60;
+  const include = (p: Vec2) => {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  };
+  for (const axis of doc.auxiliarySystems ?? []) include(axis.anchor);
+  for (const e of doc.entities) {
+    if (e.kind === 'line') {
+      include(localToSheet(doc, e.viewId, e.anchor));
+      continue;
+    }
+    for (const p of entityPath(doc, e, { x: -10000, y: -10000, width: 20000, height: 20000 }))
+      include(localToSheet(doc, e.viewId, p));
+  }
+  return { x: minX - 10, y: minY - 10, width: maxX - minX + 20, height: maxY - minY + 20 };
 }
 export function localBounds(doc: GeometryDocument, viewId: string, box: Bounds): Bounds {
   const p = [

@@ -40,12 +40,21 @@ describe('independent grading core', () => {
   });
   it('sends pure geometry as structured text through the existing provider', async () => {
     const problem = createDocument('ISOMETRIC');
-    const answer = addDrawing(problem, 'segment', 'view-0', [{ x: 0, y: 0 }], 'student');
+    const answer = addDrawing(
+      problem,
+      'segment',
+      'view-0',
+      [
+        { x: 0, y: 0 },
+        { x: 6, y: 8 },
+      ],
+      'student',
+    );
     const bundle = exportGeometryBundle(answer);
     const request = GradingRequest.parse({
       ...requestFixture(),
       submissionAssets: [],
-      promptVersion: 'geometry-review/1.2.0',
+      promptVersion: 'geometry-review/1.5.0',
       geometryEvidence: {
         schemaVersion: answer.schemaVersion,
         editorType: answer.editorType,

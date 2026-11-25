@@ -2,7 +2,7 @@ import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import { add, sub, dot, cross, unit, scale, distance, lineGeometry } from './math';
 import { referenceGeometry } from './references';
 import { sheetDeltaToLocal } from './sheet';
-import { snapCandidates, type SnapCandidate } from './snapping';
+import { snapCandidates, confirmSnap, type SnapCandidate } from './snapping';
 
 // A direction decision is angular, not an endpoint-to-axis pixel distance: long
 // strokes must have the same tolerance as short ones at every zoom level.
@@ -35,7 +35,7 @@ export function penLinePreview(
     options.direction !== false &&
     span * pixels >= penDirectionThresholds.minimumPixels
       ? referenceGeometry(base)
-          .filter((r) => r.direction)
+          .filter((r) => r.direction && !(r.ref.kind==='baseAxis' && r.ref.axisId==='MITER_45'))
           .map((r) => {
             const d = unit(sheetDeltaToLocal(base, entity.viewId, r.direction!));
             // Keep exact zero components for orthogonal axes in JSON.
@@ -96,4 +96,42 @@ export function penLinePreview(
   }
   candidates[1] = near(original[1], start).find((c) => c.kind !== 'AXIS_DIRECTION');
   return { points: [start, candidates[1]?.position ?? original[1]], candidates };
+}
+
+import { transact } from './document';
+export function applyPenLineFit(
+  doc: GeometryDocument,
+  raw: GeometryDocument,
+  fit: NonNullable<ReturnType<typeof penLinePreview>>,
+  role: 'teacher' | 'student',
+) {
+  const entity = raw.entities.at(-1);
+  if (!entity || (entity.kind !== 'line' && entity.kind !== 'segment'))
+    throw Error('笔迹不是拟合直线');
+  let next = transact(
+    raw,
+    (draft) => {
+      const line = draft.entities.find((e) => e.id === entity.id);
+      if (line?.kind === 'line') {
+        line.anchor = fit.points[0];
+        line.direction = sub(fit.points[1], fit.points[0]);
+      }
+      if (line?.kind === 'segment')
+        [line.startPoint, line.endPoint].forEach((id, i) => {
+          const point = draft.entities.find((e) => e.id === id);
+          if (point?.kind === 'point') {
+            point.position = fit.points[i];
+            point.spatial = null;
+          }
+        });
+    },
+    role,
+  );
+  if (entity.kind === 'segment')
+    for (const [i, id] of [entity.startPoint, entity.endPoint].entries()) {
+      const candidate = fit.candidates[i];
+      if (candidate) next = confirmSnap(doc, next, candidate, id, role);
+    }
+
+  return next;
 }

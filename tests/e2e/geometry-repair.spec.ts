@@ -20,11 +20,13 @@ async function login(page: Page) {
   await expect(page.locator('.geometry-editor')).toBeVisible();
 }
 async function load(page: Page, doc: GeometryDocument) {
+  await expect(page.locator('[data-workspace-ready=true]').first()).toBeVisible();
   await page.getByLabel('加载几何 JSON').setInputFiles({
     name: 'case.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(doc)),
   });
+  await expect(page.getByLabel('加载几何 JSON')).toHaveValue('');
   await expect(page.locator('[data-entity-id]')).toHaveCount(doc.entities.length);
 }
 async function json(page: Page) {
@@ -46,6 +48,27 @@ async function clickAt(page: Page, p: Vec2) {
   const q = await screen(page, p);
   await page.mouse.click(q.x, q.y);
 }
+function cameraPose(page: Page) {
+  return page.locator('.geo-active svg').evaluate((el) => {
+    const svg = el as SVGSVGElement;
+    const box = svg.viewBox.baseVal;
+    const matrix = svg.getScreenCTM()!;
+    return {
+      x: box.x + box.width / 2,
+      y: box.y + box.height / 2,
+      scale: Math.hypot(matrix.a, matrix.b),
+    };
+  });
+}
+function expectCameraPose(page: Page, original: Awaited<ReturnType<typeof cameraPose>>) {
+  return expect
+    .poll(() => cameraPose(page))
+    .toMatchObject({
+      x: expect.closeTo(original.x, 4),
+      y: expect.closeTo(original.y, 4),
+      scale: expect.closeTo(original.scale, 4),
+    });
+}
 async function drag(page: Page, a: Vec2, b: Vec2, beforeUp?: () => Promise<void>) {
   const from = await screen(page, a),
     to = await screen(page, b);
@@ -54,6 +77,15 @@ async function drag(page: Page, a: Vec2, b: Vec2, beforeUp?: () => Promise<void>
   await page.mouse.move(to.x, to.y, { steps: 10 });
   if (beforeUp) await beforeUp();
   await page.mouse.up();
+}
+async function drawSegment(page: Page, start: Vec2, end: Vec2, checkPreview?: () => Promise<void>) {
+  await choose(page, '实线');
+  await clickAt(page, start);
+  const p = await screen(page, end);
+  await page.mouse.move(p.x, p.y, { steps: 8 });
+  if (checkPreview) await checkPreview();
+  await page.mouse.click(p.x, p.y);
+  await choose(page, '完成');
 }
 test.use({ viewport: { width: 1440, height: 1000 }, video: 'on' });
 test.beforeEach(async ({ page }) => {
@@ -112,7 +144,8 @@ test('5px endpoint merge, cancellation, undo/redo and connected point moves both
   expect(await json(page)).toEqual(d);
   await choose(page, '撤销');
   await drag(page, { x: -30, y: 35 }, rawEnd);
-  await drag(page, { x: -10, y: 15 }, { x: 2, y: 20 }, async () => {
+  const axis = await screen(page, { x: 0, y: 20 });
+  await drag(page, { x: -10, y: 15 }, { x: 5 / axis.scale, y: 20 }, async () => {
     await expect
       .poll(async () =>
         Number(await page.locator(`[data-entity-id="${lines[0].id}"] line`).getAttribute('x2')),
@@ -238,8 +271,7 @@ test('standard coordinates, two-level parallel/perpendicular axes, reload and re
       String(p.y),
     );
   }
-  await choose(page, '实线');
-  await drag(page, { x: -50, y: -10 }, { x: -20, y: -10 });
+  await drawSegment(page, { x: -50, y: -10 }, { x: -20, y: -10 });
   await choose(page, '新增投影轴');
   await page.getByLabel('新轴构造').selectOption('PARALLEL');
   await choose(page, '开始定位新轴');
@@ -251,10 +283,14 @@ test('standard coordinates, two-level parallel/perpendicular axes, reload and re
   expect(d.auxiliarySystems).toHaveLength(1);
   expect(d.entities).toHaveLength(6);
   const first = d.auxiliarySystems![0];
+  expect(first.retainedViewId).toBe('view-1');
+  expect(first.anchor.y).toBeCloseTo(-35, 0);
   expect(first.tangent.y).toBeCloseTo(0);
-  expect(first.positiveNormal.y).toBe(-1);
-  await choose(page, '实线');
-  await drag(page, { x: -50, y: -45 }, { x: -30, y: -45 });
+  expect(first.positiveNormal.y).toBeCloseTo(-1, 10);
+  // Make the newly unfolded side visible while the command controls occupy part of the container.
+  await choose(page, '缩小');
+  await closePanels(page);
+  await drawSegment(page, { x: -50, y: -45 }, { x: -30, y: -45 });
   expect((await json(page)).entities.at(-1)?.viewId).toBe(first.newViewId);
   await choose(page, '新增投影轴');
   await page.getByLabel('父投影系').selectOption(first.id);
@@ -367,7 +403,7 @@ test('pen/touch simulated cancellation preserves samples, ignores palm during st
   const svg = page.locator('.geo-active svg');
   await svg.scrollIntoViewIfNeeded();
   const c = await screen(page, { x: -30, y: 20 }),
-    initial = await svg.getAttribute('viewBox');
+    initial = await cameraPose(page);
   await svg.dispatchEvent('pointerdown', {
     pointerId: 40,
     pointerType: 'pen',
@@ -398,12 +434,13 @@ test('pen/touch simulated cancellation preserves samples, ignores palm during st
     clientX: c.x + 150,
     clientY: c.y + 80,
   });
-  await expect(svg).toHaveAttribute('viewBox', initial!);
+  await expectCameraPose(page, initial);
   await svg.dispatchEvent('pointercancel', { pointerId: 40, pointerType: 'pen' });
   await choose(page, '恢复中断笔迹');
   expect((await json(page)).entities.at(-1)?.kind).toBe('polyline');
   await choose(page, '平移');
   const before = await json(page);
+  const beforePinch = await cameraPose(page);
   await svg.scrollIntoViewIfNeeded();
   const b = (await svg.boundingBox())!,
     cdp = await context.newCDPSession(page);
@@ -422,6 +459,7 @@ test('pen/touch simulated cancellation preserves samples, ignores palm during st
     ],
   });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect.poll(async () => (await cameraPose(page)).scale).toBeGreaterThan(beforePinch.scale);
   expect(await json(page)).toEqual(before);
   await cdp.detach();
 });
@@ -455,7 +493,7 @@ test('stem anchor stays read-only in the UI and explicit disconnection affects o
   expect(anchored.entities.find((e) => e.id === line.id)).toMatchObject({ endPoint: stem.id });
   await drag(page, { x: -25, y: 35 }, { x: -15, y: 45 });
   expect(await json(page)).toEqual(anchored);
-  await expect(page.locator('.geo-status').first()).toContainText('只读');
+  await expect(page.locator('.cad-step-message').first()).toContainText('只读');
   await page.getByText('节点连接与绑定', { exact: true }).click();
   await choose(page, '解除此对象连接');
   const detached = await json(page);
@@ -467,50 +505,51 @@ for (const viewport of [
   { width: 768, height: 1024 },
   { width: 390, height: 844 },
 ]) {
-  test(`automatic V/H/W from drawing position at ${viewport.width}px, with no frame selector`, async ({
-    page,
-  }) => {
-    await page.setViewportSize(viewport);
-    await choose(page, '点');
-    for (const p of [
-      { x: -30, y: 40 },
-      { x: -30, y: -20 },
-      { x: 20, y: 40 },
-    ])
-      await clickAt(page, p);
-    const doc = await json(page);
-    expect(doc.entities.map((e) => e.viewId)).toEqual(['view-0', 'view-1', 'view-2']);
-    expect(doc.entities.map((e) => (e.kind === 'point' ? e.position : null))).toEqual([
-      { x: expect.closeTo(30, 4), y: expect.closeTo(40, 4) },
-      { x: expect.closeTo(30, 4), y: expect.closeTo(-20, 4) },
-      { x: expect.closeTo(20, 4), y: expect.closeTo(40, 4) },
-    ]);
-    await expect(page.getByLabel('当前作图框架')).toHaveCount(0);
-    const camera = await page.locator('.geo-active svg').getAttribute('viewBox');
-    await choose(page, '实线');
-    await drag(page, { x: -45, y: -30 }, { x: -20, y: -30 });
-    const line = (await json(page)).entities.at(-1)!;
-    expect(line).toMatchObject({ kind: 'segment', viewId: 'view-1' });
-    expect(await page.locator('.geo-active svg').getAttribute('viewBox')).toBe(camera);
-    await page.screenshot({
-      path: `${evidence}/automatic-view-${viewport.width}.png`,
-      fullPage: true,
+  test.describe(`V/H/W viewport ${viewport.width}`, () => {
+    test.use({ viewport });
+    test(`automatic V/H/W from drawing position at ${viewport.width}px, with no frame selector`, async ({
+      page,
+    }) => {
+      await choose(page, '点');
+      for (const p of [
+        { x: -30, y: 40 },
+        { x: -30, y: -20 },
+        { x: 20, y: 40 },
+      ])
+        await clickAt(page, p);
+      const doc = await json(page);
+      expect(doc.entities.map((e) => e.viewId)).toEqual(['view-0', 'view-1', 'view-2']);
+      expect(doc.entities.map((e) => (e.kind === 'point' ? e.position : null))).toEqual([
+        { x: expect.closeTo(30, 4), y: expect.closeTo(40, 4) },
+        { x: expect.closeTo(30, 4), y: expect.closeTo(-20, 4) },
+        { x: expect.closeTo(20, 4), y: expect.closeTo(40, 4) },
+      ]);
+      await expect(page.getByLabel('当前作图框架')).toHaveCount(0);
+      const camera = await cameraPose(page);
+      await drawSegment(page, { x: -45, y: -30 }, { x: -20, y: -30 });
+      const line = (await json(page)).entities.at(-1)!;
+      expect(line).toMatchObject({ kind: 'segment', viewId: 'view-1' });
+      await expectCameraPose(page, camera);
+      await page.screenshot({
+        path: `${evidence}/automatic-view-${viewport.width}.png`,
+        fullPage: true,
+      });
+      writeFileSync(
+        `${evidence}/automatic-view-${viewport.width}.json`,
+        JSON.stringify(await json(page), null, 2),
+      );
     });
-    writeFileSync(
-      `${evidence}/automatic-view-${viewport.width}.json`,
-      JSON.stringify(await json(page), null, 2),
-    );
   });
 }
 
 test('automatic projection stays locked across axes for a gesture and a multi-click circle', async ({
   page,
 }) => {
-  await choose(page, '实线');
-  await drag(page, { x: -30, y: -20 }, { x: -30, y: 30 }, async () => {
-    await expect(page.locator('.geo-view-title')).toContainText('H');
+  await drawSegment(page, { x: -30, y: -20 }, { x: -30, y: 30 }, async () => {
+    await expect(page.locator('.cad-coordinate-readout')).toContainText('H');
   });
   let d = await json(page);
+  expect(d.entities.filter((e) => e.kind === 'segment')).toHaveLength(1);
   expect(d.entities.every((e) => e.viewId === 'view-1')).toBe(true);
   await choose(page, '圆');
   await clickAt(page, { x: 15, y: 20 });

@@ -24,12 +24,17 @@ async function load(page: Page, document = connectionSheet()) {
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page.locator('.geometry-editor')).toBeVisible();
-  await page.getByLabel('加载几何 JSON').setInputFiles({
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    choose(page, '打开 JSON 或图纸包 ZIP'),
+  ]);
+  await chooser.setFiles({
     name: 'ux.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(document)),
   });
   await expect(page.locator('[data-entity-id]')).toHaveCount(document.entities.length);
+  await closePanels(page);
   await page.evaluate(
     () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
   );
@@ -65,25 +70,30 @@ test('UX01: live length HUD exists before pointerup', async ({ page }) => {
   await page.mouse.up();
 });
 
-test('E01: one split entry per drawing family remembers the last command and supports keyboard menus', async ({
+test('E01: drawing and editing rails expose commands directly and arc modes support keyboard menus', async ({
   page,
 }) => {
   await load(page);
-  const arrow = page.getByRole('button', { name: '线工具', exact: true });
-  await expect(arrow).toHaveText('⌄');
+  const drawing = page.getByRole('complementary', { name: '绘图与标注工具' });
+  const editing = page.getByRole('complementary', { name: '修改工具' });
+  const line = drawing.getByRole('button', { name: '直线', exact: true });
+  await line.click();
+  await expect(line).toHaveAttribute('aria-pressed', 'true');
+  await expect(editing.getByRole('button', { name: '修剪', exact: true })).toBeVisible();
+  const arrow = drawing.getByRole('button', { name: '圆弧工具', exact: true });
   await arrow.focus();
   await page.keyboard.press('ArrowDown');
-  const menu = page.getByRole('dialog', { name: '线工具菜单', exact: true });
+  const menu = page.getByRole('dialog', { name: '圆弧工具菜单', exact: true });
   await expect(menu).toBeVisible();
-  await menu.getByRole('button', { name: '虚线', exact: true }).click();
+  await menu.getByRole('button', { name: '三点圆弧', exact: true }).click();
   await expect(menu).not.toBeVisible();
-  await expect(page.locator('.geo-split [data-command="hidden"]')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'CAD 命令' })).toContainText('三点圆弧');
   await arrow.click();
   await page.keyboard.press('Escape');
   await expect(menu).not.toBeVisible();
   await expect(arrow).toBeFocused();
-  await expect(page.getByRole('button', { name: '圆与圆弧', exact: true })).toHaveText('⌄');
-  await expect(page.getByRole('button', { name: '电子笔线型', exact: true })).toHaveText('⌄');
+  await expect(drawing.getByRole('button', { name: '三点圆弧', exact: true })).toBeVisible();
+  await expect(drawing.getByRole('button', { name: '电子笔线型', exact: true })).toBeVisible();
 });
 test('UX05: a standalone point snaps to the actual Z axis', async ({ page }) => {
   await load(page, standardSheet());
@@ -216,6 +226,7 @@ test('UX03/04/16: precise property drafts keep focus and commit once with fixed 
   expect(await json(page)).toEqual(d);
   await choose(page, '恢复');
   expect(await json(page)).toEqual(next);
+  await click(page, { x: -42.5, y: 35 });
   await input.fill('123');
   await input.press('Escape');
   await expect(input).toHaveValue('40');
@@ -445,7 +456,7 @@ for (const [width, height] of [
     async ({ page }) => {
       await page.setViewportSize({ width, height });
       await load(page);
-      await choose(page, '展开编辑');
+      await expect(page.locator('.geo-standalone')).toBeVisible();
       const canvas = page.locator('.geo-view svg');
       const b = (await canvas.boundingBox())!;
       expect(b.y).toBeLessThan(130);
@@ -513,13 +524,17 @@ test('UX01/02: new line and circle preview measurements equal snapped committed 
   await press(page, { x: -20, y: 30 });
   await move(page, { x: -20, y: 30.2 });
   await expect(page.locator('[data-measurement-hud]')).toContainText('20.00 mm');
-  await expect(page.locator('[data-transient=preview-circle]')).toBeVisible();
+  await expect(page.locator('.geo-view [data-kind=circle]')).toBeVisible();
+  const previewRadius = Number(
+    await page.locator('.geo-view [data-kind=circle] circle').first().getAttribute('r'),
+  );
   await page.mouse.up();
   d = await json(page);
   const circle = d.entities.at(-1)!;
   expect(circle.kind).toBe('circle');
   if (circle.kind === 'circle') {
-    expect(circle.radius).toBeCloseTo(Math.hypot(20, 0.2), 3);
+    expect(previewRadius).toBeCloseTo(20, 3);
+    expect(circle.radius).toBeCloseTo(previewRadius, 3);
     expect(point(d, circle.center).x).toBe(0);
   }
   await choose(page, '取消本次吸附');
@@ -620,7 +635,7 @@ test('UX17: resized mobile viewport keeps object and property confirmation acces
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await load(page);
-  await choose(page, '展开编辑');
+  await expect(page.locator('.geo-standalone')).toBeVisible();
   await click(page, { x: -42.5, y: 35 });
   await choose(page, '编辑属性');
   const field = page.getByLabel('长度 (mm)', { exact: true });
@@ -628,7 +643,7 @@ test('UX17: resized mobile viewport keeps object and property confirmation acces
   // Reduced visual space is a browser simulation; this is not a physical software keyboard test.
   await page.setViewportSize({ width: 390, height: 500 });
   await expect(field).toHaveValue('30');
-  const canvas = (await page.locator('.geo-view svg').boundingBox())!;
+  const canvas = (await page.locator('.geo-view > svg').boundingBox())!;
   expect(canvas.height).toBeGreaterThan(100);
   for (const target of [
     field,
@@ -693,4 +708,36 @@ test('UX18: teacher stem is a read-only reference for confirmed finite hidden co
   expect(length(b)).toBeCloseTo(14);
   await choose(page, '撤销');
   expect(await json(page)).toEqual(d);
+});
+test.describe('touch rail hit areas', () => {
+  test.use({ hasTouch: true });
+  for (const [width, height] of [
+    [390, 844],
+    [1024, 768],
+  ]) {
+    test(`44px command target stays inside each rail at ${width}×${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await load(page);
+      for (const id of ['segment', 'move']) {
+        const button = page.locator(`.cad-rail [data-command="${id}"]`);
+        await expect(button).toBeEnabled();
+        await button.scrollIntoViewIfNeeded();
+        const box = (await button.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        const edgeHits = await button.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return [
+            [r.left + 1, r.y + r.height / 2],
+            [r.right - 1, r.y + r.height / 2],
+            [r.x + r.width / 2, r.top + 1],
+            [r.x + r.width / 2, r.bottom - 1],
+          ].every(([x, y]) => el.contains(document.elementFromPoint(x, y)));
+        });
+        expect(edgeHits).toBe(true);
+        await page.touchscreen.tap(box.x + box.width - 2, box.y + box.height / 2);
+        await expect(button).toHaveAttribute('aria-pressed', 'true');
+      }
+    });
+  }
 });

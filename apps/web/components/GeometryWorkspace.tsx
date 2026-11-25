@@ -1,30 +1,30 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { EditorType } from '@tuheng/contracts';
-import { GeometryEditor } from '@tuheng/geometry-editor';
-import { editorRegistry } from '@tuheng/geometry-core';
+import { GeometryEditor, type GeometryEditorHandle } from '@tuheng/geometry-editor';
 export function GeometryWorkspace() {
-  const [type, setType] = useState<EditorType>('VHW_PROJECTION');
+  const editor = useRef<GeometryEditorHandle>(null);
+  const [sheet, setSheet] = useState<{ type: EditorType; revision: number }>({
+    type: 'VHW_PROJECTION',
+    revision: 0,
+  });
   return (
-    <>
-      <label>
-        图纸类型
-        <select
-          aria-label="图纸类型"
-          value={type}
-          onChange={(e) => {
-            if (window.confirm('切换图纸将开始一份新文档，请先导出需要保留的作图。'))
-              setType(e.target.value as EditorType);
-          }}
-        >
-          {Object.entries(editorRegistry).map(([key, def]) => (
-            <option key={key} value={key}>
-              {def.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <GeometryEditor key={type} editorType={type} />
-    </>
+    <GeometryEditor
+      standalone
+      ref={editor}
+      key={sheet.revision}
+      editorType={sheet.type}
+      documentName="独立作图"
+      onEditorTypeChange={(type) => {
+        const current = editor.current?.getDocument();
+        if (current?.editorType === type) return;
+        if (
+          (current?.entities.length || current?.auxiliarySystems?.length) &&
+          !window.confirm('切换图纸将开始一份新文档，请先导出需要保留的作图。')
+        )
+          return;
+        setSheet((previous) => ({ type, revision: previous.revision + 1 }));
+      }}
+    />
   );
 }

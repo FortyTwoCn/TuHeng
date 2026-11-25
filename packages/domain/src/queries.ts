@@ -1,4 +1,4 @@
-import { AssetArchiveContext, GradingResult } from '@tuheng/contracts';
+import { AssetArchiveContext, GradingRequest, GradingResult } from '@tuheng/contracts';
 import type { Actor, DataPort, Entities } from './entities';
 import {
   ensure,
@@ -180,12 +180,34 @@ export async function viewAttempt(db: DataPort, a: Actor, id: string) {
       errorCode: r.errorCode,
       createdAt: r.createdAt,
     })),
-    suggestions: suggestions.map((s) => ({
-      id: s.id,
-      runId: s.runId,
-      result: GradingResult.parse(s.result),
-      processedAssets: s.processedAssets,
-    })),
+    suggestions: suggestions.map((s) => {
+      const result = GradingResult.parse(s.result);
+      const annotations = result.geometryAnnotations ?? [];
+      const cited = new Set(annotations.flatMap((annotation) => annotation.relationIds));
+      // Resolve cited relations against the immutable request that produced this suggestion.
+      const request = cited.size
+        ? GradingRequest.safeParse(runs.find((r) => r.id === s.runId)?.request)
+        : undefined;
+      const relations = request?.success
+        ? (request.data.geometryEvidence?.derivedRelations ?? [])
+        : [];
+      const members = new Map(
+        relations.filter((r) => cited.has(r.id)).map((r) => [r.id, r.entityIds]),
+      );
+      const geometryHighlights = annotations.map((annotation) => [
+        ...new Set([
+          ...annotation.entityIds,
+          ...annotation.relationIds.flatMap((id) => members.get(id) ?? []),
+        ]),
+      ]);
+      return {
+        id: s.id,
+        runId: s.runId,
+        result,
+        processedAssets: s.processedAssets,
+        geometryHighlights,
+      };
+    }),
     decisions,
     appeals: await db.list('appeal', { attemptId: id }),
   };

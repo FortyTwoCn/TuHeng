@@ -46,7 +46,7 @@ export function writeReferenceRelation(
   source: ReferenceRelation['source'] = 'USER',
   replacePosition = true,
 ) {
-  if (doc.schemaVersion !== 'tuheng.geometry/2.2.0') doc.schemaVersion = 'tuheng.geometry/2.1.0';
+  if (doc.schemaVersion === 'tuheng.geometry/2.0.0') doc.schemaVersion = 'tuheng.geometry/2.1.0';
   doc.referenceRelations ??= [];
   // A new explicit placement replaces the previous observation of the same kind, not unrelated bindings.
   doc.referenceRelations = doc.referenceRelations.filter(

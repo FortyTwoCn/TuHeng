@@ -227,6 +227,7 @@ export function QuestionEditor({
                 value={geometry}
                 onChange={setGeometry}
                 role="teacher"
+                documentName="题干图纸"
               />
             )}
           </>

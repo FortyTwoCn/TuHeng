@@ -4,6 +4,7 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { GeometryDocument, type Vec2 } from '@tuheng/contracts';
 import { createDocument, addDrawing, point } from '@tuheng/geometry-core';
 import { choose, closePanels } from './editor-controls';
+import { activateCommand } from './editor-fixture';
 import { handDrawnCurve } from '../hand-drawn-curve-fixtures';
 
 function fixture() {
@@ -50,11 +51,15 @@ async function json(page: Page) {
   return GeometryDocument.parse(JSON.parse(readFileSync((await (await download).path())!, 'utf8')));
 }
 async function load(page: Page, doc: GeometryDocument) {
+  await expect(page.locator('[data-workspace-ready=true]').first()).toBeVisible();
   await page.getByLabel('加载几何 JSON').setInputFiles({
     name: 'curve.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(doc)),
   });
+  // Empty sheets can have the same entity count. Wait for File.text() and
+  // document replacement to finish before picking the next drawing command.
+  await expect(page.getByLabel('加载几何 JSON')).toHaveValue('');
   await expect(page.locator('[data-entity-id]')).toHaveCount(doc.entities.length);
 }
 test.beforeEach(async ({ page }) => {
@@ -72,21 +77,16 @@ for (const width of [1366, 390])
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     const base = fixture();
     await load(page, base);
-    await page
-      .getByRole('button', { name: width === 390 ? '绘图' : '线工具', exact: true })
-      .click();
-    await page.getByRole('button', { name: '曲线', exact: true }).click();
+    await activateCommand(page.locator('.geometry-editor'), 'spline');
     await click(page, { x: -50, y: 40 });
-    await click(page, { x: -10, y: 10 });
     const q = await screen(page, { x: -35, y: 30 });
     await click(page, { x: -35 + 2 / q.scale, y: 30 + 2 / q.scale });
     await click(page, { x: -20 + 2 / q.scale, y: 2 / q.scale });
-    await expect(page.locator('[data-kind=curve]')).toHaveCount(0);
-    await expect(page.locator('[data-transient=curve-preview]')).toHaveAttribute('d', /C/);
-    await expect(page.getByRole('button', { name: '确认曲线', exact: true })).toBeDisabled();
-    await page.screenshot({ path: `test-results/curves/preview-${width}.png`, fullPage: true });
     await click(page, { x: -10, y: 10 });
-    await page.getByRole('button', { name: '确认曲线', exact: true }).click();
+    await expect(page.locator('.cad-command-state')).toContainText('样条');
+    expect(await json(page)).toEqual(base);
+    await page.screenshot({ path: `test-results/curves/preview-${width}.png`, fullPage: true });
+    await page.getByRole('button', { name: '完成', exact: true }).click();
     const doc = await json(page),
       c = doc.entities.at(-1)!;
     expect(c.kind).toBe('curve');
@@ -116,14 +116,17 @@ for (const width of [1366, 390])
     await choose(page, '选择');
     const initialPath = await page.locator('[data-kind=curve] > path').getAttribute('d');
     const from = await screen(page, { x: -35, y: 30 }),
-      to = await screen(page, { x: -41, y: 34 });
+      to = await screen(page, { x: -39, y: 17 });
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
     await page.mouse.move(to.x, to.y, { steps: 8 });
     await expect(page.locator('[data-kind=curve] > path')).not.toHaveAttribute('d', initialPath!);
     await page.mouse.up();
     const moved = await json(page);
-    expect(point(moved, c.pointIds[1])).not.toEqual(point(doc, c.pointIds[1]));
+    const changed = moved.entities.find(e=>e.id===c.id);
+    if (changed?.kind!=='curve') throw Error('curve lost after knot drag');
+    expect(changed.pointIds[1]).toBe(c.pointIds[1]);
+    expect(point(moved, changed.pointIds[1])).not.toEqual(point(doc,c.pointIds[1]));
     expect(moved.entities.slice(0, 2)).toEqual(base.entities.slice(0, 2));
     await choose(page, '撤销');
     expect(await json(page)).toEqual(doc);
@@ -194,22 +197,22 @@ test.describe('touch curve creation', () => {
   }) => {
     const base = fixture();
     await load(page, base);
-    await page.getByRole('button', { name: '绘图', exact: true }).tap();
-    await page.getByRole('button', { name: '曲线', exact: true }).tap();
+    const editor = page.locator('.geometry-editor');
+    await activateCommand(editor, 'spline', true);
     const tap = async (p: Vec2) => {
       const q = await screen(page, p);
       await page.touchscreen.tap(q.x, q.y);
     };
     await tap({ x: -50, y: 40 });
     await tap({ x: -10, y: 10 });
-    await page.getByRole('button', { name: '取消曲线', exact: true }).tap();
+    await page.getByRole('button', { name: '取消', exact: true }).tap();
     expect(await json(page)).toEqual(base);
-    await expect(page.locator('[data-transient=curve-preview]')).toHaveCount(0);
-    await tap({ x: -50, y: 40 });
+    await expect(page.getByRole('region', { name: 'CAD 命令' })).toHaveCount(0);
+    await activateCommand(editor, 'spline', true);
     await tap({ x: -10, y: 10 });
     await tap({ x: -35, y: 30 });
     await tap({ x: -50, y: 40 });
-    await page.getByRole('button', { name: '确认曲线', exact: true }).tap();
+    await page.getByRole('button', { name: '完成', exact: true }).tap();
     const doc = await json(page),
       c = doc.entities.at(-1)!;
     if (c.kind !== 'curve') throw Error();
@@ -237,15 +240,17 @@ for (const width of [1366, 390])
       await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
       if (index) await page.mouse.wheel(0, index === 1 ? -320 : 320);
       await page.waitForTimeout(100);
-      const samples = handDrawnCurve(shape).map((p) => ({
-        x: p.x * (width === 390 ? 0.6 : 1),
-        y: p.y * (width === 390 ? 0.6 : 1),
-      }));
+      const path = handDrawnCurve(shape);
+      const halfWidth = Math.max(...path.map(p=>Math.abs(p.x)));
+      const halfHeight = Math.max(...path.map(p=>Math.abs(p.y)));
+      const ratio = Math.min(1,(rect.width/2-14)/halfWidth, (rect.height*0.3-14)/halfHeight);
+      const samples = path.map(p=>({x:p.x*ratio,y:p.y*ratio}));
       const at = (p: Vec2) => ({
         x: rect.x + rect.width / 2 + p.x,
         y: rect.y + rect.height * 0.3 - p.y,
       });
       const start = at(samples[0]);
+      expect(await page.evaluate(p => !!document.elementFromPoint(p.x,p.y)?.closest('svg[aria-label="统一展开图绘图区"]'),start)).toBe(true);
       await page.mouse.move(start.x, start.y);
       await page.mouse.down();
       for (const p of samples.slice(1)) {

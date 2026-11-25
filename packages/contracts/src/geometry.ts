@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import {
+  simpleHatchPolygon,
+  hatchPatternExtent,
+  HATCH_ROW_LIMIT,
+  HATCH_WORK_LIMIT,
+} from './hatch-validation';
+export { HATCH_ROW_LIMIT, HATCH_WORK_LIMIT } from './hatch-validation';
 import { GeometryDocument as LegacyGeometryDocument } from './geometry-v1';
 export { LegacyGeometryDocument };
 
@@ -18,12 +25,15 @@ const id = z
   .max(100)
   .regex(/^[\w.-]+$/);
 const scalar = z.number().finite().min(-10000).max(10000);
+const degrees = z.number().finite().min(-360).max(360);
+const signedSweep = degrees.refine((n) => Math.abs(n) > 0.001, '扫角必须非零');
+const paperSize = scalar.positive().max(100);
 export const GeometryTargetRef = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('entity'), entityId: id }).strict(),
   z
     .object({
       kind: z.literal('baseAxis'),
-      axisId: z.enum(['X', 'Z', 'Y_H', 'Y_W', 'x', 'y', 'z']),
+      axisId: z.enum(['X', 'Z', 'Y_H', 'Y_W', 'MITER_45', 'x', 'y', 'z']),
     })
     .strict(),
   z.object({ kind: z.literal('projectionAxis'), systemId: id }).strict(),
@@ -51,6 +61,17 @@ const base = {
   viewId: id,
   layerId: id,
   lineStyle: LineStyle,
+  appearance: z
+    .object({
+      widthMm: z.number().finite().min(0.05).max(5).optional(),
+      color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .optional(),
+      pattern: z.enum(['SOLID', 'DASHED', 'CENTER', 'PHANTOM', 'GUIDE']).optional(),
+    })
+    .strict()
+    .optional(),
   scope: z.enum(['VIEW', 'SHEET']).optional(),
   sampling: z
     .object({
@@ -139,7 +160,11 @@ export const GeometryEntity = z.discriminatedUnion('kind', [
       ...base,
       kind: z.literal('curve'),
       pointIds: z.array(id).min(3).max(128),
-      interpolation: z.literal('CUBIC_HERMITE'),
+      interpolation: z.enum(['CUBIC_HERMITE','QUADRATIC_BSPLINE']),
+      parameterRange: z
+        .tuple([z.number().min(0).max(1), z.number().min(0).max(1)])
+        .refine(([from, to]) => from < to, '样条参数区间无效')
+        .optional(),
       samples: stroke.optional(),
     })
     .strict(),
@@ -150,6 +175,90 @@ export const GeometryEntity = z.discriminatedUnion('kind', [
       points: z.array(Vec2).min(2).max(4096),
       samples: stroke.optional(),
       fitStatus: z.literal('UNFITTED'),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      kind: z.literal('ellipse'),
+      center: id,
+      majorRadius: scalar.positive(),
+      minorRadius: scalar.positive(),
+      angle: degrees,
+      startAngle: degrees,
+      sweep: signedSweep,
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      kind: z.literal('text'),
+      position: Vec2,
+      angle: degrees,
+      size: paperSize,
+      content: z.string().trim().min(1).max(400),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      kind: z.literal('symbol'),
+      position: Vec2,
+      angle: degrees,
+      size: paperSize,
+      symbolType: z.enum(['DIRECTION', 'LEFT_ROTATION', 'RIGHT_ROTATION']),
+      label: z.string().trim().max(40).optional(),
+      labelPosition: Vec2.optional(),
+      arrowLength: z.number().finite().positive().max(30000).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      kind: z.literal('dimension'),
+      dimensionType: z.enum(['LINEAR', 'ALIGNED', 'ANGULAR', 'RADIUS', 'DIAMETER']),
+      linearAxis: z.enum(['X', 'Y']).optional(),
+      linearAngle: degrees.optional(),
+      referenceIds: z.array(id).min(1).max(3),
+      position: Vec2,
+      precision: z.number().int().min(0).max(6),
+      textOverride: z.string().max(100),
+      textSize: paperSize,
+      arrowStyle: z.enum(['CLOSED', 'OPEN']),
+      tolerance: z.object({
+        code: z.string().trim().max(20), upper: z.string().trim().max(24), lower: z.string().trim().max(24),
+        showCode: z.boolean(), showDeviation: z.boolean(),
+      }).strict().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      kind: z.literal('engineeringAnnotation'),
+      position: Vec2,
+      angle: degrees,
+      size: paperSize,
+      annotationType: z.enum(['DATUM', 'ROUGHNESS', 'GEOMETRIC_TOLERANCE', 'TOLERANCE_TEXT']),
+      roughnessMode: z.enum(['BASIC', 'REMOVAL_REQUIRED', 'REMOVAL_PROHIBITED']).optional(),
+      leader: Vec2.optional(),
+      roughnessDetails: z.object({
+        accessory: z.enum(['NONE','BAR','ALL_AROUND','AFTER_WELD']),
+        texture: z.enum(['NONE','PARALLEL','PERPENDICULAR','CROSSED','MULTIDIRECTIONAL','CIRCULAR','RADIAL','NON_DIRECTIONAL']),
+        method: z.string().trim().max(60), extent: z.enum(['NONE','ALL','REMAINDER']),
+      }).strict().optional(),
+      toleranceRows: z.array(z.array(z.string().trim().max(80)).length(6)).min(1).max(3).optional(),
+      fields: z.array(z.string().trim().max(80)).min(1).max(6),
+    })
+    .strict(),
+  z
+    .object({
+      ...base,
+      kind: z.literal('hatch'),
+      loops: z.array(z.array(id).min(1).max(256)).min(1).max(16),
+      spans: z.array(z.array(z.object({entityId:id, from:z.number().finite().min(-1e7).max(1e7), to:z.number().finite().min(-1e7).max(1e7)}).strict()).min(1).max(256)).min(1).max(16).optional(),
+      origin: Vec2,
+      angle: degrees,
+      spacing: z.number().finite().min(0.1).max(500),
     })
     .strict(),
   z
@@ -166,6 +275,47 @@ export const GeometryEntity = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export type GeometryEntity = z.infer<typeof GeometryEntity>;
+export type CadEntity = Extract<
+  GeometryEntity,
+  {
+    kind: 'ellipse' | 'text' | 'symbol' | 'dimension' | 'engineeringAnnotation' | 'hatch';
+  }
+>;
+export function isCadEntity(entity: GeometryEntity): entity is CadEntity {
+  return ['ellipse', 'text', 'symbol', 'dimension', 'engineeringAnnotation', 'hatch'].includes(
+    entity.kind,
+  );
+}
+/** Return the ordered point cycle for a set of boundary segments; require one connected ring. */
+export function hatchRing(edges: Extract<GeometryEntity, { kind: 'segment' }>[]): string[] {
+  const adjacent = new Map<string, string[]>();
+  for (const e of edges) {
+    for (const [a, b] of [
+      [e.startPoint, e.endPoint],
+      [e.endPoint, e.startPoint],
+    ]) {
+      const list = adjacent.get(a) ?? [];
+      list.push(b);
+      adjacent.set(a, list);
+    }
+  }
+  if (edges.length < 3 || [...adjacent.values()].some((list) => list.length !== 2)) return [];
+  const first = edges[0].startPoint,
+    ordered = [first],
+    visited = new Set(ordered);
+  let previous = first,
+    current = edges[0].endPoint;
+  while (current !== first) {
+    if (visited.has(current)) return [];
+    visited.add(current);
+    ordered.push(current);
+    const next = adjacent.get(current)!.find((p) => p !== previous);
+    if (!next) return [];
+    previous = current;
+    current = next;
+  }
+  return ordered.length === edges.length ? ordered : [];
+}
 export const RelationKind = z.enum([
   'COINCIDENT',
   'PARALLEL',
@@ -230,6 +380,14 @@ export const ProjectionAxis = z
     oldAxis: z.object({ anchor: Vec2, tangent: Vec2, positiveNormal: Vec2 }).strict(),
     method: z.enum(['FREE', 'PARALLEL', 'PERPENDICULAR']),
     referenceEntityId: id.nullable(),
+    referenceAxis: z
+      .discriminatedUnion('kind', [
+        z
+          .object({ kind: z.literal('baseAxis'), axisId: z.enum(['X', 'Z', 'Y_H', 'Y_W', 'MITER_45']) })
+          .strict(),
+        z.object({ kind: z.literal('projectionAxis'), systemId: id }).strict(),
+      ])
+      .optional(),
   })
   .strict();
 export type ProjectionAxis = z.infer<typeof ProjectionAxis>;
@@ -240,6 +398,7 @@ export const GeometryDocument = z
       'tuheng.geometry/2.0.0',
       'tuheng.geometry/2.1.0',
       'tuheng.geometry/2.2.0',
+      'tuheng.geometry/3.0.0',
     ]),
     editorType: EditorType,
     units: z.literal('mm'),
@@ -320,7 +479,9 @@ export const GeometryDocument = z
     const orthographic = ['VHW_PROJECTION', 'THREE_VIEW'].includes(doc.editorType);
     if (
       doc.referenceRelations &&
-      !['tuheng.geometry/2.1.0', 'tuheng.geometry/2.2.0'].includes(doc.schemaVersion)
+      !['tuheng.geometry/2.1.0', 'tuheng.geometry/2.2.0', 'tuheng.geometry/3.0.0'].includes(
+        doc.schemaVersion,
+      )
     )
       fail('类型化参考关系需要 2.1 文档');
     if (doc.views.length !== (orthographic ? 3 + (doc.auxiliarySystems?.length ?? 0) : 1))
@@ -429,16 +590,33 @@ export const GeometryDocument = z
       }
       if (!a.parentId && (createdViews.has(a.retainedViewId) || createdViews.has(a.replacedViewId)))
         fail('派生视图必须指明父投影系');
-      if (a.method !== 'FREE') {
+      const axisDependencies = a.parentId ? [a.parentId] : [];
+      if (a.referenceAxis) {
+        if (
+          a.method === 'FREE' ||
+          a.referenceEntityId ||
+          doc.schemaVersion !== 'tuheng.geometry/3.0.0'
+        )
+          fail('平行或垂直新轴只能选择一个参考');
+        if (a.referenceAxis.kind === 'projectionAxis') {
+          const referenceId = a.referenceAxis.systemId;
+          const ref = systems.find((s) => s.id === referenceId);
+          if (!ref || ![ref.retainedViewId, ref.newViewId].includes(a.retainedViewId))
+            fail('参考轴与保留面不属于同一投影系');
+          if (a.owner !== 'STUDENT' && ref?.owner === 'STUDENT') fail('教师轴不能依赖学生轴');
+          axisDependencies.push(referenceId);
+        }
+      } else if (a.method !== 'FREE') {
         const r = entities.get(a.referenceEntityId ?? '');
         if (!r || !['line', 'segment'].includes(r.kind) || r.viewId !== a.retainedViewId)
           fail('新轴参考线无效');
         if (a.owner !== 'STUDENT' && r && layers.get(r.layerId) !== 'PROBLEM_STEM')
           fail('教师轴不能依赖学生图形');
       } else if (a.referenceEntityId) fail('普通轴不能声明参考线');
-      edges.set(a.id, a.parentId ? [a.parentId] : []);
+      edges.set(a.id, axisDependencies);
     }
     let samples = 0;
+    let hatchWork = 0;
     for (const e of doc.entities) {
       if (!views.has(e.viewId) || !layers.has(e.layerId)) fail('对象引用不存在的视图或图层');
       const role = layers.get(e.layerId);
@@ -452,7 +630,7 @@ export const GeometryDocument = z
       const refs =
         e.kind === 'segment'
           ? [e.startPoint, e.endPoint]
-          : e.kind === 'circle' || e.kind === 'arc'
+          : e.kind === 'circle' || e.kind === 'arc' || e.kind === 'ellipse'
             ? [e.center]
             : e.kind === 'curve'
               ? [...e.pointIds]
@@ -465,7 +643,8 @@ export const GeometryDocument = z
           fail('题干不能引用可编辑答案点');
       }
       if (e.kind === 'curve') {
-        if (doc.schemaVersion !== 'tuheng.geometry/2.2.0') fail('插值曲线需要 2.2 文档');
+        if (!['tuheng.geometry/2.2.0', 'tuheng.geometry/3.0.0'].includes(doc.schemaVersion))
+          fail('插值曲线需要 2.2 或更新文档');
         if (new Set(e.pointIds).size !== e.pointIds.length) fail('曲线经过点引用不能重复');
         for (let i = 1; i < e.pointIds.length; i++) {
           const a = entities.get(e.pointIds[i - 1]),
@@ -513,11 +692,104 @@ export const GeometryDocument = z
           refs.push(e.referencePlaneId);
         }
       }
+      if (
+        (isCadEntity(e) || e.appearance || (e.kind === 'curve' && e.parameterRange)) &&
+        doc.schemaVersion !== 'tuheng.geometry/3.0.0'
+      )
+        fail('CAD 图元与绘图样式需要 3.0 文档');
+      if (e.kind === 'ellipse' && e.majorRadius < e.minorRadius) fail('长半轴不得小于短半轴');
+      if (e.kind === 'engineeringAnnotation') {
+        if (e.annotationType !== 'ROUGHNESS' && (e.roughnessMode || e.roughnessDetails))
+          fail('表面加工方式仅适用于粗糙度标注');
+        if (e.toleranceRows && (e.annotationType !== 'GEOMETRIC_TOLERANCE' || e.toleranceRows.some(row=>!row[0] || !row[1])))
+          fail('形位公差每行至少需填写特征和公差值');
+        if (e.annotationType === 'TOLERANCE_TEXT') {
+          if (e.fields.length !== 3 || !e.fields[0] || !(e.fields[1] || e.fields[2]))
+            fail('公差文字需填写基本尺寸与至少一侧偏差');
+        } else if (e.fields.some((f) => !f)) fail('工程标注字段不能为空');
+      }
+      if (e.kind === 'dimension' || e.kind === 'hatch') {
+        const dependencies = e.kind === 'dimension' ? e.referenceIds : e.loops.flat();
+        if (new Set(dependencies).size !== dependencies.length) fail('标注或剖面边界引用重复');
+        for (const ref of dependencies) {
+          const value = entities.get(ref);
+          if (!value || value.viewId !== e.viewId) fail('CAD 引用不存在或跨越视图');
+          if (role === 'PROBLEM_STEM' && value?.layerId !== e.layerId) fail('题干不能引用作答对象');
+        }
+        refs.push(...dependencies);
+      }
+      if (e.kind === 'dimension') {
+        const sources = e.referenceIds.map((id) => entities.get(id));
+        const radial = e.dimensionType === 'RADIUS' || e.dimensionType === 'DIAMETER';
+        const angularLines = e.dimensionType === 'ANGULAR' && sources.length === 2;
+        const required = radial ? 1 : e.dimensionType === 'ANGULAR' && !angularLines ? 3 : 2;
+        if (sources.length !== required || sources.some(source => radial
+          ? source?.kind !== 'circle' && source?.kind !== 'arc'
+          : angularLines ? source?.kind !== 'segment' && source?.kind !== 'line'
+          : source?.kind !== 'point'))
+          fail('尺寸标注测量引用无效');
+        if (e.dimensionType === 'ANGULAR' && sources[0]?.kind === 'point') {
+          const vertex = sources[0].position;
+          if (
+            sources
+              .slice(1)
+              .some(
+                (v) =>
+                  v?.kind === 'point' &&
+                  Math.hypot(v.position.x - vertex.x, v.position.y - vertex.y) < 1e-8,
+              )
+          )
+            fail('角度标注不能使用零长射线');
+        }
+      }
+      if (e.kind === 'hatch') {
+        if (e.spans) {
+          if (e.spans.length !== e.loops.length) fail('剖面区间与边界环不对应');
+          for (const [i,spans] of e.spans.entries()) {
+            const loop = e.loops[i] ?? [];
+            if (new Set(spans.map(s=>s.entityId)).size !== loop.length ||
+              spans.some(s=>!loop.includes(s.entityId))) fail('剖面区间引用与边界不一致');
+            for (const span of spans) {
+              const source=entities.get(span.entityId);
+              const [lo,hi]=source?.kind==='curve' ? source.parameterRange ?? [0,1] : [0,1];
+              if (!source || !['segment','line','circle','arc','ellipse','curve'].includes(source.kind) ||
+                Math.abs(span.from-span.to)<=1e-8 ||
+                (source.kind!=='line' && (Math.abs(span.from-span.to)>1+1e-8 ||
+                  (source.kind==='circle' ? Math.min(span.from,span.to)<-1 || Math.max(span.from,span.to)>2
+                    : Math.min(span.from,span.to)<lo-1e-8 || Math.max(span.from,span.to)>hi+1e-8))))
+                fail('剖面边界的参数区间无效');
+            }
+          }
+        } else for (const ring of e.loops) {
+          const borders = ring.map((id) => entities.get(id));
+          if (
+            borders.length === 1 &&
+            (borders[0]?.kind === 'circle' ||
+              (borders[0]?.kind === 'ellipse' && Math.abs(borders[0].sweep) === 360))
+          )
+            continue;
+          const segments = borders.filter((b) => b?.kind === 'segment');
+          const vertices = hatchRing(segments)
+            .map((id) => entities.get(id))
+            .filter((p) => p?.kind === 'point')
+            .map((p) => p.position);
+          if (
+            segments.length !== borders.length ||
+            vertices.length !== segments.length ||
+            !simpleHatchPolygon(vertices)
+          )
+            fail('剖面边界必须闭合且连通');
+        }
+        const rows = hatchPatternExtent(e, entities);
+        if (rows > HATCH_ROW_LIMIT) fail('剖面线超过 4096 排，请增加间距');
+        hatchWork += rows * e.loops.reduce((n, ring) => n + ring.length, 0);
+      }
       edges.set(e.id, refs);
       if ('samples' in e) samples += e.samples?.length ?? 0;
       if (e.kind === 'polyline') samples += e.points.length;
     }
     if (samples > 30000) fail('笔迹采样总数超出限制');
+    if (hatchWork > HATCH_WORK_LIMIT) fail('剖面边界与间距组合超过单图计算限制');
     for (const c of doc.constraints)
       if (c.mode === 'BINDING') {
         if (c.kind !== 'INTERSECTION') fail('本版持续绑定仅支持显式交点');
@@ -541,7 +813,7 @@ export const GeometryDocument = z
         fail('参考对象不存在或自引用');
       if (
         ref.kind === 'baseAxis' &&
-        !(orthographic ? ['X', 'Z', 'Y_H', 'Y_W'] : ['x', 'y', 'z']).includes(ref.axisId)
+        !(orthographic ? ['X', 'Z', 'Y_H', 'Y_W', 'MITER_45'] : ['x', 'y', 'z']).includes(ref.axisId)
       )
         fail('基准轴不属于当前投影体系');
       if (ref.kind === 'origin' && !doc.views.some((v) => v.id === ref.frameId))
@@ -663,6 +935,7 @@ export const GeometryDocument = z
     }
   });
 export type GeometryDocument = z.infer<typeof GeometryDocument>;
+export const GEOMETRY_EVIDENCE_NARRATIVE_LIMIT = 1_000_000;
 export const GeometryEvidence = z
   .object({
     schemaVersion: z.enum([
@@ -670,12 +943,13 @@ export const GeometryEvidence = z
       'tuheng.geometry/2.0.0',
       'tuheng.geometry/2.1.0',
       'tuheng.geometry/2.2.0',
+      'tuheng.geometry/3.0.0',
     ]),
     editorType: EditorType,
     problemDocument: GeometryDocument,
     answerDocument: GeometryDocument,
     derivedRelations: z.array(GeometryRelation).max(10000),
-    narrative: z.string().max(1000000),
+    narrative: z.string().max(GEOMETRY_EVIDENCE_NARRATIVE_LIMIT),
   })
   .refine(
     (e) =>

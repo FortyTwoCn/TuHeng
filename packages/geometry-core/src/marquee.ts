@@ -1,15 +1,19 @@
 import type { GeometryDocument, GeometryEntity, Vec2 } from '@tuheng/contracts';
+import { isCadEntity } from '@tuheng/contracts';
+import { cadDrawing, ellipseAt, textCorners } from './cad-geometry';
 import { localToSheet, viewTransform } from './sheet';
+import { boundaryShape, atPiece } from './parametric-geometry';
+import { diffPoly, polynomialRoots, sumPoly } from './curve-roots';
 import {
   add,
   sub,
   angle,
   arcPoint,
   clipLine,
+  dot,
   lineGeometry,
   point,
   planeOutline,
-  entityPath,
   type Bounds,
 } from './math';
 export type SelectionMode = 'window' | 'crossing';
@@ -29,6 +33,86 @@ export function entityInMarquee(
 ) {
   const at = (p: Vec2) => (space === 'sheet' ? localToSheet(doc, e.viewId, p) : p);
   if (e.kind === 'point') return inside(at(e.position), b);
+  if (e.kind === 'curve') {
+    const shape = boundaryShape(doc, e);
+    if (shape?.kind !== 'parametric') return false;
+    const origin = at({ x: 0, y: 0 }),
+      u = sub(at({ x: 1, y: 0 }), origin),
+      v = sub(at({ x: 0, y: 1 }), origin);
+    // Derivative zeros are the extrema of the actual retained Bézier spans.
+    const pieceInside = (s: (typeof shape.pieces)[number]) => {
+      const candidates = [s.lo, s.hi];
+      for (const axis of ['x', 'y'] as const) {
+        const polynomial = sumPoly(
+          s.x.map((a) => u[axis] * a),
+          s.y,
+          v[axis],
+        );
+        polynomial[0] += origin[axis];
+        candidates.push(...polynomialRoots(diffPoly(polynomial), s.lo, s.hi));
+        if (mode === 'crossing') {
+          for (const wall of [b[axis], b[axis] + (axis === 'x' ? b.width : b.height)]) {
+            candidates.push(...polynomialRoots(sumPoly(polynomial, [-wall]), s.lo, s.hi));
+          }
+        }
+      }
+      const contains = (t: number) => inside(at(atPiece(s, t)), b);
+      return mode === 'window' ? candidates.every(contains) : candidates.some(contains);
+    };
+    return mode === 'window' ? shape.pieces.every(pieceInside) : shape.pieces.some(pieceInside);
+  }
+  if (e.kind === 'ellipse') {
+    const localCenter = point(doc, e.center),
+      c = at(localCenter);
+    const u = sub(at(ellipseAt(localCenter, e, 0)), c),
+      v = sub(at(ellipseAt(localCenter, e, 90)), c);
+    const params = [e.startAngle, e.startAngle + e.sweep];
+    const entry = (t: number) => {
+      if (onArc(t, e.startAngle, e.sweep)) params.push(t);
+    };
+    for (const axis of ['x', 'y'] as const) {
+      const phase = (Math.atan2(v[axis], u[axis]) * 180) / Math.PI;
+      entry(phase);
+      entry(phase + 180);
+      if (mode === 'crossing') {
+        const radius = Math.hypot(u[axis], v[axis]),
+          extent = axis === 'x' ? b.width : b.height;
+        for (const wall of [b[axis], b[axis] + extent]) {
+          const k = (wall - c[axis]) / radius;
+          if (Math.abs(k) > 1 + 1e-9) continue;
+          const t = (Math.acos(Math.max(-1, Math.min(1, k))) * 180) / Math.PI;
+          entry(phase + t);
+          entry(phase - t);
+        }
+      }
+    }
+    const contained = (t: number) => inside(at(ellipseAt(localCenter, e, t)), b);
+    return mode === 'window' ? params.every(contained) : params.some(contained);
+  }
+  if (isCadEntity(e)) {
+    const drawing = cadDrawing(doc, e);
+    const labels = drawing.labels.map((label) => textCorners(label).map(at));
+    if (mode === 'crossing') {
+      // The entire selection window can lie inside the selectable text body.
+      for (const [a, right, , top] of labels) {
+        const p = sub({ x: b.x, y: b.y }, a),
+          u = sub(right, a),
+          v = sub(top, a);
+        if (dot(p, u) >= 0 && dot(p, u) <= dot(u, u) && dot(p, v) >= 0 && dot(p, v) <= dot(v, v))
+          return true;
+      }
+    }
+    const paths = [...drawing.strokes.map((path) => path.map(at)), ...labels];
+    return mode === 'window'
+      ? paths.length > 0 && paths.every((path) => path.every((p) => inside(p, b)))
+      : paths.some((path) =>
+          path.some(
+            (p, i) =>
+              inside(p, b) ||
+              (i > 0 && !!clipLine({ a: path[i - 1], d: sub(p, path[i - 1]), finite: true }, b)),
+          ),
+        );
+  }
   if (e.kind === 'segment' || e.kind === 'line') {
     const l = lineGeometry(doc, e),
       a = at(l.a),
@@ -65,13 +149,7 @@ export function entityInMarquee(
     }
     return candidates.some((p) => inside(p, b) && relevant(angle(sub(p, c))));
   }
-  const p = (
-    e.kind === 'curve'
-      ? entityPath(doc, e, b)
-      : e.kind === 'polyline'
-        ? e.points
-        : planeOutline(doc, e)
-  ).map(at);
+  const p = (e.kind === 'polyline' ? e.points : planeOutline(doc, e)).map(at);
   return mode === 'window'
     ? p.every((v) => inside(v, b))
     : p.some(

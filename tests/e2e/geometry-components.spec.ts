@@ -1,49 +1,7 @@
-import { test, expect, type Page, type Locator } from '@playwright/test';
-import { build } from 'esbuild';
+import { test, expect } from '@playwright/test';
+import { setup, at } from './editor-fixture';
 import { cpus, platform } from 'node:os';
 import { mkdirSync, writeFileSync } from 'node:fs';
-let script = '',
-  css = '';
-test.beforeAll(async () => {
-  const built = await build({
-    entryPoints: ['tests/components/editor-fixture.tsx'],
-    bundle: true,
-    write: false,
-    outdir: 'fixture',
-    platform: 'browser',
-    format: 'iife',
-    define: { 'process.env.NODE_ENV': '"production"' },
-    alias: {
-      '@tuheng/geometry-editor/src/styles.css': './packages/geometry-editor/src/styles.css',
-    },
-  });
-  script = built.outputFiles.find((f) => f.path.endsWith('.js'))!.text;
-  css = built.outputFiles.find((f) => f.path.endsWith('.css'))!.text;
-});
-async function setup(page: Page) {
-  await page.route('**/__test/editor-fixture', (r) =>
-    r.fulfill({
-      contentType: 'text/html',
-      body:
-        '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:8px;font-family:system-ui}' +
-        css +
-        '</style></head><body><div id="root"></div><script>' +
-        script +
-        '</script></body></html>',
-    }),
-  );
-  await page.goto('/__test/editor-fixture');
-  await expect(page.locator('.geometry-editor')).toHaveCount(2);
-}
-async function at(svg: Locator, x: number, y: number) {
-  return svg.evaluate(
-    (e, p) => {
-      const q = new DOMPoint(p.x, -p.y).matrixTransform((e as SVGSVGElement).getScreenCTM()!);
-      return { x: q.x, y: q.y };
-    },
-    { x, y },
-  );
-}
 test.use({ viewport: { width: 1366, height: 900 } });
 test('UX26: two controlled editors isolate keyboard, camera and same-revision input drafts', async ({
   page,
@@ -75,13 +33,22 @@ test('UX26: two controlled editors isolate keyboard, camera and same-revision in
   await second.locator('.geo-view svg').focus();
   await page.keyboard.press('Control+z');
   expect(await page.evaluate(() => window.editorFixture.documents())).toEqual(next);
-  const camera = await second.locator('svg').getAttribute('viewBox');
+  const camera = () =>
+    second.locator('.geo-view > svg').evaluate((el) => {
+      const svg = el as SVGSVGElement,
+        box = svg.viewBox.baseVal;
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2, scale: svg.getScreenCTM()!.a };
+    });
+  const beforeZoom = await camera();
   await svg.focus();
   await page.mouse.move(p.x, p.y);
   await page.mouse.wheel(0, -250);
   await page.waitForTimeout(100);
-  expect(await second.locator('svg').getAttribute('viewBox')).toBe(camera);
-  const c = await at(second.locator('svg'), -42.5, 35);
+  const afterZoom = await camera();
+  expect(afterZoom.x).toBeCloseTo(beforeZoom.x, 5);
+  expect(afterZoom.y).toBeCloseTo(beforeZoom.y, 5);
+  expect(afterZoom.scale).toBeCloseTo(beforeZoom.scale, 5);
+  const c = await at(second.locator('.geo-view > svg'), -42.5, 35);
   await page.mouse.click(c.x, c.y);
   await expect(second.locator('.geo-compact-summary')).toBeVisible();
   await expect(second.locator('.geo-compact-summary')).toContainText('25.00 mm');
@@ -202,8 +169,16 @@ for (const [w, h] of [
       e.setAttribute('style', 'width:' + width + 'px;flex:none');
     }, w - 16);
     const svg = first.locator('.geo-view svg');
-    const pos = await at(svg, -42.5, 35);
-    await page.mouse.click(pos.x, pos.y);
+    const selectSegment = async () => {
+      const pos = await at(svg, -42.5, 35);
+      await page.mouse.click(pos.x, pos.y);
+      const candidates = first.getByLabel('重叠对象');
+      if (await candidates.isVisible()) {
+        const segment = candidates.locator('option', { hasText: '线段' }).first();
+        await candidates.selectOption((await segment.getAttribute('value'))!);
+      }
+    };
+    await selectSegment();
     const card = first.getByRole('dialog', { name: '对象属性' }),
       heading = card.locator('.geo-card-heading');
     const expand = card.getByRole('button', { name: '编辑属性', exact: true });
@@ -237,7 +212,7 @@ for (const [w, h] of [
     expect((await page.evaluate(() => window.editorFixture.documents()[0]!)).entities).toEqual(
       before.entities,
     );
-    if (!(await heading.isVisible())) await page.mouse.click(pos.x, pos.y);
+    if (!(await heading.isVisible())) await selectSegment();
     await heading.getByRole('button', { name: '删除', exact: true }).click();
     expect(
       (await page.evaluate(() => window.editorFixture.documents()[0]!)).entities.length,

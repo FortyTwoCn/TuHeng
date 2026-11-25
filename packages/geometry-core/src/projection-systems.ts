@@ -3,6 +3,7 @@ import type { GeometryDocument, ProjectionAxis, Vec2 } from '@tuheng/contracts';
 import { add, sub, dot, scale, unit, lineGeometry } from './math';
 import { transact } from './document';
 import { localToSheet, upgradeGeometryDocument, viewTransform } from './sheet';
+import { resolveReference } from './references';
 export function changedPlaneProjection(
   retained: Vec2,
   replaced: Vec2,
@@ -20,6 +21,7 @@ export interface AxisConstruction {
   parentId: string | null;
   method: ProjectionAxis['method'];
   referenceEntityId: string | null;
+  referenceAxis?: ProjectionAxis['referenceAxis'];
   anchor: Vec2;
   through: Vec2;
   side: 1 | -1;
@@ -69,9 +71,16 @@ export function renameProjectionAxis(
 }
 export function axisDirection(
   doc: GeometryDocument,
-  spec: Pick<AxisConstruction, 'method' | 'referenceEntityId' | 'anchor' | 'through'>,
+  spec: Pick<
+    AxisConstruction,
+    'method' | 'referenceEntityId' | 'referenceAxis' | 'anchor' | 'through'
+  >,
 ): Vec2 {
   if (spec.method === 'FREE') return unit(sub(spec.through, spec.anchor));
+  if (spec.referenceAxis) {
+    const d = resolveReference(doc, spec.referenceAxis).direction!;
+    return unit(spec.method === 'PARALLEL' ? d : { x: -d.y, y: d.x });
+  }
   const e = doc.entities.find((e) => e.id === spec.referenceEntityId);
   if (!e || !['segment', 'line'].includes(e.kind)) throw new Error('请选择保留面中的参考线');
   const l = lineGeometry(doc, e),
@@ -136,6 +145,7 @@ export function addProjectionAxis(
         oldAxis,
         method: spec.method,
         referenceEntityId: spec.referenceEntityId,
+        ...(spec.referenceAxis ? { referenceAxis: spec.referenceAxis } : {}),
       });
       d.views.push({
         id: newViewId,
@@ -160,7 +170,11 @@ export function deleteProjectionAxis(
     (axis.owner !== 'STUDENT' || axis.locked || !doc.sheet?.allowAuxiliaryViews)
   )
     throw new Error('题干轴只读');
-  const dependents = (doc.auxiliarySystems ?? []).filter((a) => a.parentId === id);
+  const dependents = (doc.auxiliarySystems ?? []).filter(
+    (a) =>
+      a.parentId === id ||
+      (a.referenceAxis?.kind === 'projectionAxis' && a.referenceAxis.systemId === id),
+  );
   const objects = doc.entities.filter((e) => e.viewId === axis.newViewId);
   if (
     doc.referenceRelations?.some(

@@ -7,6 +7,7 @@ import {
   useState,
   useEffect,
   useReducer,
+  useSyncExternalStore,
 } from 'react';
 import { GeometryDocument, type EditorType } from '@tuheng/contracts';
 import {
@@ -14,33 +15,35 @@ import {
   DocumentHistory,
   serializeGeometryDocument,
   exportGeometryNarrative,
-  loadGeometryDocument,
   deletionSet,
   deleteEntities,
   copyEntities,
   editorRegistry,
   combineAnswer,
   upgradeGeometryDocument,
-  orthographic,
-  exportSheetSvg,
-  importPenStroke,
   targetFromKey,
   targetCapabilities,
   deleteProjectionAxis,
   resolveReference,
+  CAD_COMMANDS,
+  type Bounds,
 } from '@tuheng/geometry-core';
 import { Viewport } from './Viewport';
-import { ToolPicker } from './ToolPicker';
-import { PlaneCreator } from './PlaneCreator';
-import { RelatedPlaneTools } from './PlaneTools';
-import { ProjectionSettings } from './ProjectionSettings';
-import { RulerControls } from './RulerControls';
-import { EditorToolbar } from './EditorToolbar';
-import { EditorPopover } from './EditorPopover';
+import { DrawingRail, ModifyRail, WorkspaceTopbar, WorkspaceStatus } from './workspace-controls';
+import { WorkspaceSettings, initialSettings } from './WorkspaceSettings';
+import { useCadCommand, type CadId } from './useCadCommand';
+import { DrawingAppearance, linePresets, type Appearance } from './CadPreferences';
+import { GridSpacing } from './GridSpacing';
+import { downloadCadFile } from './cad-download';
+import { DrawingFileInput, downloadDrawingText } from './DrawingFiles';
 import { commandRegistry, commandUnavailable, textEntry, type CommandId } from './commands';
-import { sessionReducer } from './session';
+import { sessionReducer, viewportSession } from './session';
 import type { Ruler } from './types';
 import './styles.css';
+// The server can show the work area before it can accept browser gestures.
+const browserReady = () => true;
+const serverReady = () => false;
+const noSubscription = () => () => undefined;
 export interface GeometryEditorHandle {
   getDocument: () => GeometryDocument;
   exportJSON: () => string;
@@ -50,6 +53,9 @@ export interface GeometryEditorHandle {
   fitToContent: () => void;
 }
 export interface GeometryEditorProps {
+  standalone?: boolean;
+  documentName?: string;
+  onEditorTypeChange?: (type: EditorType) => void;
   editorType?: EditorType;
   value?: unknown;
   defaultValue?: unknown;
@@ -64,6 +70,9 @@ export interface GeometryEditorProps {
 export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorProps>(
   function GeometryEditor(
     {
+      standalone = false,
+      documentName,
+      onEditorTypeChange,
       editorType = 'VHW_PROJECTION',
       value,
       defaultValue,
@@ -76,6 +85,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     },
     ref,
   ) {
+    const ready = useSyncExternalStore(noSubscription,browserReady,serverReady);
     const [internal, setInternal] = useState<unknown>(
       () => defaultValue ?? createDocument(editorType),
     );
@@ -94,34 +104,25 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     // The fingerprint is computed once at the controlled boundary, never on pointermove.
     const fingerprint = useMemo(() => JSON.stringify(doc), [doc]);
     const revision = useMemo(() => ({ fingerprint }), [fingerprint]);
-    const history = useRef(new DocumentHistory(doc));
-    const [session, dispatch] = useReducer(sessionReducer, {
-      tool: 'select',
+    const [history] = useState(() => ({ current: new DocumentHistory(doc) }));
+    const [workspace, dispatch] = useReducer(sessionReducer, {
+      activity: { kind: 'tool', tool: 'select' },
       penStyle: 'visible',
       selected: [],
       panel: null,
-      construction: null,
       active: doc.views[0].id,
       expanded: false,
     });
+    const session = viewportSession(workspace);
     const { tool, expanded, panel } = session;
     const selected = session.selected.filter(
       (id) => targetCapabilities(doc, targetFromKey(id), role, readOnly).selectable,
     );
     const select = (ids: string[]) => dispatch({ type: 'select', ids });
     const [message, report] = useState('选择对象，或从空白拖动框选');
-    const [settings, setSettings] = useState({
-      snapping: true,
-      gridSnap: false,
-      projectionSnap: false,
-      axesSnap: true,
-      referenceFilter: false,
-      fingerDraw: false,
-      grid: true,
-      axes: true,
-      labels: doc.settings.labels,
-      hiddenLayers: [] as string[],
-    });
+    const [settings, setSettings] = useState(() => initialSettings(doc));
+    const [appearance, setAppearance] = useState<Appearance>({});
+    const [touch, setTouch] = useState(false);
     const [documentLabels, setDocumentLabels] = useState(doc.settings.labels);
     if (documentLabels !== doc.settings.labels) {
       setDocumentLabels(doc.settings.labels);
@@ -137,22 +138,47 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       angle: 0,
       length: 60,
     });
-    const [exported, setExported] = useState('');
     const root = useRef<HTMLDivElement>(null);
-    const [compact, setCompact] = useState(false);
+    const camera = useRef<Bounds | null>(null);
+    const [fullscreen,setFullscreen]=useState(false);
+    useEffect(()=>{
+      const change=()=>setFullscreen(document.fullscreenElement===root.current);
+      document.addEventListener('fullscreenchange',change);
+      return ()=>document.removeEventListener('fullscreenchange',change);
+    },[]);
+    const fileInput = useRef<HTMLInputElement>(null);
+    const cursorStatusRef = useRef<HTMLOutputElement>(null);
     useEffect(() => {
       const el = root.current;
       if (!el) return;
-      const observer = new ResizeObserver(([e]) => setCompact(e.contentRect.width < 700));
-      observer.observe(el);
-      return () => observer.disconnect();
+      const viewport = window.visualViewport;
+      const syncKeyboard = () => {
+        if (viewport && el.contains(document.activeElement) && textEntry(document.activeElement)) {
+          el.style.setProperty('--geo-keyboard-height', Math.floor(viewport.height) + 'px');
+        } else el.style.removeProperty('--geo-keyboard-height');
+      };
+      viewport?.addEventListener('resize', syncKeyboard);
+      el.addEventListener('focusin', syncKeyboard);
+      el.addEventListener('focusout', syncKeyboard);
+      return () => {
+        viewport?.removeEventListener('resize', syncKeyboard);
+        el.removeEventListener('focusin', syncKeyboard);
+        el.removeEventListener('focusout', syncKeyboard);
+      };
     }, []);
+    const scope = role + ':' + readOnly;
+    const previousScope = useRef(scope);
     useEffect(() => {
-      if (JSON.stringify(history.current.current) !== fingerprint) {
+      if (
+        previousScope.current !== scope ||
+        JSON.stringify(history.current.current) !== fingerprint
+      ) {
+        previousScope.current = scope;
         history.current = new DocumentHistory(doc);
+        dispatch({ type: 'tool', tool: 'select' });
         dispatch({ type: 'patch', patch: { selected: [], construction: null } });
       }
-    }, [fingerprint, doc]);
+    }, [fingerprint, doc, history, scope]);
     const update = (next: GeometryDocument) => {
       if (readOnly) return;
       setInternal(next);
@@ -181,12 +207,13 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       }
       return next;
     };
-    const commit = (next: GeometryDocument) => {
+    const commit = (next: GeometryDocument, label?: string) => {
       if (readOnly || next === doc) return;
       try {
         history.current.current = doc;
         const valid = validate(next);
-        update(history.current.commit(valid));
+        const applied = history.current.commit(valid, label);
+        update(applied);
         select(
           selected.filter((id) => {
             const r = targetFromKey(id);
@@ -200,6 +227,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           }),
         );
         report('已保存到当前文档');
+        return applied;
       } catch (e) {
         report((e as Error).message);
       }
@@ -211,8 +239,25 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         report((e as Error).message);
       }
     };
-    const undo = () => update(history.current.undo()),
-      redo = () => update(history.current.redo());
+    function stepHistory(direction: 'undo' | 'redo', count = 1) {
+      if (readOnly || !(direction === 'undo' ? history.current.canUndo : history.current.canRedo))
+        return;
+      dispatch({
+        type: 'tool',
+        tool: workspace.activity.kind === 'tool' ? workspace.activity.tool : 'select',
+      });
+      let restored = doc;
+      for (let n = 0; n < count; n++) restored = history.current[direction]();
+      select(
+        selected.filter(
+          (id) => targetCapabilities(restored, targetFromKey(id), role, readOnly).selectable,
+        ),
+      );
+      update(restored);
+      report((direction === 'undo' ? '已撤销 ' : '已恢复 ') + count + ' 步');
+    }
+    const undo = () => stepHistory('undo'),
+      redo = () => stepHistory('redo');
     const fit = () => {
       setZoom(1);
       setFitKey((k) => k + 1);
@@ -261,6 +306,27 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     const activeView = doc.views.some((v) => v.id === session.active)
       ? session.active
       : doc.views[0].id;
+    const cad = useCadCommand(
+      workspace.activity,
+      dispatch,
+      doc,
+      fingerprint,
+      activeView,
+      role,
+      readOnly,
+      selected,
+      commit,
+      report,
+      appearance,
+    );
+    function startCad(id: CadId) {
+      if (readOnly) return;
+      const group=CAD_COMMANDS.find(command=>command.id===id)?.group;
+      if (id==='point') setAppearance({pattern:'SOLID',...linePresets.SOLID});
+      if (group==='尺寸标注' || group==='高级标注') setAppearance({pattern:'GUIDE',...linePresets.GUIDE});
+      cad.start(id);
+      root.current?.querySelector<SVGSVGElement>('.geo-view > svg')?.focus({ preventScroll: true });
+    }
     const runCommand = (id: CommandId) => {
       const entry = commandRegistry.find((e) => e.id === id);
       if (!entry) return;
@@ -273,14 +339,11 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         dispatch({ type: 'tool', tool: id as typeof tool });
         if (id === 'projection') select([]);
         report(
-          entry.name +
-            (id === 'box'
-              ? '：点击或拖动两个对角点'
-              : id === 'circle'
-                ? '：选择圆心，再选择圆周点'
-                : id === 'arc'
-                  ? '：选择圆心、起点、终点'
-                  : ''),
+          id === 'box'
+            ? '点击或拖动两个对角点'
+            : id === 'projection'
+              ? '选择不同投影中的对应对象'
+              : entry.name,
         );
         return;
       }
@@ -317,52 +380,6 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           : '请选择参考线或投影轴',
       );
     };
-    const output = (kind: 'json' | 'narrative' | 'svg') => {
-      const text =
-        kind === 'json'
-          ? serializeGeometryDocument(doc)
-          : kind === 'svg'
-            ? exportSheetSvg(doc)
-            : exportGeometryNarrative(doc);
-      setExported(text);
-      onExport?.(text, kind);
-      const url = URL.createObjectURL(
-          new Blob([text], {
-            type:
-              kind === 'svg'
-                ? 'image/svg+xml'
-                : kind === 'json'
-                  ? 'application/json'
-                  : 'text/plain',
-          }),
-        ),
-        a = document.createElement('a');
-      a.href = url;
-      a.download = `tuheng.${kind === 'narrative' ? 'txt' : kind}`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    };
-    const checkbox = (
-      key:
-        | 'snapping'
-        | 'gridSnap'
-        | 'projectionSnap'
-        | 'axesSnap'
-        | 'referenceFilter'
-        | 'grid'
-        | 'axes'
-        | 'labels',
-      label: string,
-    ) => (
-      <label key={key}>
-        <input
-          type="checkbox"
-          checked={settings[key]}
-          onChange={(e) => setSettings((s) => ({ ...s, [key]: e.target.checked }))}
-        />
-        {label}
-      </label>
-    );
     if (!parsed.success)
       return (
         <div role="alert">
@@ -376,14 +393,92 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     const linked = doc.projectionGroups
       .filter((g) => g.entityIds.some((id) => selected.includes(id)))
       .flatMap((g) => g.entityIds);
+    const openSettings = () =>
+      dispatch({ type: 'patch', patch: { panel: panel === 'settings' ? null : 'settings' } });
+    const toggle = (key: 'objectSnap' | 'grid' | 'gridSnap' | 'tracking' | 'ortho') =>
+      setSettings((s) => ({ ...s, [key]: !s[key] }));
+    const activeCommand =
+      cad.session?.commandId ??
+      (panel === 'axis'
+        ? 'new-axis'
+        : session.construction
+          ? (session.construction.mode === 'create' ? 'construct-' : 'relation-') +
+            (session.construction.spec.directionMode === 'PARALLEL' ? 'parallel' : 'perpendicular')
+          : tool);
+    const railProps = {
+      active: activeCommand,
+      readOnly,
+      editorType: doc.editorType,
+      run: runCommand,
+      start: startCad,
+      penStyle: session.penStyle,
+      setPenStyle: (penStyle: typeof session.penStyle) =>
+        dispatch({ type: 'patch', patch: { penStyle } }),
+      selectionMode: settings.selectionMode,
+      setSelectionMode: (selectionMode: typeof settings.selectionMode) =>
+        setSettings((s) => ({ ...s, selectionMode })),
+    };
+    const importJson = () => fileInput.current?.click();
+    const output = (kind: 'json' | 'narrative' | 'svg') => downloadDrawingText(doc, kind, onExport);
+    const fileActions = {
+      importJson,
+      json: () => output('json'),
+      svg: () => output('svg'),
+      narrative: () => output('narrative'),
+      png: () => void downloadCadFile(doc, 'png', report),
+      viewPng: () => {if(camera.current) void downloadCadFile(doc,'png',report,camera.current);},
+      zip: () => void downloadCadFile(doc, 'zip', report),
+      inspect: () => dispatch({ type: 'patch', patch: { panel: 'file' } }),
+    };
     return (
       <div
         ref={root}
-        className={`geometry-editor ${expanded ? 'geo-expanded' : ''}`}
+        data-workspace-ready={ready}
+        inert={!ready}
+        className={`geometry-editor ${standalone ? 'geo-standalone' : ''} ${expanded ? 'geo-expanded' : ''} ${settings.inputLayout === 'touch' || (settings.inputLayout === 'auto' && touch) ? 'geo-touch' : ''}`}
+        data-input-layout={settings.inputLayout}
+        data-theme={settings.theme}
+        onPointerUp={(e) => {
+          // Finish the canvas gesture before adapting controls on a hybrid device.
+          if (e.target instanceof Element && e.target.closest('.geo-view > svg')) {
+            setTouch(e.pointerType === 'touch' || e.pointerType === 'pen');
+          }
+        }}
         tabIndex={0}
         aria-label={`${editorRegistry[doc.editorType].name}编辑器`}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing || textEntry(e.target) || e.defaultPrevented) return;
+          if ((e.target === e.currentTarget || e.target instanceof SVGSVGElement) && !panel &&
+              !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey &&
+              (e.key === 'F3' || e.key === 'F8' || e.key === 'F11')) {
+            e.preventDefault();
+            if (!e.repeat) toggle(e.key === 'F3' ? 'objectSnap' : e.key === 'F8' ? 'ortho' : 'tracking');
+            return;
+          }
+          if (
+            cad.session &&
+            (e.key === 'Escape' || (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)))
+          ) {
+            e.preventDefault();
+            cad.send({ type: e.key === 'Escape' ? 'cancel' : 'confirm' });
+            return;
+          }
+          if (
+            !cad.session &&
+            !panel &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey &&
+            (e.target === e.currentTarget || e.target instanceof SVGSVGElement) &&
+            /^[a-z]$/i.test(e.key)
+          ) {
+            const cmd = CAD_COMMANDS.find((c) => c.aliases.includes(e.key.toLowerCase()));
+            if (cmd) {
+              e.preventDefault();
+              startCad(cmd.id);
+            }
+            return;
+          }
           if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             if (e.shiftKey) redo();
@@ -393,7 +488,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
             e.preventDefault();
             redo();
           }
-          if (e.key === 'Delete' || e.key === 'Backspace') {
+          if (!cad.session && (e.key === 'Delete' || e.key === 'Backspace')) {
             e.preventDefault();
             deleteSelection();
           }
@@ -407,194 +502,160 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           }
         }}
       >
-        <div className="geo-heading">
-          <strong>{editorRegistry[doc.editorType].name}</strong>
-          <button type="button" onClick={fit}>
-            完整展开图
-          </button>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'patch', patch: { expanded: !expanded } })}
-          >
-            {expanded ? '退出展开' : '展开编辑'}
-          </button>
-        </div>
-        <EditorToolbar>
-          <div className="geo-tool-scroll">
-            <ToolPicker
-              penStyle={session.penStyle}
-              setPenStyle={(penStyle) => dispatch({ type: 'patch', patch: { penStyle } })}
-              editorType={doc.editorType}
-              tool={tool}
-              run={runCommand}
+        <WorkspaceTopbar
+          title={documentName ?? editorRegistry[doc.editorType].name}
+          fullscreen={fullscreen}
+          toggleFullscreen={()=>{
+            if (document.fullscreenElement === root.current) void document.exitFullscreen().catch(()=>report('无法退出全屏'));
+            else if (root.current?.requestFullscreen) void root.current.requestFullscreen().catch(()=>report('浏览器无法进入全屏'));
+            else if (!standalone) dispatch({type:'patch',patch:{expanded:!expanded}});
+            else report('此浏览器未开放网页全屏');
+          }}
+          expanded={expanded}
+          standalone={standalone}
+          readOnly={readOnly}
+          canUndo={history.current.canUndo}
+          canRedo={history.current.canRedo}
+          operations={history.current.operations}
+          jumpHistory={stepHistory}
+          undo={undo}
+          redo={redo}
+          fit={fit}
+          toggleExpanded={() => dispatch({ type: 'patch', patch: { expanded: !expanded } })}
+          openSettings={openSettings}
+          fileActions={fileActions}
+          startCad={startCad}
+          sheetControl={
+            onEditorTypeChange ? (
+              <select
+                className="cad-sheet-select"
+                aria-label="图纸类型"
+                value={doc.editorType}
+                onChange={(e) => onEditorTypeChange(e.target.value as EditorType)}
+              >
+                {Object.entries(editorRegistry).map(([id, definition]) => (
+                  <option key={id} value={id}>
+                    {definition.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="cad-sheet-title">{editorRegistry[doc.editorType].name}</span>
+            )
+          }
+          styleControls={
+            <>
+              <DrawingAppearance theme={settings.theme}
+                initial={appearance}
+                doc={doc}
+                selected={selected}
+                role={role}
+                readOnly={readOnly}
+                commit={commit}
+                change={setAppearance}
+                report={report}
+              />
+              <GridSpacing key={doc.settings.grid} readOnly={readOnly} value={doc.settings.grid} report={report}
+                change={(grid) => commit({...doc, settings: {...doc.settings, grid}}, '设置网格间距')} />
+            </>
+          }
+        />
+        <DrawingFileInput
+          inputRef={fileInput}
+          readOnly={readOnly}
+          doc={doc}
+          activeView={activeView}
+          role={role}
+          report={report}
+          importStroke={(stroke) => commit(stroke, '导入笔迹')}
+          replaceDocument={(loaded) => {
+            const next = validate(loaded);
+            history.current = new DocumentHistory(next);
+            update(next);
+          }}
+          loaded={() => {
+            dispatch({ type: 'tool', tool: 'select' });
+            select([]);
+            fit();
+          }}
+        />
+        <div className="geo-workspace-body">
+          <DrawingRail {...railProps} />
+          <div className="geo-views">
+            <Viewport
+              document={doc}
+              cad={cad}
+              cursorStatusRef={cursorStatusRef}
+              appearance={appearance}
+              cameraRef={camera}
+              gridSpacing={doc.settings.grid}
+              revision={revision}
+              viewId={activeView}
+              focusKey={focusKey}
+              replace={replace}
+              role={role}
               readOnly={readOnly}
-              compact={compact}
+              tool={tool}
+              selected={selected}
+              select={select}
+              commit={commit}
+              report={report}
+              {...settings}
+              skipSnap={skipSnap}
+              consumeSnap={() => setSkipSnap(false)}
+              ruler={ruler}
+              onRulerChange={setRuler}
+              zoom={zoom}
+              highlighted={[...highlightedEntityIds, ...linked]}
+              fitKey={fitKey}
+              session={session}
+              dispatch={dispatch}
+              runCommand={runCommand}
+              deleteSelection={deleteSelection}
+              copySelection={copySelection}
             />
           </div>
-          <button type="button" disabled={readOnly || !history.current.canUndo} onClick={undo}>
-            撤销
-          </button>
-          <button type="button" disabled={readOnly || !history.current.canRedo} onClick={redo}>
-            恢复
-          </button>
-          {compact ? (
-            <EditorPopover label="更多">
-              {/* Shared settings and file commands */}{' '}
-              <button
-                type="button"
-                aria-pressed={settings.snapping}
-                aria-label="吸附开关"
-                onClick={() => setSettings((s) => ({ ...s, snapping: !s.snapping }))}
-              >
-                吸附
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  dispatch({
-                    type: 'patch',
-                    patch: { panel: panel === 'settings' ? null : 'settings' },
-                  })
-                }
-                aria-label="视图/设置"
-              >
-                视图/设置
-              </button>
-              <button
-                type="button"
-                disabled={readOnly}
-                onClick={() =>
-                  root.current?.querySelector<HTMLInputElement>('.geo-file-input')?.click()
-                }
-              >
-                导入 JSON
-              </button>
-              <button type="button" onClick={() => output('json')}>
-                导出 JSON
-              </button>
-              <button type="button" onClick={() => output('narrative')}>
-                导出关系描述
-              </button>
-              <button type="button" onClick={() => output('svg')}>
-                导出展开图 SVG
-              </button>
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'patch', patch: { panel: 'file' } })}
-              >
-                查看文档
-              </button>
-            </EditorPopover>
-          ) : (
-            <>
-              {' '}
-              <button
-                type="button"
-                aria-pressed={settings.snapping}
-                aria-label="吸附开关"
-                onClick={() => setSettings((s) => ({ ...s, snapping: !s.snapping }))}
-              >
-                吸附
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  dispatch({
-                    type: 'patch',
-                    patch: { panel: panel === 'settings' ? null : 'settings' },
-                  })
-                }
-                aria-label="视图/设置"
-              >
-                视图/设置
-              </button>
-              <EditorPopover label="文件">
-                <button
-                  type="button"
-                  disabled={readOnly}
-                  onClick={() =>
-                    root.current?.querySelector<HTMLInputElement>('.geo-file-input')?.click()
-                  }
-                >
-                  导入 JSON
-                </button>
-                <button type="button" onClick={() => output('json')}>
-                  导出 JSON
-                </button>
-                <button type="button" onClick={() => output('narrative')}>
-                  导出关系描述
-                </button>
-                <button type="button" onClick={() => output('svg')}>
-                  导出展开图 SVG
-                </button>
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'patch', patch: { panel: 'file' } })}
-                >
-                  查看文档
-                </button>
-              </EditorPopover>
-            </>
-          )}
-          <input
-            className="geo-file-input"
-            tabIndex={-1}
-            aria-label="加载几何 JSON"
-            type="file"
-            accept=".json,application/json"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file || readOnly) return;
-              try {
-                if (file.size > 2_000_000) throw Error('文档超过 2MB');
-                const text = await file.text(),
-                  input = JSON.parse(text);
-                const next =
-                  input?.schemaVersion === 'tuheng.stroke/1.0.0'
-                    ? importPenStroke(doc, input, activeView, role)
-                    : loadGeometryDocument(text);
-                commit(upgradeGeometryDocument(next));
-                select([]);
-                fit();
-              } catch (error) {
-                report(`加载失败，${(error as Error).message}`);
-              }
-              e.target.value = '';
-            }}
-          />
-        </EditorToolbar>
-        <div className="geo-views">
-          <Viewport
-            document={doc}
-            revision={revision}
-            viewId={activeView}
-            focusKey={focusKey}
-            replace={replace}
-            role={role}
-            readOnly={readOnly}
-            tool={tool}
-            selected={selected}
-            select={select}
-            commit={commit}
-            report={report}
-            {...settings}
-            skipSnap={skipSnap}
-            consumeSnap={() => setSkipSnap(false)}
-            ruler={ruler}
-            onRulerChange={setRuler}
-            zoom={zoom}
-            highlighted={[...highlightedEntityIds, ...linked]}
-            fitKey={fitKey}
-            session={session}
-            dispatch={dispatch}
-            runCommand={runCommand}
-            deleteSelection={deleteSelection}
-            copySelection={copySelection}
+          <ModifyRail
+            {...railProps}
+            erase={() => (selected.length ? deleteSelection() : startCad('erase'))}
+            canErase={
+              !readOnly &&
+              selected.every(
+                (id) => targetCapabilities(doc, targetFromKey(id), role, readOnly).deletable,
+              )
+            }
           />
         </div>
-        <div className="geo-status" role="status">
-          {message} · {doc.entities.length} 个对象 · mm
-        </div>
+        <WorkspaceStatus
+          cad={cad}
+          viewName={doc.views.find((v) => v.id === activeView)?.name ?? activeView}
+          toolName={
+            CAD_COMMANDS.find((c) => c.id === activeCommand)?.name ??
+            commandRegistry.find((c) => c.id === activeCommand)?.name ??
+            '选择'
+          }
+          message={message}
+          entityCount={doc.entities.length}
+          selectionCount={selected.length}
+          cursorStatusRef={cursorStatusRef}
+          snapping={settings.objectSnap}
+          toggleSnap={() => toggle('objectSnap')}
+          objectTypes={settings.objectTypes}
+          changeObjectTypes={(objectTypes) => setSettings((s) => ({ ...s, objectTypes }))}
+          orthogonal={settings.ortho}
+          toggleOrthogonal={() => toggle('ortho')}
+          grid={settings.grid}
+          toggleGrid={() => toggle('grid')}
+          gridSnap={settings.gridSnap}
+          toggleGridSnap={() => toggle('gridSnap')}
+          tracking={settings.tracking}
+          toggleTracking={() => toggle('tracking')}
+          openSettings={openSettings}
+          theme={settings.theme}
+          toggleTheme={() =>
+            setSettings((s) => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' }))
+          }
+        />
         {(panel === 'settings' || panel === 'file') && (
           <aside
             className="geo-panel"
@@ -611,92 +672,34 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
               </button>
             </div>
             {panel === 'settings' ? (
-              <>
-                <div className="geo-context-actions">
-                  <button type="button" onClick={() => setZoom((z) => Math.min(8, z * 1.25))}>
-                    放大
-                  </button>
-                  <button type="button" onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}>
-                    缩小
-                  </button>
-                  <button type="button" onClick={fit}>
-                    适应画布
-                  </button>
-                  <button type="button" onClick={() => setFocusKey((k) => k + 1)}>
-                    聚焦当前投影
-                  </button>
-                </div>
-                {checkbox('snapping', '吸附')}
-                {checkbox('axesSnap', '参考轴吸附')}
-                {checkbox('gridSnap', '网格吸附')}
-                {checkbox('projectionSnap', '投影对齐吸附')}
-                {checkbox('grid', '显示网格')}
-                {checkbox('axes', '显示坐标轴')}
-                {checkbox('labels', '点名称')}
-                {checkbox('referenceFilter', '框选包含参考轴')}
-                <p>显示与吸附单独设置；隐藏的轴不参与吸附。坐标与角度按当前局部框架记录。</p>
-                {doc.layers.map((layer) => (
-                  <label key={layer.id}>
-                    <input
-                      type="checkbox"
-                      checked={!settings.hiddenLayers.includes(layer.id)}
-                      onChange={(e) =>
-                        setSettings((s) => ({
-                          ...s,
-                          hiddenLayers: e.target.checked
-                            ? s.hiddenLayers.filter((id) => id !== layer.id)
-                            : [...s.hiddenLayers, layer.id],
-                        }))
-                      }
-                    />
-                    {
-                      {
-                        PROBLEM_STEM: '题干图层',
-                        STUDENT_ANSWER: '答案图层',
-                        CONSTRUCTION: '辅助图层',
-                      }[layer.role]
-                    }
-                  </label>
-                ))}
-                <button type="button" aria-pressed={skipSnap} onClick={() => setSkipSnap(true)}>
-                  下一次不吸附
-                </button>
-                <RulerControls
-                  ruler={ruler}
-                  setRuler={setRuler}
-                  fingerDraw={settings.fingerDraw}
-                  setFingerDraw={(fingerDraw) => setSettings((s) => ({ ...s, fingerDraw }))}
-                />
-                {!readOnly && !orthographic(doc) && (
-                  <>
-                    <PlaneCreator
-                      document={doc}
-                      viewId={activeView}
-                      role={role}
-                      commit={commit}
-                      report={report}
-                    />
-                    <RelatedPlaneTools document={doc} role={role} commit={commit} report={report} />
-                    {(role === 'teacher' ||
-                      (!problemDocument &&
-                        !doc.entities.some((e) => e.lineStyle.startsWith('PROBLEM')))) && (
-                      <ProjectionSettings document={doc} perform={perform} />
-                    )}
-                  </>
-                )}
-              </>
+              <WorkspaceSettings
+                {...{
+                  doc,
+                  settings,
+                  setSettings,
+                  history: history.current,
+                  setZoom,
+                  fit,
+                  setFocusKey,
+                  skipSnap,
+                  setSkipSnap,
+                  ruler,
+                  setRuler,
+                  readOnly,
+                  role,
+                  commit,
+                  report,
+                  perform,
+                  problemDocument,
+                  activeView,
+                }}
+              />
             ) : (
               <>
-                <button
-                  type="button"
-                  disabled={readOnly}
-                  onClick={() =>
-                    root.current?.querySelector<HTMLInputElement>('.geo-file-input')?.click()
-                  }
-                >
+                <button type="button" disabled={readOnly} onClick={importJson}>
                   加载 JSON
                 </button>
-                <pre className="geo-export">{exported || serializeGeometryDocument(doc)}</pre>
+                <pre className="geo-export">{serializeGeometryDocument(doc)}</pre>
               </>
             )}
           </aside>

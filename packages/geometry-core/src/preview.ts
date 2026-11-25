@@ -31,6 +31,14 @@ export function previewTransform(
       )
         throw Error('对象由关系驱动，请先解除绑定');
       const d = sheetDeltaToLocal(base, e.viewId, delta);
+      if (
+        e.kind === 'text' ||
+        e.kind === 'symbol' ||
+        e.kind === 'engineeringAnnotation' ||
+        e.kind === 'dimension'
+      )
+        e.position = add(e.position, d);
+      if (e.kind === 'hatch') e.origin = add(e.origin, d);
       if (e.kind === 'point') {
         e.position = add(e.position, d);
         e.spatial = null;

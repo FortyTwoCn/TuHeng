@@ -6,6 +6,7 @@ import {
   availableLineStyles,
   applyProperties,
   propertyValues,
+  formatCadAngle,
   copyEntities,
   confirmSnap,
   clipLine,
@@ -17,7 +18,6 @@ import {
   transact,
   arcSvgPath,
   setLineStyle,
-  lineGeometry,
   spatialTranslation,
 } from '@tuheng/geometry-core';
 import {
@@ -38,6 +38,32 @@ import {
   snapCandidates,
 } from '@tuheng/geometry-core';
 describe('versioned geometry kernel', () => {
+  it('displays near-horizontal angles without changing their geometry when confirming properties', () => {
+    const sheet = createDocument('ISOMETRIC');
+    const doc = addDrawing(sheet, 'segment', sheet.views[0].id, [
+      { x: 0, y: 0 }, { x: 24, y: -3e-14 },
+    ], 'student');
+    const line = doc.entities.at(-1)!;
+    const serialized = serializeGeometryDocument(doc);
+    const draft = propertyValues(doc, line);
+    expect(draft.angle).toBe('0');
+    expect(formatCadAngle(-7.48e-14, 1)).toBe('0.0');
+    expect(formatCadAngle(-0.02, 1)).toBe('0.0');
+    expect(formatCadAngle(-0.02)).toBe('-0.02');
+    expect(applyProperties(doc, line.id, draft, 'student')).toBe(doc);
+    expect(serializeGeometryDocument(doc)).toBe(serialized);
+    const resized = applyProperties(doc, line.id, { ...draft, length: '48' }, 'student');
+    const ends = resized.entities.filter(e => e.kind === 'point');
+    expect(ends[1].position.y).toBeCloseTo(-6e-14, 24);
+  });
+  it('requires an explicit second point to commit a segment or construction line', () => {
+    const doc = createDocument('VHW_PROJECTION');
+    for (const tool of ['segment', 'hidden', 'line'] as const)
+      expect(() => addDrawing(doc, tool, 'view-0', [{ x: 0, y: 0 }], 'student')).toThrow(
+        /第二个点/,
+      );
+    expect(doc.entities).toHaveLength(0);
+  });
   it('moves spatial planes by the requested projected displacement in all views', () => {
     for (const type of ['VHW_PROJECTION', 'THREE_VIEW', 'ISOMETRIC', 'OBLIQUE_DIMETRIC'] as const) {
       const doc = createDocument(type);
@@ -120,20 +146,21 @@ describe('versioned geometry kernel', () => {
     expect(segments[0].endPoint).toBe(segments[1].startPoint);
     expect(GeometryDocument.safeParse(copied).success).toBe(true);
   });
-  it('changes line semantics while preserving IDs and renders complete signed arcs', () => {
+  it('changes display style within the original layer and renders complete signed arcs', () => {
     const doc = addDrawing(
       createDocument('ISOMETRIC'),
       'segment',
       'view-0',
-      [{ x: 0, y: 0 }],
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+      ],
       'student',
     );
     const id = doc.entities.at(-1)!.id;
-    const construction = setLineStyle(doc, id, 'CONSTRUCTION', 'student');
-    const line = construction.entities.find((e) => e.id === id)!;
-    expect(line.kind).toBe('line');
-    expect(lineGeometry(construction, line).finite).toBe(false);
-    const answer = setLineStyle(construction, id, 'ANSWER_HIDDEN', 'student');
+    expect(() => setLineStyle(doc, id, 'CONSTRUCTION', 'student')).toThrow(/图层/);
+    const answer = setLineStyle(doc, id, 'ANSWER_HIDDEN', 'student');
+    expect(answer.entities).toHaveLength(doc.entities.length);
     expect(answer.entities.find((e) => e.id === id)).toMatchObject({
       kind: 'segment',
       lineStyle: 'ANSWER_HIDDEN',
@@ -166,9 +193,17 @@ describe('versioned geometry kernel', () => {
     );
     expect(analyzeGeometryDocument(d).some((r) => r.kind === 'TANGENT')).toBe(false);
   });
-  it('loads all four supplied JSON examples through the real schema', () => {
+  it('loads the four projection examples and the CAD drawing through the real schema', () => {
     const files = readdirSync('docs/geometry-examples').filter((f) => f.endsWith('.json'));
-    expect(files).toHaveLength(4);
+    expect(files).toEqual(
+      expect.arrayContaining([
+        'CAD-V3.json',
+        'VHW_PROJECTION.json',
+        'THREE_VIEW.json',
+        'ISOMETRIC.json',
+        'OBLIQUE_DIMETRIC.json',
+      ]),
+    );
     for (const file of files)
       expect(
         loadGeometryDocument(readFileSync(`docs/geometry-examples/${file}`, 'utf8')).entities
@@ -180,10 +215,22 @@ describe('versioned geometry kernel', () => {
       createDocument('VHW_PROJECTION'),
       'line',
       'view-0',
-      [{ x: 0, y: 0 }],
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+      ],
       'student',
     );
-    d = addDrawing(d, 'line', 'view-0', [{ x: 10, y: 0 }], 'student');
+    d = addDrawing(
+      d,
+      'line',
+      'view-0',
+      [
+        { x: 10, y: 0 },
+        { x: 20, y: 0 },
+      ],
+      'student',
+    );
     if (d.entities[0].kind === 'line' && d.entities[1].kind === 'line') {
       d.entities[0].referenceEntityId = d.entities[1].id;
       d.entities[1].referenceEntityId = d.entities[0].id;
@@ -194,7 +241,10 @@ describe('versioned geometry kernel', () => {
       createDocument('VHW_PROJECTION'),
       'segment',
       'view-0',
-      [{ x: 0, y: 0 }],
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+      ],
       'student',
     );
     d.constraints.push({
@@ -347,10 +397,22 @@ describe('versioned geometry kernel', () => {
       createDocument('THREE_VIEW'),
       'segment',
       'view-0',
-      [{ x: 0, y: 0 }],
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+      ],
       'teacher',
     );
-    const answer = addDrawing(stem, 'hidden', 'view-0', [{ x: 10, y: 10 }], 'student');
+    const answer = addDrawing(
+      stem,
+      'hidden',
+      'view-0',
+      [
+        { x: 10, y: 10 },
+        { x: 20, y: 10 },
+      ],
+      'student',
+    );
     expect(combineAnswer(stem, answer).entities).toHaveLength(6);
     const reordered = {
       ...stem,

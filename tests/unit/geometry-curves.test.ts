@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { GeometryDocument } from '@tuheng/contracts';
 import {
   createDocument,
+  cadStep,
+  startCadSession,
   addDrawing,
   addCurve,
   curveSegments,
@@ -23,12 +25,6 @@ import {
   snapPenCurve,
 } from '@tuheng/geometry-core';
 
-import {
-  curveClick,
-  commitCurve,
-  type CurveDraft,
-} from '../../packages/geometry-editor/src/curve-session';
-
 const knots = [
   { x: 10, y: 10 },
   { x: 20, y: 25 },
@@ -42,57 +38,34 @@ const sStroke = () =>
   }));
 
 describe('interpolating curves and common reference snapping', () => {
-  it('keeps endpoint/through-point selection as a draft, accepts either finish endpoint and refuses cross-view endpoints', () => {
-    let base = addDrawing(
-      createDocument('VHW_PROJECTION'),
-      'point',
-      'view-0',
-      [knots[0]],
-      'teacher',
-    );
+  it('retains ordered spline picks in the session until confirmation and only reuses same-view nodes', () => {
+    let base = addDrawing(createDocument('VHW_PROJECTION'), 'point', 'view-0', [knots[0]], 'teacher');
     base = addDrawing(base, 'point', 'view-1', [knots[2]], 'student');
-    const original = structuredClone(base);
-    let draft: CurveDraft | null = curveClick(
-      base,
-      null,
-      'view-0',
-      knots[0],
-      base.entities[0].id,
-      4,
-      true,
-      {},
-    );
-    expect(() =>
-      curveClick(base, draft, 'view-0', knots[2], base.entities[1].id, 4, true, {}),
-    ).toThrow('同一投影面');
-    draft = curveClick(base, draft, 'view-0', knots[2], undefined, 4, false, {});
-    expect(() => commitCurve(base, draft!, 'student')).toThrow('先点击任意端点');
-    draft = curveClick(base, draft, 'view-0', knots[1], undefined, 4, false, {});
-    expect(base).toEqual(original);
-    for (const endpoint of [knots[0], knots[2]]) {
-      const complete = curveClick(base, draft, 'view-0', endpoint, undefined, 4, false, {});
-      const { next } = commitCurve(base, complete, 'student');
-      const curve = next.entities.at(-1)!;
-      if (curve.kind !== 'curve') throw Error();
-      expect(curve.pointIds.map((id) => point(next, id))).toEqual(
-        endpoint === knots[0] ? [...knots].reverse() : knots,
-      );
-      expect(next.entities[0]).toEqual(base.entities[0]);
-      expect(next.entities.filter((e) => e.kind === 'point' && e.viewId === 'view-0')).toHaveLength(
-        3,
-      );
+    const before = structuredClone(base);
+    let s = startCadSession('spline', base, 'view-0', 'student');
+    for (const [i,position] of knots.entries()) {
+      const step = cadStep(s,base,{type:'point',position,viewId:'view-0',entityId: i===0?base.entities[0].id:i===2?base.entities[1].id:undefined});
+      expect(step.document).toBeUndefined();
+      s = step.session!;
     }
-    expect(base).toEqual(original);
+    expect(cadStep(s,base,{type:'cancel'}).document).toBeUndefined();
+    const next = cadStep(s,base,{type:'confirm'}).document!;
+    const curve = next.entities.at(-1)!;
+    if (curve.kind!=='curve') throw Error();
+    expect(curve.pointIds.map(id=>point(next,id))).toEqual(knots);
+    expect(curve.pointIds[0]).toBe(base.entities[0].id);
+    expect(curve.pointIds[2]).not.toBe(base.entities[1].id);
+    expect(next.entities[0]).toEqual(before.entities[0]);
+    expect(base).toEqual(before);
   });
-
   it.each(['VHW_PROJECTION', 'THREE_VIEW', 'ISOMETRIC', 'OBLIQUE_DIMETRIC'] as const)(
-    'stores ordered v2.2 references and interpolates every knot in %s',
+    'stores ordered interpolation references and interpolates every knot in %s',
     (editorType) => {
       const doc = addCurve(createDocument(editorType), 'view-0', knots, 'student');
       const c = doc.entities.at(-1)!;
       expect(c.kind).toBe('curve');
       if (c.kind !== 'curve') throw Error();
-      expect(doc.schemaVersion).toBe('tuheng.geometry/2.2.0');
+      expect(doc.schemaVersion).toBe('tuheng.geometry/3.0.0');
       const segments = curveSegments(c.pointIds.map((id) => point(doc, id)));
       expect(segments.map((s) => s.end)).toEqual(knots.slice(1));
       expect(curvePath(knots)).toContain('C');

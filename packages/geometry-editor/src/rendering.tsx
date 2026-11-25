@@ -1,14 +1,25 @@
-import { memo } from 'react';
-import type { GeometryDocument, GeometryEntity } from '@tuheng/contracts';
+import { memo, useMemo } from 'react';
+import {
+  isCadEntity,
+  type GeometryDocument,
+  type GeometryEntity,
+  type Vec2,
+} from '@tuheng/contracts';
 import {
   arcSvgPath,
   curvePath,
   clipLine,
-  lineGeometry,
   point,
   planeOutline,
   projectPoint,
   type Bounds,
+  cadDrawing,
+  mapCadDrawing,
+  ellipsePath,
+  drawingStyle,
+  drawingRunLength,
+  localToSheet,
+  ellipseAt,
 } from '@tuheng/geometry-core';
 import { semanticLineStyles } from '@tuheng/geometry-core';
 export const lineStyles = semanticLineStyles;
@@ -19,23 +30,71 @@ export const EntityShape = memo(function EntityShape({
   selected,
   labels,
   scale,
+  sourceDocument,
+  sheetPoints,
 }: {
   document: GeometryDocument;
   entity: GeometryEntity;
-  box: Bounds;
+  box?: Bounds;
   selected: boolean;
   labels: boolean;
   scale: number;
+  sourceDocument?: GeometryDocument;
+  sheetPoints: ReadonlyMap<string, Vec2>;
 }) {
+  const source = sourceDocument ?? doc;
+  const baseStyle=drawingStyle(e,scale);
+  const runLength=useMemo(()=>baseStyle.strokeDasharray ? drawingRunLength(source,e) : undefined,
+    [source,e,baseStyle.strokeDasharray]);
+  const appearance = runLength!==undefined ? drawingStyle(e,scale,runLength) : baseStyle;
+  if (!e.appearance?.color) {
+    if (e.lineStyle.startsWith('ANSWER')) appearance.stroke = 'var(--cad-ink,#253b47)';
+    if (e.lineStyle === 'CONSTRUCTION') appearance.stroke = 'var(--cad-axis,#638894)';
+    if (e.lineStyle.startsWith('PROBLEM')) appearance.stroke = 'var(--cad-stem,#4585dd)';
+  }
   const style = {
-    ...lineStyles[e.lineStyle],
-    strokeWidth: selected ? 3 : 1.6,
+    ...appearance,
+    strokeWidth: selected ? Math.max(appearance.strokeWidth + 1, 3) : appearance.strokeWidth,
     fill: 'none',
     vectorEffect: 'non-scaling-stroke' as const,
   };
 
   let shape;
-  if (e.kind === 'point')
+  const at = (p: Vec2) => (sourceDocument ? localToSheet(source, e.viewId, p) : p);
+  const cadGeometry = useMemo(() => {
+    if (!isCadEntity(e)) return null;
+    const project = (p: Vec2) => (sourceDocument ? localToSheet(sourceDocument, e.viewId, p) : p);
+    if (e.kind === 'ellipse') return { path: ellipsePath(source, e, project), labels: [] };
+    const drawing = mapCadDrawing(cadDrawing(source, e), project);
+    return {
+      path: drawing.strokes
+        .map((path) => path.map((p, i) => (i ? 'L' : 'M') + p.x + ' ' + p.y).join(' '))
+        .join(' '),
+      labels: drawing.labels,
+    };
+  }, [e, source, sourceDocument]);
+  if (isCadEntity(e)) {
+    if (cadGeometry) {
+      shape = (
+        <>
+          {cadGeometry.path && <path d={cadGeometry.path} vectorEffect="non-scaling-stroke" />}
+          {cadGeometry.labels.map((l, i) => (
+            <text
+              key={i}
+              transform={`translate(${l.at.x} ${l.at.y}) rotate(${l.angle}) scale(1 -1)`}
+              fontSize={l.size}
+              textAnchor={l.anchor}
+              textDecoration={selected ? 'underline' : undefined}
+              fill={appearance.stroke}
+              stroke="none"
+            >
+              {l.text}
+            </text>
+          ))}
+        </>
+      );
+    }
+  } else if (e.kind === 'point')
     shape = (
       <>
         <circle
@@ -43,6 +102,7 @@ export const EntityShape = memo(function EntityShape({
           cx={e.position.x}
           cy={e.position.y}
           r={3 / scale}
+          style={{ r: 'var(--geo-point-radius)' }}
           fill={style.stroke}
         />
         {labels && e.labelVisible && (
@@ -58,7 +118,12 @@ export const EntityShape = memo(function EntityShape({
       </>
     );
   else if (e.kind === 'segment' || e.kind === 'line') {
-    const ends = clipLine(lineGeometry(doc, e), box);
+    // The SVG clips finite primitives to its viewport. Only infinite construction lines
+    // require camera-dependent clipping, so zooming does not reconstruct every finite edge.
+    const ends =
+      e.kind === 'segment'
+        ? [sheetPoints.get(e.startPoint)!, sheetPoints.get(e.endPoint)!]
+        : box && clipLine({ a: e.anchor, d: e.direction, finite: false }, box);
     shape = ends && (
       <line
         vectorEffect="non-scaling-stroke"
@@ -72,7 +137,11 @@ export const EntityShape = memo(function EntityShape({
     shape = (
       <path
         vectorEffect="non-scaling-stroke"
-        d={curvePath(e.pointIds.map((id) => point(doc, id)))}
+        d={curvePath(
+          e.pointIds.map((id) => sheetPoints.get(id)!),
+          e.parameterRange,
+          e.interpolation,
+        )}
       />
     );
   else if (e.kind === 'polyline')
@@ -102,7 +171,7 @@ export const EntityShape = memo(function EntityShape({
       </>
     );
   else {
-    const c = point(doc, e.center);
+    const c = sheetPoints.get(e.center)!;
     if (e.kind === 'circle')
       shape = <circle vectorEffect="non-scaling-stroke" cx={c.x} cy={c.y} r={e.radius} />;
     else {
@@ -129,10 +198,18 @@ export const EntityShape = memo(function EntityShape({
           {(e.kind === 'point'
             ? [e.position]
             : e.kind === 'segment'
-              ? [point(doc, e.startPoint), point(doc, e.endPoint)]
+              ? [sheetPoints.get(e.startPoint)!, sheetPoints.get(e.endPoint)!]
               : e.kind === 'curve'
-                ? e.pointIds.map((id) => point(doc, id))
-                : []
+                ? e.pointIds.map((id) => sheetPoints.get(id)!)
+                : e.kind === 'ellipse'
+                  ? [
+                      point(source, e.center),
+                      ellipseAt(point(source, e.center), e, 0),
+                      ellipseAt(point(source, e.center), e, 90),
+                    ].map(at)
+                  : isCadEntity(e) && 'position' in e
+                    ? [at(e.position)]
+                    : []
           ).map((p, i) => (
             <circle
               data-transient="handle"

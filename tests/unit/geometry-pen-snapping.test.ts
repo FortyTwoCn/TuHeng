@@ -16,7 +16,7 @@ import {
   sheetDeltaToLocal,
   type PenStrokeStyle,
 } from '@tuheng/geometry-core';
-import { acceptPrimitive } from '../../packages/geometry-editor/src/primitive-preview';
+import { applyPenLineFit } from '@tuheng/geometry-core';
 import { penSample } from '../repair-fixtures';
 
 function stroke(degrees: number, pixels = 4, length = 180, start: Vec2 = { x: 80, y: 80 }) {
@@ -40,7 +40,7 @@ function apply(
 ) {
   const preview = penLinePreview(base, raw, pixels, options);
   expect(preview).toBeDefined();
-  return { preview: preview!, next: acceptPrimitive(base, raw, preview!, 'student') };
+  return { preview: preview!, next: applyPenLineFit(base, raw, preview!, 'student') };
 }
 
 describe('pen direction correction after fitting', () => {

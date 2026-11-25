@@ -1,29 +1,40 @@
 'use client';
-import { useId, useRef, useState, useEffect, type ReactNode } from 'react';
+import { useId, useRef, useState, useEffect, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { autoUpdate, computePosition, offset, flip, shift } from '@floating-ui/dom';
 export function EditorPopover({
   label,
   children,
-  arrowOnly = false,
+  trigger,
+  buttonClass,
+  panelClass,
+  triggerRef,
 }: {
   label: string;
   children: ReactNode;
-  arrowOnly?: boolean;
+  trigger?: ReactNode;
+  buttonClass?: string;
+  panelClass?: string;
+  triggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const id = useId();
-  const button = useRef<HTMLButtonElement>(null),
-    panel = useRef<HTMLDivElement>(null);
+  const ownButton = useRef<HTMLButtonElement>(null);
+  const button = triggerRef ?? ownButton;
+  const panel = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false),
     [host, setHost] = useState<HTMLElement | null>(null);
-  useEffect(() => {
+  function openPopover() {
     setHost(button.current?.closest<HTMLElement>('.geometry-editor') ?? null);
-  }, []);
+    setOpen(true);
+  }
   useEffect(() => {
     const a = button.current,
       b = panel.current;
     if (!open || !a || !b) return;
-    b.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    const focusTarget =
+      b.querySelector<HTMLElement>('[data-initial-focus]') ??
+      b.querySelector<HTMLButtonElement>('button:not(:disabled)');
+    focusTarget?.focus();
     const cleanup = autoUpdate(a, b, () => {
       void computePosition(a, b, {
         strategy: 'fixed',
@@ -39,7 +50,7 @@ export function EditorPopover({
       cleanup();
       document.removeEventListener('pointerdown', outside);
     };
-  }, [open]);
+  }, [open, button]);
   return (
     <>
       <button
@@ -49,14 +60,14 @@ export function EditorPopover({
         aria-label={label}
         aria-controls={open ? id : undefined}
         aria-haspopup="dialog"
-        className={arrowOnly ? 'geo-split-arrow' : undefined}
-        title={arrowOnly ? label : undefined}
-        onClick={() => setOpen(!open)}
+        className={buttonClass}
+        title={label}
+        onClick={() => (open ? setOpen(false) : openPopover())}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
             e.preventDefault();
             e.stopPropagation();
-            setOpen(true);
+            openPopover();
           }
           if (open && e.key === 'Escape') {
             e.preventDefault();
@@ -65,7 +76,10 @@ export function EditorPopover({
           }
         }}
       >
-        {!arrowOnly && label} <span aria-hidden>⌄</span>
+        {trigger ?? label}{' '}
+        <span className="cad-menu-arrow" aria-hidden>
+          ⌄
+        </span>
       </button>
       {open &&
         host &&
@@ -73,7 +87,7 @@ export function EditorPopover({
           <div
             ref={panel}
             id={id}
-            className="geo-popover"
+            className={`geo-popover${panelClass ? ' ' + panelClass : ''}`}
             role="dialog"
             aria-label={`${label}菜单`}
             onKeyDown={(e) => {
@@ -108,6 +122,7 @@ export function EditorPopover({
               const b = (e.target as Element).closest('button');
               if (
                 b &&
+                !b.hasAttribute('data-keep-open') &&
                 (b.hasAttribute('data-command') ||
                   (!b.hasAttribute('aria-expanded') && !b.hasAttribute('aria-pressed')))
               )

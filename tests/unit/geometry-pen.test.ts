@@ -9,7 +9,7 @@ import {
   serializeGeometryDocument,
   moveEntities,
 } from '@tuheng/geometry-core';
-import { finishDrawing } from '../../packages/geometry-editor/src/drawing-session';
+import { finishPen } from '../../packages/geometry-editor/src/drawing-session';
 import {
   penSample,
   wavyLineSample,
@@ -47,13 +47,9 @@ describe('oblique axes and pen regressions', () => {
   it('keeps sampling evidence on an unfitted stroke without a redundant recovery action', () => {
     const samples = penSample(4, 1, 360, 'ellipse'),
       doc = createDocument('VHW_PROJECTION');
-    const result = finishDrawing(doc, {
-      tool: 'pen',
+    const result = finishPen(doc, {
       viewId: 'view-0',
       role: 'student',
-      start: samples[0],
-      end: samples.at(-1)!,
-      steps: [],
       samples,
       scale: 4,
     });
@@ -84,13 +80,9 @@ describe('pen styles share fitting, evidence and permissions', () => {
                 kind === 'arc' ? 160 : 360,
                 kind === 'polyline' ? 'eight' : 'circle',
               );
-        const result = finishDrawing(createDocument('OBLIQUE_DIMETRIC'), {
-          tool: 'pen',
+        const result = finishPen(createDocument('OBLIQUE_DIMETRIC'), {
           viewId: 'view-0',
           role: 'student',
-          start: samples[0],
-          end: samples.at(-1)!,
-          steps: [],
           samples,
           scale: 4,
           penStyle: style,
@@ -201,13 +193,9 @@ describe('automatic fitting after pointerup, without forced circle fallback', ()
         shape === 'backtrack'
           ? [0, 20, 5, 24, 2, 30].map((x) => ({ x, y: 0, pressure: 0.5 }))
           : penSample(4, 1, 360, shape);
-      const result = finishDrawing(createDocument('VHW_PROJECTION'), {
-        tool: 'pen',
+      const result = finishPen(createDocument('VHW_PROJECTION'), {
         viewId: 'view-0',
         role: 'student',
-        start: samples[0],
-        end: samples.at(-1)!,
-        steps: [],
         samples,
         scale: 4,
       });

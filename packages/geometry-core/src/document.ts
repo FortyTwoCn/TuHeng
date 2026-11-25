@@ -98,8 +98,9 @@ export function transact(
 ) {
   doc = upgradeGeometryDocument(doc);
   const draft = structuredClone(doc);
+  draft.schemaVersion = 'tuheng.geometry/3.0.0';
   change(draft);
-  if (draft.schemaVersion !== 'tuheng.geometry/1.0.0') evaluateDependencies(draft);
+  evaluateDependencies(draft);
   const next = GeometryDocument.parse(draft);
   if (role === 'student') {
     for (const entity of doc.entities.filter((e) => !editable(doc, e, role))) {
@@ -112,7 +113,7 @@ export function transact(
 export function pointReferences(e: GeometryEntity): string[] {
   if (e.kind === 'segment') return [e.startPoint, e.endPoint];
   if (e.kind === 'curve') return e.pointIds;
-  if (e.kind === 'circle' || e.kind === 'arc') return [e.center];
+  if (e.kind === 'circle' || e.kind === 'arc' || e.kind === 'ellipse') return [e.center];
   return [];
 }
 export function moveEntities(
@@ -129,6 +130,16 @@ export function moveEntities(
     (d) => {
       for (const e of d.entities.filter((e) => targets.has(e.id))) {
         if (!editable(doc, e, role)) throw new Error('移动涉及只读题干点');
+        if (
+          e.kind === 'dimension' ||
+          e.kind === 'text' ||
+          e.kind === 'symbol' ||
+          e.kind === 'engineeringAnnotation'
+        )
+          e.position = add(e.position, delta);
+        if (e.kind==='engineeringAnnotation' && e.leader) e.leader=add(e.leader,delta);
+        if (e.kind==='symbol' && e.labelPosition) e.labelPosition=add(e.labelPosition,delta);
+        if (e.kind === 'hatch') e.origin = add(e.origin, delta);
         if (e.kind === 'point') {
           e.position = add(e.position, delta);
           e.spatial = null;
@@ -154,7 +165,12 @@ export function deletionSet(doc: GeometryDocument, ids: string[], role: 'teacher
   while (added) {
     added = false;
     for (const e of doc.entities)
-      if (!removed.has(e.id) && pointReferences(e).some((id) => removed.has(id))) {
+      if (
+        !removed.has(e.id) &&
+        (pointReferences(e).some((id) => removed.has(id)) ||
+          (e.kind === 'dimension' && e.referenceIds.some((id) => removed.has(id))) ||
+          (e.kind === 'hatch' && e.loops.some((loop) => loop.some((id) => removed.has(id)))))
+      ) {
         removed.add(e.id);
         added = true;
       }
@@ -190,6 +206,9 @@ export function deletionSet(doc: GeometryDocument, ids: string[], role: 'teacher
 }
 export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
   const removed = deletionSet(doc, ids, role);
+  const possibleOrphans = new Set(
+    doc.entities.filter((e) => removed.has(e.id)).flatMap((e) => pointReferences(e)),
+  );
   return transact(
     doc,
     (d) => {
@@ -200,8 +219,36 @@ export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teac
       d.projectionGroups = d.projectionGroups.filter((r) =>
         r.entityIds.every((id) => !removed.has(id)),
       );
+      removeUnusedControlPoints(d, possibleOrphans, role);
     },
     role,
+  );
+}
+/** Never remove labelled, protected or independently referenced points with their former owner. */
+export function removeUnusedControlPoints(
+  doc: GeometryDocument,
+  candidates: ReadonlySet<string>,
+  role: 'teacher' | 'student',
+) {
+  if (!candidates.size) return;
+  const retained = new Set<string>();
+  for (const e of doc.entities) {
+    for (const id of pointReferences(e)) retained.add(id);
+    if (e.kind === 'dimension') for (const id of e.referenceIds) retained.add(id);
+  }
+  for (const relation of [...doc.constraints, ...doc.projectionGroups])
+    for (const id of relation.entityIds) retained.add(id);
+  for (const r of doc.referenceRelations ?? []) {
+    retained.add(r.targetId);
+    if (r.reference.kind === 'entity') retained.add(r.reference.entityId);
+  }
+  doc.entities = doc.entities.filter(
+    (e) =>
+      e.kind !== 'point' ||
+      !candidates.has(e.id) ||
+      retained.has(e.id) ||
+      e.labelVisible ||
+      !editable(doc, e, role),
   );
 }
 export function copySelectionEntities(
@@ -235,67 +282,77 @@ export function copySelectionEntities(
     throw Error('复制涉及外部绑定，请先解除绑定或同时选中参考对象');
   return selected;
 }
-export function copyEntities(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
-  const selected = copySelectionEntities(doc, ids, role);
+export function appendSelectionCopies(
+  d: GeometryDocument,
+  doc: GeometryDocument,
+  selected: GeometryEntity[],
+) {
   const mapping = new Map(selected.map((e) => [e.id, createId()]));
-  const next = transact(
-    doc,
-    (d) => {
-      for (const original of selected) {
-        const e = structuredClone(original);
-        e.id = mapping.get(e.id)!;
-        if (e.kind === 'segment') {
-          e.startPoint = mapping.get(e.startPoint)!;
-          e.endPoint = mapping.get(e.endPoint)!;
-        }
-        if (e.kind === 'circle' || e.kind === 'arc') e.center = mapping.get(e.center)!;
-        if (e.kind === 'curve') e.pointIds = e.pointIds.map((id) => mapping.get(id)!);
-        if (e.kind === 'line' && e.referenceEntityId)
-          e.referenceEntityId = mapping.get(e.referenceEntityId) ?? e.referenceEntityId;
-        if (e.kind === 'plane' && e.referencePlaneId)
-          e.referencePlaneId = mapping.get(e.referencePlaneId) ?? e.referencePlaneId;
-        d.entities.push(e);
-      }
-      for (const relation of doc.constraints.filter((r) =>
-        r.entityIds.every((id) => mapping.has(id)),
-      ))
-        d.constraints.push({
-          ...relation,
-          id: createId(),
-          entityIds: relation.entityIds.map((id) => mapping.get(id)!),
-        });
-      for (const r of doc.referenceRelations ?? [])
-        if (mapping.has(r.targetId)) {
-          d.referenceRelations ??= [];
-          d.referenceRelations.push({
-            ...r,
-            id: createId(),
-            targetId: mapping.get(r.targetId)!,
-            reference:
-              r.reference.kind === 'entity'
-                ? {
-                    kind: 'entity',
-                    entityId: mapping.get(r.reference.entityId) ?? r.reference.entityId,
-                  }
-                : r.reference,
-          });
-        }
-      for (const relation of doc.projectionGroups.filter((r) =>
-        r.entityIds.every((id) => mapping.has(id)),
-      ))
-        d.projectionGroups.push({
-          ...relation,
-          id: createId(),
-          entityIds: relation.entityIds.map((id) => mapping.get(id)!),
-        });
-    },
-    role,
-  );
-  return moveEntities(next, [...mapping.values()], { x: 5, y: 5 }, role);
+  for (const original of selected) {
+    const e = structuredClone(original);
+    e.id = mapping.get(e.id)!;
+    if (e.kind === 'segment') {
+      e.startPoint = mapping.get(e.startPoint)!;
+      e.endPoint = mapping.get(e.endPoint)!;
+    }
+    if (e.kind === 'circle' || e.kind === 'arc' || e.kind === 'ellipse')
+      e.center = mapping.get(e.center)!;
+    if (e.kind === 'dimension') e.referenceIds = e.referenceIds.map((id) => mapping.get(id) ?? id);
+    if (e.kind === 'hatch') {
+      e.loops = e.loops.map((loop) => loop.map((id) => mapping.get(id) ?? id));
+      if (e.spans) e.spans=e.spans.map(ring=>ring.map(span=>({...span,entityId:mapping.get(span.entityId) ?? span.entityId})));
+    }
+    if (e.kind === 'curve') e.pointIds = e.pointIds.map((id) => mapping.get(id)!);
+    if (e.kind === 'line' && e.referenceEntityId)
+      e.referenceEntityId = mapping.get(e.referenceEntityId) ?? e.referenceEntityId;
+    if (e.kind === 'plane' && e.referencePlaneId)
+      e.referencePlaneId = mapping.get(e.referencePlaneId) ?? e.referencePlaneId;
+    d.entities.push(e);
+  }
+  for (const relation of doc.constraints.filter((r) => r.entityIds.every((id) => mapping.has(id))))
+    d.constraints.push({
+      ...relation,
+      id: createId(),
+      entityIds: relation.entityIds.map((id) => mapping.get(id)!),
+    });
+  for (const r of doc.referenceRelations ?? [])
+    if (mapping.has(r.targetId)) {
+      d.referenceRelations ??= [];
+      d.referenceRelations.push({
+        ...r,
+        id: createId(),
+        targetId: mapping.get(r.targetId)!,
+        reference:
+          r.reference.kind === 'entity'
+            ? {
+                kind: 'entity',
+                entityId: mapping.get(r.reference.entityId) ?? r.reference.entityId,
+              }
+            : r.reference,
+      });
+    }
+  for (const relation of doc.projectionGroups.filter((r) =>
+    r.entityIds.every((id) => mapping.has(id)),
+  ))
+    d.projectionGroups.push({
+      ...relation,
+      id: createId(),
+      entityIds: relation.entityIds.map((id) => mapping.get(id)!),
+    });
+  return mapping;
 }
 export class DocumentHistory {
-  private past: GeometryDocument[] = [];
-  private future: GeometryDocument[] = [];
+  private past: { document: GeometryDocument; label: string }[] = [];
+  private future: { document: GeometryDocument; label: string }[] = [];
+  get operations() {
+    return [
+      ...this.past.map(({ label }) => ({ label, applied: true })),
+      ...this.future
+        .slice()
+        .reverse()
+        .map(({ label }) => ({ label, applied: false })),
+    ];
+  }
   get canUndo() {
     return this.past.length > 0;
   }
@@ -308,10 +365,10 @@ export class DocumentHistory {
   ) {
     this.current = GeometryDocument.parse(current);
   }
-  commit(next: GeometryDocument) {
+  commit(next: GeometryDocument, label = '编辑图形') {
     next = GeometryDocument.parse(next);
     if (JSON.stringify(next) === JSON.stringify(this.current)) return this.current;
-    this.past.push(this.current);
+    this.past.push({ document: this.current, label });
     if (this.past.length > this.limit) this.past.shift();
     this.future = [];
     this.current = next;
@@ -325,16 +382,16 @@ export class DocumentHistory {
   undo() {
     const next = this.past.pop();
     if (next) {
-      this.future.push(this.current);
-      this.current = next;
+      this.future.push({ document: this.current, label: next.label });
+      this.current = next.document;
     }
     return this.current;
   }
   redo() {
     const next = this.future.pop();
     if (next) {
-      this.past.push(this.current);
-      this.current = next;
+      this.past.push({ document: this.current, label: next.label });
+      this.current = next.document;
     }
     return this.current;
   }

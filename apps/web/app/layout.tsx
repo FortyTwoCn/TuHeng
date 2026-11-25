@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { SiteFooter } from '../components/SiteFooter';
 import './globals.css';
+import '../components/cad-hosts.css';
 import '../components/identity/organization.css';
 import '../components/organization/workspace.css';
 import '../components/identity/configuration.css';

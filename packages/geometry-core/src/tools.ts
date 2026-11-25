@@ -60,15 +60,17 @@ export function addDrawing(
         });
         return id;
       }
-      const a = positions[0],
-        b = positions[1] ?? add(a, { x: 10, y: 0 });
+      const [a, b] = positions;
+      if (!a) throw Error('请选择起点');
       if (tool === 'point') {
         makePoint(a, 0);
         return;
       }
+      if (!b) throw Error('请确定第二个点后再提交图形');
+      if (tool === 'arc' && !positions[2]) throw Error('请确定圆弧终点');
       const id = createId();
       if (tool === 'curve') {
-        d.schemaVersion = 'tuheng.geometry/2.2.0';
+        if (d.schemaVersion !== 'tuheng.geometry/3.0.0') d.schemaVersion = 'tuheng.geometry/2.2.0';
         d.entities.push({
           ...base,
           id,
@@ -107,7 +109,7 @@ export function addDrawing(
           id,
           kind: 'segment',
           startPoint: makePoint(a, 0),
-          endPoint: makePoint(referenceId ? add(a, scale(unit(direction), 10)) : b, 1),
+          endPoint: makePoint(referenceId ? add(a, scale(unit(direction), distance(a, b))) : b, 1),
         });
       if (referenceId)
         d.constraints.push({
@@ -235,7 +237,14 @@ export function addPenStroke(
         if (!existing.has(e.id)) Object.assign(e, penAppearance(d, role, options.style));
       }
       const e = d.entities[d.entities.length - 1];
-      if (e.kind !== 'point' && e.kind !== 'plane') {
+      if (
+        e.kind === 'segment' ||
+        e.kind === 'line' ||
+        e.kind === 'curve' ||
+        e.kind === 'circle' ||
+        e.kind === 'arc' ||
+        e.kind === 'polyline'
+      ) {
         e.samples = samples;
         e.sampling = { cssPixelsPerMm: options.cssPixelsPerMm, ...viewTransform(doc, viewId) };
       }
@@ -268,20 +277,11 @@ export function availableLineStyles(
   if (!ids.length) return [];
   const entities = ids.map((id) => doc.entities.find((e) => e.id === id));
   if (entities.some((e) => !e || !editable(doc, e, role))) return [];
-  if (role === 'teacher')
-    return entities.every((e) => e?.lineStyle.startsWith('PROBLEM'))
-      ? ['PROBLEM_VISIBLE', 'PROBLEM_HIDDEN']
-      : [];
-  const styles: GeometryEntity['lineStyle'][] = ['ANSWER_VISIBLE', 'ANSWER_HIDDEN'];
-  if (
-    entities.every(
-      (e) =>
-        e?.kind !== 'plane' &&
-        !(e?.kind === 'segment' && doc.projectionGroups.some((g) => g.entityIds.includes(e.id))),
-    )
-  )
-    styles.push('CONSTRUCTION');
-  return styles;
+  const layer = doc.layers.find((l) => l.id === entities[0]?.layerId);
+  if (!layer || entities.some((e) => e?.layerId !== layer.id)) return [];
+  if (layer.role === 'PROBLEM_STEM') return ['PROBLEM_VISIBLE', 'PROBLEM_HIDDEN'];
+  if (layer.role === 'CONSTRUCTION') return ['CONSTRUCTION'];
+  return ['ANSWER_VISIBLE', 'ANSWER_HIDDEN'];
 }
 export function setLineStyle(
   doc: GeometryDocument,
@@ -290,77 +290,19 @@ export function setLineStyle(
   role: 'teacher' | 'student',
 ) {
   if (!availableLineStyles(doc, [id], role).includes(lineStyle))
-    throw Error('当前对象和角色不允许使用此线型');
-  if (doc.entities.find((e) => e.id === id)?.lineStyle === lineStyle) return doc;
+    throw Error('线型必须属于当前对象的图层');
+  const entity = doc.entities.find((e) => e.id === id);
+  if (entity?.lineStyle === lineStyle) return doc;
   return transact(
     doc,
     (d) => {
-      const index = d.entities.findIndex((e) => e.id === id);
-      const entity = d.entities[index];
-      if (!entity) throw new Error('对象不存在');
-      if (
-        role === 'student' &&
-        (lineStyle.startsWith('PROBLEM') || entity.lineStyle.startsWith('PROBLEM'))
-      )
-        throw new Error('题干对象只读');
-      const layerRole = lineStyle.startsWith('PROBLEM')
-        ? 'PROBLEM_STEM'
-        : lineStyle === 'CONSTRUCTION'
-          ? 'CONSTRUCTION'
-          : 'STUDENT_ANSWER';
-      const layerId = d.layers.find((l) => l.role === layerRole)!.id;
-      if (entity.kind === 'segment' && lineStyle === 'CONSTRUCTION') {
-        if (d.projectionGroups.some((g) => g.entityIds.includes(id)))
-          throw new Error('关联的投影线段不能转换为无限辅助线');
-        const geometry = lineGeometry(d, entity);
-        d.entities[index] = {
-          id,
-          kind: 'line',
-          viewId: entity.viewId,
-          layerId,
-          lineStyle,
-          anchor: geometry.a,
-          direction: unit(geometry.d),
-          referenceEntityId: null,
-          ...(entity.samples ? { samples: entity.samples } : {}),
-        };
-      } else if (entity.kind === 'line' && lineStyle.startsWith('ANSWER')) {
-        const startPoint = createId(),
-          endPoint = createId();
-        for (const [pointId, position] of [
-          [startPoint, entity.anchor],
-          [endPoint, add(entity.anchor, scale(unit(entity.direction), 10))],
-        ] as const)
-          d.entities.push({
-            id: pointId,
-            kind: 'point',
-            viewId: entity.viewId,
-            layerId,
-            lineStyle,
-            position,
-            spatial: null,
-            name: `P${d.entities.filter((e) => e.kind === 'point').length + 1}`,
-            labelVisible: true,
-          });
-        d.entities[index] = {
-          id,
-          kind: 'segment',
-          viewId: entity.viewId,
-          layerId,
-          lineStyle,
-          startPoint,
-          endPoint,
-          ...(entity.samples ? { samples: entity.samples } : {}),
-        };
-      } else {
-        entity.lineStyle = lineStyle;
-        entity.layerId = layerId;
-      }
+      const target = d.entities.find(e => e.id === id)!;
+      target.lineStyle=lineStyle;
+      if (target.appearance?.pattern) delete target.appearance.pattern;
     },
     role,
   );
 }
-
 export function importPenStroke(
   doc: GeometryDocument,
   input: unknown,

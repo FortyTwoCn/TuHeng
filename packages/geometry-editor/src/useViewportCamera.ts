@@ -33,6 +33,7 @@ export function useViewportCamera(
   busy: () => boolean,
 ) {
   const [size, setSize] = useState({ width: 800, height: 600 }),
+    [fitSize, setFitSize] = useState<{ width:number; height:number } | null>(null),
     [pan, setPan] = useState({ x: 0, y: 0 }),
     [localZoom, setLocalZoom] = useState(1),
     [fitted, setFitted] = useState<Bounds>(() => sheetBounds(doc));
@@ -41,6 +42,7 @@ export function useViewportCamera(
     setPrevious({ fitKey, focusKey });
     if (previous.fitKey !== fitKey) {
       setFitted(sheetBounds(doc));
+      setFitSize(size);
       setPan({ x: 0, y: 0 });
       setLocalZoom(1);
     } else {
@@ -49,9 +51,10 @@ export function useViewportCamera(
       setPan({ x: p.x - (fitted.x + fitted.width / 2), y: p.y - (fitted.y + fitted.height / 2) });
     }
   }
-  const ratio = size.width / size.height,
-    height = Math.max(fitted.height, fitted.width / ratio) / (zoom * localZoom),
-    width = height * ratio;
+  // Opening a tool drawer changes the visible area, not the physical scale of the drawing.
+  const baseline = fitSize ?? size;
+  const mmPerPixel = Math.max(fitted.height / baseline.height, fitted.width / baseline.width) / (zoom * localZoom);
+  const height = size.height * mmPerPixel, width = size.width * mmPerPixel;
   const box = {
     x: fitted.x + fitted.width / 2 - width / 2 + pan.x,
     y: fitted.y + fitted.height / 2 - height / 2 + pan.y,
@@ -67,7 +70,10 @@ export function useViewportCamera(
     if (!el) return;
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      if (width && height) setSize({ width, height });
+      if (width && height) {
+        setSize({ width, height });
+        setFitSize(current => current ?? { width, height });
+      }
     });
     observer.observe(el);
     return () => observer.disconnect();

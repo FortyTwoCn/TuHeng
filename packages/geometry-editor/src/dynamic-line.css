@@ -1,0 +1,68 @@
+.geometry-editor .geo-view.geo-active {
+  position: relative;
+  grid-template-rows: minmax(0, 1fr);
+}
+.geometry-editor .cad-dynamic-input {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  pointer-events: none;
+  gap: 4px;
+  padding: 3px;
+  max-width: calc(100% - 8px);
+  border: 1px solid var(--cad-axis, #638894);
+  border-radius: 5px;
+  color: var(--cad-ink, #253b47);
+  background: var(--cad-paper, #f8fbfc);
+  box-shadow: 0 2px 6px #172d391c;
+  font:
+    12px/1.1 system-ui,
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.geometry-editor .cad-dynamic-input label {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: inherit;
+  margin: 0;
+}
+.geometry-editor .cad-dynamic-input input {
+  pointer-events: auto;
+  width: 5.6ch;
+  min-width: 0;
+  height: 30px;
+  min-height: 0;
+  font: inherit;
+  padding: 1px 2px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+}
+.geometry-editor .cad-dynamic-input input:focus {
+  border-color: var(--cad-accent, #087c72);
+  outline: 1px solid var(--cad-accent, #087c72);
+}
+.geometry-editor .cad-dynamic-input button {
+  pointer-events: auto;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  color: var(--cad-accent, #087c72);
+  background: var(--cad-paper, #f8fbfc);
+  border: 1px solid var(--cad-axis, #638894);
+}
+.geometry-editor .cad-dynamic-error {
+  flex-basis: 100%;
+  padding: 4px;
+}
+@media (any-pointer: coarse) {
+  .geometry-editor .cad-dynamic-input input,
+  .geometry-editor .cad-dynamic-input button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

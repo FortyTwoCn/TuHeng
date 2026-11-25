@@ -5,6 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@tuheng/contracts": "*"
+    "@tuheng/contracts": "*",
+    "jszip": "3.10.2"
   }
 }

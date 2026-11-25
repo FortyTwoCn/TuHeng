@@ -1,4 +1,7 @@
 import type { GeometryDocument, GeometryTargetRef, GeometryEntity, Vec2 } from '@tuheng/contracts';
+import { isCadEntity } from '@tuheng/contracts';
+import { cadPropertyValues, changeCadProperties } from './cad-properties';
+import { formatCadAngle } from './cad-input';
 import { transact, editable, pointReferences } from './document';
 import { addDrawing, setLineStyle } from './tools';
 import { add, sub, scale, point, angle, length, lineGeometry } from './math';
@@ -169,8 +172,9 @@ export function unbindReferences(doc: GeometryDocument, id: string, role: 'teach
     role,
   );
 }
-export function propertyValues(doc: GeometryDocument, e: GeometryEntity): Record<string, string> {
+function sourcePropertyValues(doc: GeometryDocument, e: GeometryEntity): Record<string, string> {
   const common = { style: e.lineStyle };
+  if (isCadEntity(e)) return { ...common, ...cadPropertyValues(e) };
   if (e.kind === 'point')
     return { ...common, name: e.name, u: String(e.position.x), v: String(e.position.y) };
   if (e.kind === 'line' || e.kind === 'segment') {
@@ -193,6 +197,16 @@ export function propertyValues(doc: GeometryDocument, e: GeometryEntity): Record
     };
   return common;
 }
+function displayPropertyValues(source: Record<string, string>) {
+  const fields = { ...source };
+  for (const key of ['angle', 'startAngle', 'sweep', 'linearAngle']) {
+    if (key in fields) fields[key] = formatCadAngle(Number(fields[key]));
+  }
+  return fields;
+}
+export function propertyValues(doc: GeometryDocument, e: GeometryEntity): Record<string, string> {
+  return displayPropertyValues(sourcePropertyValues(doc, e));
+}
 export function applyProperties(
   doc: GeometryDocument,
   id: string,
@@ -201,12 +215,34 @@ export function applyProperties(
 ) {
   const e = doc.entities.find((e) => e.id === id);
   if (!e || !editable(doc, e, role)) throw Error('对象只读');
+  const source = sourcePropertyValues(doc, e);
+  const current = displayPropertyValues(source);
   const number = (key: string) => {
+    // Editing another field must retain the exact value that a rounded draft represents.
+    if (values[key] === current[key] && key in source) return Number(source[key]);
     const text = values[key]?.trim();
     if (!text || !Number.isFinite(Number(text))) throw Error('请输入完整的有限数值');
     return Number(text);
   };
-  const current = propertyValues(doc, e);
+  if (isCadEntity(e)) {
+    const changed = Object.entries(current).some(
+      ([key, value]) => key !== 'style' && values[key] !== value,
+    );
+    const next = changed
+      ? transact(
+          doc,
+          (d) => {
+            const target = d.entities.find((o) => o.id === id);
+            if (!target || !isCadEntity(target)) throw Error('对象已变更');
+            changeCadProperties(target, values, number);
+          },
+          role,
+        )
+      : doc;
+    return values.style === e.lineStyle
+      ? next
+      : setLineStyle(next, id, values.style as GeometryEntity['lineStyle'], role);
+  }
   const geometryChanged = Object.keys(current).some(
     (key) =>
       key !== 'style' &&

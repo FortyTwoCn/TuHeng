@@ -1,15 +1,23 @@
 import { createId } from '@tuheng/contracts';
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import {
-  addDrawing,
   addPenStroke,
   addRawPenStroke,
   distance,
+  penLinePreview,
+  snapPenCurve,
+  snapCandidates,
+  confirmSnap,
+  applyPenLineFit,
+  moveEntities,
+  sub,
+  sheetToLocal,
   foot,
   type PenOptions,
   type PenStrokeStyle,
 } from '@tuheng/geometry-core';
-import type { Tool, Ruler } from './types';
+import type { Ruler } from './types';
+import type { EditorControls } from './types';
 export type StrokeSample = Vec2 & { pressure: number };
 export function rawStrokeDocument(
   base: GeometryDocument,
@@ -37,125 +45,109 @@ export function rulerSamples(samples: StrokeSample[], ruler: Ruler, scale: numbe
     return samples.map((p) => ({ ...foot(p, line), pressure: p.pressure }));
   return samples;
 }
-export type DrawingResult =
-  | { kind: 'steps'; steps: Vec2[]; reference?: string; message: string }
-  | {
-      kind: 'document';
-      document: GeometryDocument;
-      rawStroke?: GeometryDocument;
-      message?: string;
-    };
-export function finishDrawing(
+export function finishPen(
   doc: GeometryDocument,
   options: {
-    tool: Tool;
     viewId: string;
     role: 'teacher' | 'student';
-    start: Vec2;
-    end: Vec2;
-    targetId?: string;
-    steps: Vec2[];
-    reference?: string;
     samples: StrokeSample[];
     scale: number;
-    clickThreshold?: number;
     penStyle?: PenStrokeStyle;
   },
-): DrawingResult {
-  const { tool, viewId, role, start, end, steps, reference, samples, scale } = options;
-  const target = doc.entities.find((e) => e.id === options.targetId && e.viewId === viewId);
-  if (tool === 'pen') {
-    const penOptions: PenOptions = { cssPixelsPerMm: scale, style: options.penStyle };
-    if (samples.length >= 4096)
-      return {
-        kind: 'document',
-        document: rawStrokeDocument(doc, viewId, samples, role, undefined, penOptions),
-        message: '采样达到 4096 上限，已保留原始折线与最终落点；请分段绘制',
-      };
-    const document = addPenStroke(doc, viewId, samples, role, penOptions),
-      entity = document.entities.at(-1)!;
+) {
+  const { viewId, role, samples, scale } = options;
+  const penOptions: PenOptions = { cssPixelsPerMm: scale, style: options.penStyle };
+  if (samples.length >= 4096)
     return {
-      kind: 'document',
-      document,
-      rawStroke:
-        entity.kind === 'polyline'
-          ? undefined
-          : rawStrokeDocument(doc, viewId, samples, role, entity.id, penOptions),
-      message:
-        entity.kind === 'polyline'
-          ? '未能可靠拟合为直线、圆、圆弧或曲线，已保留原笔迹'
-          : `已自动拟合为${{ circle: '圆', arc: '圆弧', segment: '直线', line: '无限辅助线', curve: '曲线' }[entity.kind as 'circle' | 'arc' | 'segment' | 'line' | 'curve']}，可恢复原始笔迹`,
+      kind: 'document' as const,
+      document: rawStrokeDocument(doc, viewId, samples, role, undefined, penOptions),
+      message: '采样达到 4096 上限，已保留原始折线与最终落点；请分段绘制',
     };
-  }
-
-  if (
-    ['parallel', 'perpendicular', 'parallel-hidden', 'perpendicular-hidden'].includes(tool) &&
-    !reference
-  ) {
-    if (!target || !['line', 'segment'].includes(target.kind))
-      throw new Error('请点击当前投影中的参考线');
-    return {
-      kind: 'steps',
-      steps: [],
-      reference: target.id,
-      message: '参考线已选，点击新线通过的位置',
-    };
-  }
-  if (tool === 'connect') {
-    if (target?.kind !== 'point') throw new Error('请选择同一投影中的两个点');
-    if (!reference)
-      return {
-        kind: 'steps',
-        steps: [target.position],
-        reference: target.id,
-        message: '选择另一个点',
-      };
-    return {
-      kind: 'document',
-      document: addDrawing(doc, 'connect', viewId, [steps[0], target.position], role, undefined, [
-        reference,
-        target.id,
-      ]),
-    };
-  }
-  if (tool === 'circle' || tool === 'arc') {
-    if (steps.length < (tool === 'circle' ? 1 : 2))
-      return {
-        kind: 'steps',
-        steps: [...steps, !steps.length && target?.kind === 'point' ? target.position : end],
-        reference: !steps.length && target?.kind === 'point' ? target.id : reference,
-        message: tool === 'circle' ? '选择圆周点' : '依次选择起点与终点',
-      };
-    return {
-      kind: 'document',
-      document: addDrawing(
-        doc,
-        tool,
-        viewId,
-        [...steps, end],
-        role,
-        undefined,
-        reference ? [reference] : undefined,
-      ),
-    };
-  }
-  if (['pan', 'projection', 'select', 'box'].includes(tool))
-    throw new Error('当前工具不是绘图工具');
-  const positions =
-    tool === 'point'
-      ? [end]
-      : distance(start, end) * scale > (options.clickThreshold ?? 3)
-        ? [start, end]
-        : [end];
+  const document = addPenStroke(doc, viewId, samples, role, penOptions),
+    entity = document.entities.at(-1)!;
   return {
-    kind: 'document',
-    document: addDrawing(
-      doc,
-      tool as Parameters<typeof addDrawing>[1],
-      viewId,
-      positions,
-      role,
-      reference,
-    ),
+    kind: 'document' as const,
+    document,
+    rawStroke:
+      entity.kind === 'polyline'
+        ? undefined
+        : rawStrokeDocument(doc, viewId, samples, role, entity.id, penOptions),
+    message:
+      entity.kind === 'polyline'
+        ? '未能可靠拟合为直线、圆、圆弧或曲线，已保留原笔迹'
+        : `已自动拟合为${{ circle: '圆', arc: '圆弧', segment: '直线', line: '无限辅助线', curve: '曲线' }[entity.kind as 'circle' | 'arc' | 'segment' | 'line' | 'curve']}，可恢复原始笔迹`,
   };
+}
+
+export function settlePen(
+  controls: EditorControls,
+  samples: StrokeSample[],
+  viewId: string,
+  scale: number,
+  threshold: number,
+  paused: boolean,
+  style: PenStrokeStyle,
+) {
+  const { document: doc, role } = controls;
+  const guided = rulerSamples(samples, controls.ruler, scale);
+  const result = finishPen(doc, {
+    viewId,
+    role,
+    scale,
+    penStyle: style,
+    samples: guided.map((p) => ({ ...sheetToLocal(doc, viewId, p), pressure: p.pressure })),
+  });
+  const raw = result.document,
+    entity = raw.entities.at(-1)!;
+  let next = raw,
+    message = result.message;
+  if (controls.snapping && !controls.skipSnap && !paused) {
+    const options = {
+      axes: controls.axes && controls.axesSnap,
+      objects: controls.objectSnap,
+      objectTypes: controls.objectTypes,
+      grid: controls.gridSnap,
+      gridSpacing: controls.gridSpacing,
+      direction: controls.direction && guided === samples,
+      hiddenLayers: controls.hiddenLayers,
+      projection: controls.projectionSnap,
+      threshold,
+    };
+    try {
+      if (entity.kind === 'line' || entity.kind === 'segment') {
+        const fit = penLinePreview(doc, raw, scale, options);
+        if (fit) {
+          next = applyPenLineFit(doc, raw, fit, role);
+          if (fit.directionLabel)
+            message = `已自动拟合并校正为${fit.directionLabel}${entity.kind === 'line' ? '辅助线' : '直线'}，可取消本次吸附或恢复原始笔迹`;
+        }
+      } else if (entity.kind === 'curve') {
+        next = snapPenCurve(doc, raw, role, scale, options);
+      } else if (entity.kind === 'arc' || entity.kind === 'circle') {
+        const center = raw.entities.find((e) => e.id === entity.center);
+        if (center?.kind === 'point') {
+          const candidate = snapCandidates(
+            doc,
+            viewId,
+            center.position,
+            scale,
+            undefined,
+            options,
+          )[0];
+          if (candidate)
+            next = confirmSnap(
+              doc,
+              moveEntities(raw, [center.id], sub(candidate.position, center.position), role),
+              candidate,
+              center.id,
+              role,
+            );
+        }
+      }
+    } catch {
+      next = raw;
+      message = '本次吸附与已有几何冲突，已保留拟合笔迹';
+    }
+  }
+  return { raw, next, rawStroke: result.rawStroke, message };
 }

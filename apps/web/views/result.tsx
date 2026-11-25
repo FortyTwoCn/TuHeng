@@ -45,6 +45,7 @@ export async function ResultView({ a, id }: { a: Actor; id: string }) {
               <GeometryReview
                 document={d.attempt.geometryAnswer}
                 annotations={suggestion?.result.geometryAnnotations}
+                geometryHighlights={suggestion?.geometryHighlights}
               />
             )}
             <DrawingViewer

@@ -17,6 +17,7 @@ import {
   moveEntities,
   addProjectionAxis,
   constructLine,
+  transact,
 } from '@tuheng/geometry-core';
 import { executeGradingRun } from '../../packages/infrastructure/src/grading-runner';
 import { MockVisionProvider } from '@tuheng/ai-providers';
@@ -130,7 +131,81 @@ it.each([false, true])(
       },
       'student',
     );
-    expect(answer.schemaVersion).toBe('tuheng.geometry/2.1.0');
+    expect(answer.schemaVersion).toBe('tuheng.geometry/3.0.0');
+    answer = transact(
+      answer,
+      (draft) => {
+        const segment = stem.entities.find((e) => e.kind === 'segment')!;
+        const common = {
+          viewId: segment.viewId,
+          layerId: 'answer',
+          lineStyle: 'ANSWER_VISIBLE',
+        } as const;
+        draft.entities.push(
+          {
+            ...common,
+            id: 'cad-ellipse',
+            kind: 'ellipse',
+            center: segment.startPoint,
+            majorRadius: 8,
+            minorRadius: 4,
+            angle: 23,
+            startAngle: 0,
+            sweep: 360,
+          },
+          {
+            ...common,
+            id: 'cad-dimension',
+            kind: 'dimension',
+            dimensionType: 'ALIGNED',
+            referenceIds: [segment.startPoint, segment.endPoint],
+            position: { x: 2, y: 3 },
+            precision: 2,
+            textOverride: '100',
+            arrowStyle: 'OPEN',
+            textSize: 2,
+          },
+          {
+            ...common,
+            id: 'cad-text',
+            kind: 'text',
+            position: { x: 2, y: 4 },
+            angle: 15,
+            size: 4,
+            content: '作答说明',
+          },
+          {
+            ...common,
+            id: 'cad-hatch',
+            kind: 'hatch',
+            loops: [['cad-ellipse']],
+            angle: 45,
+            origin: { x: 0, y: 0 },
+            spacing: 1,
+          },
+          {
+            ...common,
+            id: 'cad-datum',
+            kind: 'engineeringAnnotation',
+            annotationType: 'DATUM',
+            fields: ['A'],
+            position: { x: 3, y: 4 },
+            angle: 0,
+            size: 3,
+          },
+          {
+            ...common,
+            id: 'cad-direction',
+            kind: 'symbol',
+            symbolType: 'RIGHT_ROTATION',
+            position: { x: 4, y: 4 },
+            angle: 35,
+            size: 3,
+          },
+        );
+      },
+      'student',
+    );
     if (withCurve) {
       answer = addCurve(
         answer,
@@ -143,7 +218,7 @@ it.each([false, true])(
         'student',
         [stem.entities[0].id, '', stem.entities[1].id],
       );
-      expect(answer.schemaVersion).toBe('tuheng.geometry/2.2.0');
+      expect(answer.schemaVersion).toBe('tuheng.geometry/3.0.0');
     }
     const badReference = structuredClone(answer);
     badReference.referenceRelations![0].reference = {
@@ -226,11 +301,13 @@ it.each([false, true])(
     expect(request.geometryEvidence?.narrative).toContain('线');
     expect(request.geometryEvidence?.problemDocument).toEqual(stem);
     const evaluation = evaluationFixture();
+    const cited = request.geometryEvidence!.derivedRelations[0];
+    expect(cited?.entityIds.length).toBeGreaterThan(1);
     evaluation.geometryAnnotations = [
       {
         errorId: 'e1',
         entityIds: [answer.entities.at(-1)!.id],
-        relationIds: [],
+        relationIds: [cited.id],
         explanation: '测试定位',
       },
       { errorId: null, entityIds: ['missing'], relationIds: [], explanation: '应过滤' },
@@ -243,8 +320,22 @@ it.each([false, true])(
     const suggestion = (await db.list('gradingSuggestion', { runId: run.id }))[0];
     const result = GradingResult.parse(suggestion.result);
     expect(result.geometryAnnotations).toHaveLength(1);
-    expect(result.versions.prompt).toBe(
-      withCurve ? 'geometry-review/1.4.0' : 'geometry-review/1.3.0',
+    const review = await viewAttempt(db, teacher, attempt.id);
+    expect(review.suggestions[0].geometryHighlights[0]).toEqual([
+      ...new Set([answer.entities.at(-1)!.id, ...cited.entityIds]),
+    ]);
+    expect(result.versions.prompt).toBe('geometry-review/1.5.0');
+    expect(request.geometryEvidence?.narrative).toContain('实际测量值 10 mm');
+    expect(request.geometryEvidence?.narrative).toContain('用户覆盖文字 "100"');
+    expect(request.geometryEvidence?.answerDocument.entities.map((e) => e.kind)).toEqual(
+      expect.arrayContaining([
+        'ellipse',
+        'dimension',
+        'text',
+        'symbol',
+        'engineeringAnnotation',
+        'hatch',
+      ]),
     );
     if (withCurve) {
       expect(request.geometryEvidence?.narrative).toContain('插值曲线');

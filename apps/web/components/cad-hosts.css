@@ -1,0 +1,205 @@
+.cad-standalone {
+  display: grid;
+  height: 100vh;
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+}
+
+.site-content:has(> .cad-standalone) + .site-footer {
+  display: none;
+}
+
+.cad-standalone > .geometry-editor {
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  border-radius: 0;
+}
+
+.workspace:has(.cad-assignment) {
+  container: assignment-content / inline-size;
+}
+.workspace:has(.cad-assignment .geo-expanded) {
+  container-type: normal;
+}
+.cad-task-toggle {
+  display: none;
+}
+
+.cad-assignment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 290px);
+  align-items: start;
+  gap: 16px;
+  margin-block: 16px 28px;
+}
+
+.cad-answer-sheet,
+.cad-task-panel {
+  min-width: 0;
+}
+
+.cad-task-panel {
+  overflow-wrap: anywhere;
+  background: white;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.cad-task-heading,
+.cad-task-heading > span,
+.cad-task-extra summary,
+.cad-task-submit dl > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cad-task-heading {
+  color: var(--teal);
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.cad-task-panel h2 {
+  margin: 12px 0 8px;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.cad-task-requirement {
+  white-space: pre-wrap;
+  margin: 0 0 14px;
+}
+
+.cad-task-panel .metadata {
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-block: 0 10px;
+}
+
+.cad-task-panel details {
+  border-top: 1px solid var(--border);
+}
+
+.cad-task-panel summary {
+  min-height: 44px;
+  align-content: center;
+  font-weight: 550;
+}
+
+.cad-task-extra summary {
+  list-style: none;
+}
+
+.cad-task-extra[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.cad-task-submit {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 10px;
+}
+
+.cad-task-submit dl {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.cad-task-submit dt {
+  color: var(--muted);
+}
+
+.cad-task-submit dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.cad-task-submit .submission-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.cad-task-submit .button {
+  min-height: 44px;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cad-task-submit [role='status'] {
+  margin: 10px 0 0;
+}
+
+.cad-assignment:has(.geo-expanded) {
+  position: fixed;
+  z-index: 1050;
+  inset: 0;
+  margin: 0;
+  height: 100vh;
+  height: 100dvh;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  background: var(--bg);
+}
+.cad-assignment:has(.geo-expanded) .cad-answer-sheet,
+.cad-assignment:has(.geo-expanded) .geo-expanded {
+  height: 100%;
+  min-height: 0;
+}
+.cad-assignment:has(.geo-expanded) .cad-answer-sheet {
+  isolation: isolate;
+}
+.cad-assignment:has(.geo-expanded) .geo-expanded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+}
+.cad-assignment:has(.geo-expanded) .cad-task-panel {
+  height: 100%;
+  overflow-y: auto;
+  border-radius: 0;
+  padding-block: max(env(safe-area-inset-top), 18px) max(env(safe-area-inset-bottom), 16px);
+}
+
+@container assignment-content (max-width: 880px) {
+  .cad-assignment {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .cad-task-submit .submission-actions {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+  }
+}
+
+@media (max-width: 880px) {
+  .cad-assignment:has(.geo-expanded) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .cad-assignment:has(.geo-expanded) .cad-task-toggle {
+    display: flex;
+    min-height: 44px;
+    margin: 3px max(env(safe-area-inset-right), 6px) max(env(safe-area-inset-bottom), 3px)
+      max(env(safe-area-inset-left), 6px);
+  }
+  .cad-assignment:has(.geo-expanded) .cad-task-panel {
+    position: absolute;
+    inset: auto 6px calc(51px + env(safe-area-inset-bottom)) 6px;
+    border-radius: 12px;
+    height: auto;
+    max-height: 62%;
+    box-shadow: 0 8px 30px #13364b36;
+    z-index: 1;
+  }
+  .cad-assignment:has(.geo-expanded) .cad-task-panel[data-open='false'] {
+    display: none;
+  }
+}

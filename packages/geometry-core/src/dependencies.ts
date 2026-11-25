@@ -1,4 +1,5 @@
 import { localToSheet } from './sheet';
+import { resolveReference } from './references';
 import type { GeometryDocument } from '@tuheng/contracts';
 import { lineGeometry, unit, dot, cross, intersect, distance, point, foot } from './math';
 import {
@@ -12,6 +13,13 @@ export function evaluateDependencies(
   { resolveBindings = true }: { resolveBindings?: boolean } = {},
 ) {
   for (const a of doc.auxiliarySystems ?? []) {
+    if (a.referenceAxis) {
+      const reference = resolveReference(doc, a.referenceAxis).direction!;
+      const deviation =
+        a.method === 'PARALLEL' ? cross(reference, a.tangent) : dot(reference, a.tangent);
+      a.referenceStatus = Math.abs(deviation) < 0.001 ? 'SATISFIED' : 'INVALID';
+      continue;
+    }
     const e = doc.entities.find((e) => e.id === a.referenceEntityId);
     if (a.method === 'FREE' || !e) {
       a.referenceStatus = 'UNVERIFIED';

@@ -18,6 +18,7 @@ async function load(page: Page, doc = createDocument('OBLIQUE_DIMETRIC')) {
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(doc)),
   });
+  await expect(page.getByLabel('加载几何 JSON')).toHaveValue('');
   await expect(page.locator('[data-entity-id]')).toHaveCount(doc.entities.length);
 }
 async function exported(page: Page, name = '导出 JSON') {
@@ -48,8 +49,7 @@ async function stroke(page: Page, points: Vec2[]) {
   await page.mouse.up();
 }
 async function style(page: Page, name: string) {
-  const mobile = await page.getByRole('button', { name: '绘图', exact: true }).isVisible();
-  await choose(page, mobile ? '绘图' : '电子笔线型');
+  await choose(page, '电子笔线型');
   await page.getByRole('button', { name: `${name}笔迹`, exact: true }).click();
 }
 
@@ -68,7 +68,7 @@ test('new oblique axes point left/down and sparse real mouse stroke fits automat
 }) => {
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByLabel('图纸类型').selectOption('OBLIQUE_DIMETRIC');
-  await expect(page.getByLabel('图纸类型')).toHaveValue('OBLIQUE_DIMETRIC');
+  await expect(page.getByLabel('斜二等轴图编辑器', { exact: true })).toBeVisible();
   const doc = await json(page);
   expect(doc.projectionConfig).toMatchObject({ depthAngle: -135, depthScale: 0.5 });
   const y = page.locator('[data-reference-id="axis:y"] line').first();
@@ -110,7 +110,9 @@ for (const width of [1024, 390])
       expect(line.kind).toBe('line');
       if (line.kind !== 'line') throw Error('Expected fitted auxiliary line');
       expect(Math.abs(degrees === 4 ? line.direction.y : line.direction.x)).toBeLessThan(1e-10);
-      await expect(page.locator('.geo-status')).toContainText(degrees === 4 ? '水平' : '垂直');
+      await expect(page.locator('.cad-step-message')).toContainText(
+        degrees === 4 ? '水平' : '垂直',
+      );
       const visual = (await page.locator('[data-kind=line] line').boundingBox())!;
       expect(degrees === 4 ? visual.width : visual.height).toBeGreaterThan(250);
       await page
@@ -151,6 +153,10 @@ test('pen direction snapping respects finite styles, scale, switches, pause and 
     for (const degrees of [4, 86]) {
       await load(page, createDocument('VHW_PROJECTION'));
       await style(page, name);
+      if (degrees === 86) {
+        await choose(page, '放大');
+        await closePanels(page);
+      }
       await stroke(page, tiltedStroke(degrees));
       const doc = await json(page),
         line = doc.entities.at(-1)!;
@@ -158,14 +164,16 @@ test('pen direction snapping respects finite styles, scale, switches, pause and 
       expect(line.lineStyle).toBe(name === '实线' ? 'ANSWER_VISIBLE' : 'ANSWER_HIDDEN');
       const d = unit(lineGeometry(doc, line).d);
       expect(Math.abs(degrees === 4 ? d.y : d.x)).toBeLessThan(1e-10);
-      await choose(page, '放大');
-      await closePanels(page);
     }
   }
   for (const mode of ['disabled', 'axes', 'paused', 'diagonal']) {
     await load(page, createDocument('VHW_PROJECTION'));
     await style(page, '辅助线');
-    if (mode === 'disabled') await choose(page, '吸附开关');
+    if (mode === 'disabled') {
+      await settings(page);
+      await page.getByLabel('启用作图吸附', { exact: true }).uncheck();
+      await closePanels(page);
+    }
     if (mode === 'axes' || mode === 'paused') {
       await settings(page);
       if (mode === 'axes') await page.getByLabel('参考轴吸附', { exact: true }).uncheck();
@@ -177,21 +185,27 @@ test('pen direction snapping respects finite styles, scale, switches, pause and 
       line = doc.entities.at(-1)!;
     if (line.kind !== 'line') throw Error();
     expect(Math.abs(line.direction.y)).toBeGreaterThan(0.04);
-    await expect(page.locator('.geo-status')).not.toContainText('校正为水平');
-    if (mode === 'disabled') await choose(page, '吸附开关');
+    await expect(page.locator('.cad-step-message')).not.toContainText('校正为水平');
+    if (mode === 'paused') {
+      // The next pen gesture in the same session consumes the restored global setting.
+      await stroke(page, tiltedStroke(4).map((p) => ({ x: p.x, y: p.y + 25 })));
+      const corrected = await json(page);
+      expect(corrected.entities).toHaveLength(doc.entities.length + 1);
+      const next = corrected.entities.at(-1)!;
+      if (next.kind !== 'line') throw Error('Expected the second fitted auxiliary line');
+      expect(Math.abs(next.direction.y)).toBeLessThan(1e-10);
+    }
+    if (mode === 'disabled') {
+      await settings(page);
+      await page.getByLabel('启用作图吸附', { exact: true }).check();
+      await closePanels(page);
+    }
     if (mode === 'axes') {
       await settings(page);
       await page.getByLabel('参考轴吸附', { exact: true }).check();
       await closePanels(page);
     }
   }
-  // A paused operation consumes only the one-shot opt-out; later drawing still corrects.
-  await load(page, createDocument('VHW_PROJECTION'));
-  await stroke(page, tiltedStroke(4));
-  const corrected = await json(page);
-  const line = corrected.entities.at(-1)!;
-  if (line.kind !== 'line') throw Error();
-  expect(Math.abs(line.direction.y)).toBeLessThan(1e-10);
 });
 
 for (const width of [1366, 390])

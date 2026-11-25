@@ -1,5 +1,19 @@
+import { cadDrawing, textCorners } from './cad-geometry';
+import { isCadEntity } from '@tuheng/contracts';
+import { boundaryShape, nearestOnShape } from './parametric-geometry';
 import type { GeometryDocument, GeometryEntity, Vec2 } from '@tuheng/contracts';
-import { entityPath, type Bounds } from './math';
+import {
+  entityPath,
+  type Bounds,
+  sub,
+  unit,
+  dot,
+  distance,
+  foot,
+  point,
+  angle,
+  arcPoint,
+} from './math';
 import { entityInMarquee } from './marquee';
 export function selectionBounds(a: Vec2, b: Vec2): Bounds {
   return {
@@ -13,15 +27,75 @@ export function intersectsBox(doc: GeometryDocument, e: GeometryEntity, box: Bou
   return entityInMarquee(doc, e, box, 'crossing', 'local');
 }
 export function contentBounds(doc: GeometryDocument, viewId: string): Bounds {
-  const points = doc.entities
-    .filter((e) => e.viewId === viewId && e.kind !== 'line')
-    .flatMap((e) => entityPath(doc, e, { x: -10000, y: -10000, width: 20000, height: 20000 }));
-  if (!points.length) return { x: -20, y: -30, width: 120, height: 90 };
-  const minX = Math.min(...points.map((p) => p.x)),
-    maxX = Math.max(...points.map((p) => p.x)),
-    minY = Math.min(...points.map((p) => p.y)),
-    maxY = Math.max(...points.map((p) => p.y));
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (const e of doc.entities) {
+    if (e.viewId !== viewId) continue;
+    const positions =
+      e.kind === 'line'
+        ? [e.anchor]
+        : entityPath(doc, e, { x: -10000, y: -10000, width: 20000, height: 20000 });
+    for (const p of positions) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+  }
+  if (!Number.isFinite(minX)) return { x: -20, y: -30, width: 120, height: 90 };
   const width = Math.max(40, maxX - minX + 20, ((maxY - minY + 20) * 4) / 3),
     height = (width * 3) / 4;
   return { x: (minX + maxX - width) / 2, y: (minY + maxY - height) / 2, width, height };
+}
+
+export function hitDistance(doc: GeometryDocument, e: GeometryEntity, p: Vec2, box: Bounds) {
+  if (e.kind === 'ellipse' || e.kind === 'curve') {
+    const shape = boundaryShape(doc, e);
+    return shape ? distance(nearestOnShape(shape, p).position, p) : Infinity;
+  }
+  if (isCadEntity(e)) {
+    const drawing = cadDrawing(doc, e);
+    let nearest = Infinity;
+    for (const label of drawing.labels) {
+      const [a, b, , d] = textCorners(label);
+      const v = sub(p, a),
+        x = unit(sub(b, a)),
+        y = unit(sub(d, a));
+      const dx = Math.max(0, -dot(v, x), dot(v, x) - distance(a, b));
+      const dy = Math.max(0, -dot(v, y), dot(v, y) - distance(a, d));
+      nearest = Math.min(nearest, Math.hypot(dx, dy));
+    }
+    for (const path of drawing.strokes)
+      for (let i = 1; i < path.length; i++) {
+        const a = path[i - 1],
+          d = sub(path[i], a);
+        nearest = Math.min(
+          nearest,
+          dot(d, d) > 1e-16 ? distance(p, foot(p, { a, d, finite: true })) : distance(p, a),
+        );
+      }
+    return nearest;
+  }
+  if (e.kind === 'point') return distance(e.position, p);
+  if (e.kind === 'circle') return Math.abs(distance(point(doc, e.center), p) - e.radius);
+  if (e.kind === 'arc') {
+    const c = point(doc, e.center),
+      delta = (angle(sub(p, c)) - e.startAngle + 720) % 360;
+    if ((e.sweep > 0 && delta <= e.sweep) || (e.sweep < 0 && (360 - delta) % 360 <= -e.sweep))
+      return Math.abs(distance(c, p) - e.radius);
+    return Math.min(
+      distance(p, arcPoint(c, e.radius, e.startAngle)),
+      distance(p, arcPoint(c, e.radius, e.startAngle + e.sweep)),
+    );
+  }
+  const path = entityPath(doc, e, box);
+  return Math.min(
+    ...path.map((a, i) =>
+      i
+        ? distance(p, foot(p, { a: path[i - 1], d: sub(a, path[i - 1]), finite: true }))
+        : distance(p, a),
+    ),
+  );
 }

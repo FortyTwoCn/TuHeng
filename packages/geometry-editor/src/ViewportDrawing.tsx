@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { cloneElement, useId, useMemo, type CSSProperties } from 'react';
 import type { Vec2 } from '@tuheng/contracts';
 import {
   referenceGeometry,
@@ -9,10 +9,6 @@ import {
   scale as multiply,
   unit,
   axisDirection,
-  distance,
-  minorArc,
-  arcSvgPath,
-  viewTransform,
   type AxisConstruction,
   type Bounds,
 } from '@tuheng/geometry-core';
@@ -21,7 +17,6 @@ import { sheetDrawingDocument } from './sheet-drawing';
 import { EntityShape } from './rendering';
 export function ViewportDrawing({
   controls: props,
-  viewId,
   box,
   scale,
   preview,
@@ -30,7 +25,6 @@ export function ViewportDrawing({
   axisDraft,
 }: {
   controls: EditorControls;
-  viewId: string;
   box: Bounds;
   scale: number;
   preview: Vec2[];
@@ -38,8 +32,58 @@ export function ViewportDrawing({
   candidate: Vec2 | null;
   axisDraft: AxisConstruction | null;
 }) {
-  const doc = sheetDrawingDocument(props.document);
+  const doc = useMemo(() => sheetDrawingDocument(props.document), [props.document]);
+  const sheetPoints = useMemo(
+    () => new Map(doc.entities.filter((e) => e.kind === 'point').map((e) => [e.id, e.position])),
+    [doc],
+  );
+  const layer = useMemo(() => {
+    const active = new Set([...props.selected, ...props.highlighted]);
+    const clip: number[] = [],
+      sized: number[] = [];
+    const elements = doc.entities
+      .filter((e) => !props.hiddenLayers.includes(e.layerId))
+      .map((e, i) => {
+        const selected = active.has(e.id);
+        const labels = e.kind === 'point' && props.labels && e.labelVisible;
+        if (e.kind === 'line') clip.push(i);
+        if (selected || labels || e.appearance?.widthMm || e.kind === 'plane') sized.push(i);
+        return (
+          <EntityShape
+            key={e.id}
+            document={doc}
+            sourceDocument={props.document}
+            sheetPoints={sheetPoints}
+            entity={e}
+            labels={labels}
+            selected={selected}
+            scale={1}
+          />
+        );
+      });
+    return { elements, clip, sized };
+  }, [
+    doc,
+    props.document,
+    sheetPoints,
+    props.labels,
+    props.selected,
+    props.highlighted,
+    props.hiddenLayers,
+  ]);
+  // Retain the original paint order while sharing the entire immutable layer when a
+  // camera gesture only changes the SVG viewBox and the common point marker radius.
+  const geometry = useMemo(() => {
+    if (!layer.clip.length && !layer.sized.length) return layer.elements;
+    const elements = layer.elements.slice();
+    for (const i of layer.clip) elements[i] = cloneElement(elements[i], { box });
+    for (const i of layer.sized) elements[i] = cloneElement(elements[i], { scale });
+    return elements;
+  }, [layer, box, scale]);
   const gridId = useId().replaceAll(':', '');
+  // Coarsen only the visible grid when distant lines would merge into the same pixels.
+  const minor = props.gridSpacing * 5 ** Math.max(0, Math.ceil(Math.log(5 / (props.gridSpacing * scale)) / Math.log(5)));
+  const major = minor * 5;
   const references = referenceGeometry(props.document);
   return (
     <>
@@ -59,26 +103,36 @@ export function ViewportDrawing({
         </marker>
         <pattern
           id={gridId}
-          width={doc.settings.grid}
-          height={doc.settings.grid}
+          x="0" y="0"
+          width={minor}
+          height={minor}
+          data-world-grid="minor"
           patternUnits="userSpaceOnUse"
         >
           <path
-            d={`M ${doc.settings.grid} 0 L 0 0 0 ${doc.settings.grid}`}
+            d={`M ${minor} 0 L 0 0 0 ${minor}`}
             fill="none"
-            stroke="#e2e8f0"
-            strokeWidth={0.5 / scale}
+            stroke="var(--cad-grid-minor,#dfe7e9)"
+            strokeWidth={1 / scale}
           />
         </pattern>
+        <pattern id={gridId+'-major'} x="0" y="0" width={major} height={major} patternUnits="userSpaceOnUse" data-world-grid="major">
+          <rect width={major} height={major} fill={`url(#${gridId})`} />
+          <path d={`M ${major} 0 L 0 0 0 ${major}`} fill="none" stroke="var(--cad-grid-major,#bfd1d4)" strokeWidth={1.6 / scale}/>
+        </pattern>
       </defs>
-      <g transform="scale(1 -1)">
+      <g
+        transform="scale(1 -1)"
+        style={{ '--geo-point-radius': 3 / scale + 'px' } as CSSProperties}
+      >
         <rect
           x={box.x}
           y={box.y}
           width={box.width}
           height={box.height}
-          fill={props.grid ? `url(#${gridId})` : '#fff'}
+          fill="var(--cad-paper,#f8fbfc)"
         />
+        {props.grid && <rect aria-hidden="true" x={box.x} y={box.y} width={box.width} height={box.height} fill={`url(#${gridId}-major)`} />}
         {props.axes &&
           references.map((r) => {
             const key = referenceKey(r.ref),
@@ -90,9 +144,10 @@ export function ViewportDrawing({
                     cx={r.anchor.x}
                     cy={r.anchor.y}
                     r={(selected ? 4 : 2) / scale}
-                    fill="#64748b"
+                    fill="var(--cad-axis,#638894)"
                   />
                   <text
+                    fill="var(--cad-axis,#638894)"
                     transform={`translate(${r.anchor.x + 3 / scale} ${r.anchor.y - 12 / scale}) scale(1 -1)`}
                     fontSize={11 / scale}
                   >
@@ -108,6 +163,7 @@ export function ViewportDrawing({
                     (a) => a.id === (r.ref.kind === 'projectionAxis' ? r.ref.systemId : ''),
                   )
                 : undefined;
+            const miter = r.ref.kind === 'baseAxis' && r.ref.axisId === 'MITER_45';
             const tip = axis
               ? r.anchor
               : add(ends[1], multiply(unit(sub(ends[0], ends[1])), 25 / scale));
@@ -123,7 +179,7 @@ export function ViewportDrawing({
                       ? axis.owner === 'STUDENT'
                         ? '#0f766e'
                         : '#2563eb'
-                      : '#64748b'
+                      : 'var(--cad-axis,#638894)'
                 }
                 fill="none"
               >
@@ -133,7 +189,8 @@ export function ViewportDrawing({
                   x2={ends[1].x}
                   y2={ends[1].y}
                   strokeWidth={selected ? 2 : 1}
-                  strokeDasharray={axis ? '10 3 2 3' : undefined}
+                  strokeDasharray={axis ? '10 3 2 3' : miter ? '4 5' : undefined}
+                  opacity={miter && !selected ? 0.55 : undefined}
                   vectorEffect="non-scaling-stroke"
                 />
                 {axis && (
@@ -154,7 +211,7 @@ export function ViewportDrawing({
                 >
                   {axis
                     ? `${axis.name} · ${doc.views.find((v) => v.id === axis.newViewId)?.name}`
-                    : r.ref.kind === 'baseAxis'
+                    : r.ref.kind === 'baseAxis' && !miter
                       ? r.ref.axisId
                       : r.name}
                 </text>
@@ -209,50 +266,7 @@ export function ViewportDrawing({
             strokeWidth={2 / scale}
           />
         )}
-        {doc.entities
-          .filter((e) => !props.hiddenLayers.includes(e.layerId))
-          .map((e) => (
-            <EntityShape
-              key={e.id}
-              document={doc}
-              entity={e}
-              box={box}
-              scale={scale}
-              labels={props.labels}
-              selected={props.selected.includes(e.id) || props.highlighted.includes(e.id)}
-            />
-          ))}
-        {preview.length >= 2 && props.tool === 'circle' && (
-          <circle
-            data-transient="preview-circle"
-            cx={preview[0].x}
-            cy={preview[0].y}
-            r={distance(preview[0], preview[1])}
-            fill="none"
-            stroke="#0f766e"
-            strokeWidth={2 / scale}
-          />
-        )}
-        {preview.length === 3 &&
-          props.tool === 'arc' &&
-          (() => {
-            try {
-              const a = minorArc(preview[0], preview[1], preview[2]),
-                f = viewTransform(props.document, viewId);
-              if (a.sweep === 180) a.sweep *= f.xAxis.x * f.yAxis.y - f.xAxis.y * f.yAxis.x;
-              return (
-                <path
-                  data-transient="preview-arc"
-                  d={arcSvgPath(preview[0], a.radius, a.startAngle, a.sweep)}
-                  fill="none"
-                  stroke="#0f766e"
-                  strokeWidth={2 / scale}
-                />
-              );
-            } catch {
-              return null;
-            }
-          })()}
+        {geometry}
         {preview.length > 0 && (
           <polyline
             data-transient="preview"

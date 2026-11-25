@@ -1,4 +1,4 @@
-import { upgradeGeometryDocument } from './sheet';
+import { defaultTransform } from './sheet';
 import type { EditorType, GeometryDocument, Vec2, Vec3 } from '@tuheng/contracts';
 export const editorRegistry = {
   VHW_PROJECTION: { name: 'VHW 面投影', labels: true, views: ['V', 'H', 'W'] },
@@ -18,11 +18,13 @@ export function viewAxes(doc: GeometryDocument, viewId: string): Record<string, 
 }
 export function createDocument(editorType: EditorType): GeometryDocument {
   const def = editorRegistry[editorType];
-  return upgradeGeometryDocument({
-    schemaVersion: 'tuheng.geometry/1.0.0',
+  const doc: GeometryDocument = {
+    schemaVersion: 'tuheng.geometry/3.0.0',
     editorType,
     units: 'mm',
-    coordinateSystem: 'VIEW_LOCAL_X_RIGHT_Y_UP',
+    coordinateSystem: 'VIEW_LOCAL_WITH_SHEET_TRANSFORM',
+    sheet: { origin: { x: 0, y: 0 }, allowAuxiliaryViews: true },
+    auxiliarySystems: [],
     projectionConfig: {
       convention: 'FIRST_ANGLE_LEFT',
       depthAngle: editorType === 'OBLIQUE_DIMETRIC' ? -135 : 45,
@@ -57,7 +59,9 @@ export function createDocument(editorType: EditorType): GeometryDocument {
     projectionGroups: [],
     settings: { grid: 5, tolerance: 0.05, labels: def.labels },
     metadata: { title: '' },
-  });
+  };
+  doc.views = doc.views.map((v) => ({ ...v, transform: defaultTransform(doc, v) }));
+  return doc;
 }
 export function projectPoint(doc: GeometryDocument, point: Vec3, viewId: string): Vec2 {
   if (doc.editorType === 'VHW_PROJECTION' || doc.editorType === 'THREE_VIEW') {

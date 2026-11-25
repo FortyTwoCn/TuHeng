@@ -39,12 +39,18 @@ export function resolveReference(doc: GeometryDocument, ref: GeometryTargetRef):
     };
   if (ref.kind === 'baseAxis') {
     const directions: Record<string, Vec2> = orthographic(doc)
-      ? { X: { x: -1, y: 0 }, Z: { x: 0, y: 1 }, Y_H: { x: 0, y: -1 }, Y_W: { x: 1, y: 0 } }
+      ? {
+          X: { x: -1, y: 0 },
+          Z: { x: 0, y: 1 },
+          Y_H: { x: 0, y: -1 },
+          Y_W: { x: 1, y: 0 },
+          MITER_45: { x: 1, y: -1 },
+        }
       : viewAxes(doc, doc.views[0].id);
     if (!directions[ref.axisId]) throw Error('基准轴不存在');
     return {
       ref,
-      name: `${ref.axisId} 轴`,
+      name: ref.axisId === 'MITER_45' ? '45° 传宽线' : `${ref.axisId} 轴`,
       anchor: doc.sheet?.origin ?? { x: 0, y: 0 },
       direction: unit(directions[ref.axisId]),
       extent: 'ray',
@@ -79,7 +85,7 @@ export function resolveReference(doc: GeometryDocument, ref: GeometryTargetRef):
   };
 }
 export function referenceGeometry(doc: GeometryDocument) {
-  const keys = orthographic(doc) ? (['X', 'Z', 'Y_H', 'Y_W'] as const) : (['x', 'y', 'z'] as const);
+  const keys = orthographic(doc) ? (['X', 'Z', 'Y_H', 'Y_W', 'MITER_45'] as const) : (['x', 'y', 'z'] as const);
   const origins = doc.views.map((v) => resolveReference(doc, { kind: 'origin', frameId: v.id }));
   return [
     ...origins.filter(
@@ -124,7 +130,7 @@ export function targetCapabilities(
     return absent;
   if (
     ref.kind === 'baseAxis' &&
-    !(orthographic(doc) ? ['X', 'Z', 'Y_H', 'Y_W'] : ['x', 'y', 'z']).includes(ref.axisId)
+    !(orthographic(doc) ? ['X', 'Z', 'Y_H', 'Y_W', 'MITER_45'] : ['x', 'y', 'z']).includes(ref.axisId)
   )
     return absent;
   let editable = false,
@@ -145,7 +151,7 @@ export function targetCapabilities(
     deletable = editable;
     return {
       selectable: true,
-      snappable: ['point', 'segment', 'line'].includes(e.kind),
+      snappable: ['point', 'segment', 'line', 'circle', 'arc', 'ellipse', 'curve'].includes(e.kind),
       referenceable: ['point', 'segment', 'line'].includes(e.kind),
       editable: editable && !readOnly,
       deletable: deletable && !readOnly,
@@ -159,7 +165,11 @@ export function targetCapabilities(
         (a.owner === 'STUDENT' && !a.locked && !!doc.sheet?.allowAuxiliaryViews));
     deletable =
       editable &&
-      !doc.auxiliarySystems?.some((b) => b.parentId === a?.id) &&
+      !doc.auxiliarySystems?.some(
+        (b) =>
+          b.parentId === a?.id ||
+          (b.referenceAxis?.kind === 'projectionAxis' && b.referenceAxis.systemId === a?.id),
+      ) &&
       !doc.entities.some((e) => e.viewId === a?.newViewId) &&
       !doc.referenceRelations?.some(
         (r) => r.reference.kind === 'projectionAxis' && r.reference.systemId === a?.id,

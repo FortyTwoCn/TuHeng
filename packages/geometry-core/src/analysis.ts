@@ -1,7 +1,12 @@
 import { localToSheet } from './sheet';
 import { changedPlaneProjection } from './projection-systems';
 import { evaluateDependencies } from './dependencies';
-import type { GeometryDocument, GeometryEntity, GeometryRelation } from '@tuheng/contracts';
+import {
+  GEOMETRY_EVIDENCE_NARRATIVE_LIMIT,
+  type GeometryDocument,
+  type GeometryEntity,
+  type GeometryRelation,
+} from '@tuheng/contracts';
 import {
   angle,
   distance,
@@ -18,6 +23,7 @@ import {
 } from './math';
 import { editorRegistry } from './projections';
 import { serializeGeometryDocument } from './document';
+import { dimensionValue } from './cad-geometry';
 export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation[] {
   const relations: GeometryRelation[] = [];
   const tolerance = doc.settings.tolerance;
@@ -29,7 +35,10 @@ export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation
   ) => {
     if (relations.length < 3000)
       relations.push({
-        id: `${kind}.${entityIds.join('.')}`,
+        id:
+          doc.schemaVersion === 'tuheng.geometry/3.0.0'
+            ? [kind, ...entityIds].join(':')
+            : `${kind}.${entityIds.join('.')}`,
         kind,
         entityIds,
         source: 'COMPUTED',
@@ -39,11 +48,27 @@ export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation
       });
   };
   const lines = doc.entities.filter((e) => e.kind === 'segment' || e.kind === 'line');
+  const geometries = lines.map((e) => lineGeometry(doc, e));
+  const byView = new Map<string, GeometryEntity[]>();
+  for (const entity of doc.entities) {
+    let members = byView.get(entity.viewId);
+    if (!members) {
+      members = [];
+      byView.set(entity.viewId, members);
+    }
+    members.push(entity);
+  }
+  const centers = new Map(
+    doc.entities.filter((e) => e.kind === 'circle').map((e) => [e.id, point(doc, e.center)]),
+  );
   for (let i = 0; i < lines.length; i++) {
     const first = lines[i],
-      a = lineGeometry(doc, first);
-    for (const second of lines.slice(i + 1).filter((e) => e.viewId === first.viewId)) {
-      const b = lineGeometry(doc, second),
+      a = geometries[i];
+    for (let j = i + 1; j < lines.length; j++) {
+      if (relations.length >= 3000) return relations;
+      const second = lines[j];
+      if (second.viewId !== first.viewId) continue;
+      const b = geometries[j],
         ids = [first.id, second.id];
       if (parallel(a.d, b.d)) {
         record('PARALLEL', ids, null, '方向在 0.001 弧度容差内近似平行');
@@ -55,16 +80,15 @@ export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation
       const p = intersect(a, b);
       if (p) record('INTERSECTION', ids, 0, `交点 (${p.x.toFixed(3)}, ${p.y.toFixed(3)}) mm`);
     }
-    for (const e of doc.entities.filter((e) => e.viewId === first.viewId)) {
-      if (e.kind === 'point' && distance(e.position, foot(e.position, a)) <= tolerance)
-        record(
-          'POINT_ON_LINE',
-          [e.id, first.id],
-          distance(e.position, foot(e.position, a)),
-          '点位于线的距离容差内',
-        );
+    for (const e of byView.get(first.viewId) ?? []) {
+      if (relations.length >= 3000) return relations;
+      if (e.kind === 'point') {
+        const deviation = distance(e.position, foot(e.position, a));
+        if (deviation <= tolerance)
+          record('POINT_ON_LINE', [e.id, first.id], deviation, '点位于线的距离容差内');
+      }
       if (e.kind === 'circle') {
-        const center = point(doc, e.center);
+        const center = centers.get(e.id)!;
         const perpendicularFoot = foot(center, { ...a, finite: false });
         const residual = Math.abs(distance(center, perpendicularFoot) - e.radius);
         if (residual <= tolerance && distance(perpendicularFoot, foot(center, a)) <= tolerance)
@@ -177,7 +201,32 @@ export function exportGeometryNarrative(
       );
     if (e.kind === 'curve')
       lines.push(
-        `${prefix} 三次 Hermite 插值曲线，依次穿过 ${e.pointIds.join('、')}；端点 ${e.pointIds[0]} 与 ${e.pointIds.at(-1)}，局部坐标与实际点引用一致。`,
+        `${prefix} 三次 Hermite 插值曲线，源插值点 ${e.pointIds.join('、')}，当前保留参数区间 ${(e.parameterRange ?? [0, 1]).join(' 至 ')}。`,
+      );
+    if (e.kind === 'ellipse')
+      lines.push(
+        `${prefix} 椭圆，中心点 ${e.center}，长半轴 ${e.majorRadius} mm，短半轴 ${e.minorRadius} mm，轴方向 ${e.angle}°，始角 ${e.startAngle}°，扫角 ${e.sweep}°。`,
+      );
+    if (e.kind === 'text')
+      lines.push(
+        `${prefix} 图纸文字 ${JSON.stringify(e.content)}，位置 ${JSON.stringify(e.position)}，字高 ${e.size} mm，角度 ${e.angle}°。`,
+      );
+    if (e.kind === 'symbol')
+      lines.push(
+        `${prefix} 方向符号 ${e.symbolType}，位置 ${JSON.stringify(e.position)}，尺寸 ${e.size} mm，角度 ${e.angle}°，向视字母 ${JSON.stringify(e.label ?? "")}。`,
+      );
+    if (e.kind === 'dimension') {
+      let measurement='未知（引用几何失效）';
+      try { measurement=String(dimensionValue(doc,e))+(e.dimensionType==='ANGULAR'?'°':' mm'); } catch {}
+      lines.push(`${prefix} 尺寸标注 ${e.dimensionType}，测量对象 ${e.referenceIds.join('、')}，实际测量值 ${measurement}，用户覆盖文字 ${JSON.stringify(e.textOverride)}，公差标注 ${JSON.stringify(e.tolerance ?? null)}。`);
+    }
+    if (e.kind === 'engineeringAnnotation')
+      lines.push(
+        `${prefix} 工程标注 ${e.annotationType}，用户填写 ${JSON.stringify(e.toleranceRows ?? e.fields)}，粗糙度设置 ${JSON.stringify(e.roughnessDetails ?? null)}，该标注的公差符合性未知。`,
+      );
+    if (e.kind === 'hatch')
+      lines.push(
+        `${prefix} 剖面线，边界环 ${JSON.stringify(e.loops)}${e.spans ? '，局部区间 '+JSON.stringify(e.spans) : ''}，角度 ${e.angle}°，间距 ${e.spacing} mm，图案基点 ${JSON.stringify(e.origin)}。`,
       );
     if (e.kind === 'polyline') lines.push(`${prefix} 未拟合笔迹，共 ${e.points.length} 个轨迹点。`);
     if (e.kind === 'plane')
@@ -197,10 +246,17 @@ export function exportGeometryNarrative(
 export function exportGeometryBundle(doc: GeometryDocument) {
   const document = JSON.parse(serializeGeometryDocument(doc)) as GeometryDocument;
   const derivedRelations = analyzeGeometryDocument(document);
+  let narrative = exportGeometryNarrative(document, derivedRelations);
+  if (narrative.length > GEOMETRY_EVIDENCE_NARRATIVE_LIMIT) {
+    const note =
+      '评分用文字叙述已节选。全部对象及字段见 answerDocument，计算所得关系见 derivedRelations。';
+    const end = narrative.lastIndexOf('\n', GEOMETRY_EVIDENCE_NARRATIVE_LIMIT - note.length - 1);
+    narrative = narrative.slice(0, Math.max(0, end)) + '\n' + note;
+  }
   return {
     document,
     derivedRelations,
-    narrative: exportGeometryNarrative(document, derivedRelations),
+    narrative,
   };
 }
 export const exportGeometryJson = serializeGeometryDocument;

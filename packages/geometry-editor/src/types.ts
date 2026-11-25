@@ -1,8 +1,10 @@
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
-import type { DrawingTool } from '@tuheng/geometry-core';
 import type { EditorSession, SessionAction } from './session';
 import type { CommandId } from './commands';
-export type Tool = DrawingTool | 'select' | 'pan' | 'box' | 'pen' | 'projection';
+import type { CadController } from './useCadCommand';
+import type { ObjectSnapType } from '@tuheng/geometry-core';
+import type { Appearance } from './CadPreferences';
+export type Tool = 'select' | 'pan' | 'box' | 'pen' | 'projection';
 export interface Ruler {
   visible: boolean;
   origin: Vec2;
@@ -10,6 +12,18 @@ export interface Ruler {
   length: number;
 }
 export interface EditorControls {
+  cursorStatusRef?: import('react').RefObject<HTMLOutputElement | null>;
+  cad: CadController;
+  appearance: Appearance;
+  objectSnap: boolean;
+  gridSpacing: number;
+  objectTypes: ObjectSnapType[];
+  direction: boolean;
+  tracking: boolean;
+  ortho: boolean;
+  touchOffset: boolean;
+  selectionMode: 'replace' | 'add' | 'remove';
+  typeFilter: string;
   document: GeometryDocument;
   role: 'teacher' | 'student';
   readOnly: boolean;

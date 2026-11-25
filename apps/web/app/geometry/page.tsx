@@ -40,9 +40,7 @@ export default async function GeometryPage({
       </main>
     );
   return (
-    <main style={{ maxWidth: 1200, margin: '0 auto', padding: 16 }}>
-      <h1>几何作图</h1>
-      <p>独立作图可导出 JSON 保存，在作业页面中使用编辑器可保存到作业草稿。</p>
+    <main className="cad-standalone" aria-label="独立几何作图">
       <GeometryWorkspace />
     </main>
   );

@@ -69,22 +69,14 @@ export async function AssignmentDetails({
           const draft = own
             ? await database.list('storedAsset', { id: { in: own.draftAssetIds } })
             : [];
-          return (
-            <Panel
-              key={item.id}
-              title={`${String(index + 1).padStart(2, '0')} · ${item.question.title}`}
-              action={<Badge>{formatPoints(item.question.maxPoints)} 分</Badge>}
-            >
-              <p>{item.question.content}</p>
+          const details = (
+            <>
               <div className="metadata">
                 <span>题目版本 v{item.question.version}</span>
-                <span>{item.question.chapter}</span>
+                {item.question.chapter && <span>{item.question.chapter}</span>}
               </div>
               {assets.length > 0 && (
                 <DrawingViewer assets={assets} realm={a.kind === 'STUDENT' ? 'STUDENT' : 'STAFF'} />
-              )}
-              {(teacher || manager) && item.question.geometryDocument && (
-                <GeometryEditor value={item.question.geometryDocument} readOnly role="teacher" />
               )}
               <details>
                 <summary>查看评分细则</summary>
@@ -102,6 +94,64 @@ export async function AssignmentDetails({
                   </tbody>
                 </table>
               </details>
+            </>
+          );
+          const versions = item.attempts.length > 0 && (
+            <details className="submission-versions">
+              <summary>我的提交版本（{item.attempts.length}）</summary>
+              {item.attempts.map((at) => (
+                <Link className="list-item" key={at.id} href={`/student/results/${at.id}`}>
+                  <strong>作答 v{at.version}</strong>
+                  <span>{date(at.submittedAt)}</span>
+                  <Badge tone={at.publishedDecisionId ? 'green' : 'blue'}>
+                    {at.publishedDecisionId ? '查看成绩' : '查看处理状态'}
+                  </Badge>
+                </Link>
+              ))}
+            </details>
+          );
+          const acceptsAnswer =
+            item.attempts.length < assignment.maxAttempts &&
+            (assignment.allowLate || new Date() <= assignment.dueAt);
+          if (!teacher && !manager && acceptsAnswer && item.question.geometryDocument)
+            return (
+              <SubmissionEditor
+                key={item.id}
+                itemId={item.id}
+                initial={draft}
+                problemGeometry={item.question.geometryDocument}
+                draftGeometry={own?.draftGeometry}
+                assignmentTask={{
+                  number: index + 1,
+                  count: items.length,
+                  title: item.question.title,
+                  content: item.question.content,
+                  maxPoints: formatPoints(item.question.maxPoints),
+                  attempts: item.attempts.length,
+                  maxAttempts: assignment.maxAttempts,
+                  hasDraft: !!(own?.draftGeometry || own?.draftAssetIds.length),
+                }}
+              >
+                {details}
+                {versions}
+              </SubmissionEditor>
+            );
+          return (
+            <Panel
+              key={item.id}
+              title={`${String(index + 1).padStart(2, '0')} · ${item.question.title}`}
+              action={<Badge>{formatPoints(item.question.maxPoints)} 分</Badge>}
+            >
+              <p>{item.question.content}</p>
+              {details}
+              {item.question.geometryDocument && (
+                <GeometryEditor
+                  value={item.question.geometryDocument}
+                  readOnly
+                  role="teacher"
+                  documentName="题干图纸"
+                />
+              )}
               {teacher ? (
                 <>
                   <h3>学生提交</h3>
@@ -125,22 +175,8 @@ export async function AssignmentDetails({
                 <p>此作业由指定教师复核；管理权限不开放学生私有作答。</p>
               ) : (
                 <>
-                  {item.attempts.length > 0 && (
-                    <div>
-                      <h3>我的提交版本</h3>
-                      {item.attempts.map((at) => (
-                        <Link className="list-item" key={at.id} href={`/student/results/${at.id}`}>
-                          <strong>作答 v{at.version}</strong>
-                          <span>{date(at.submittedAt)}</span>
-                          <Badge tone={at.publishedDecisionId ? 'green' : 'blue'}>
-                            {at.publishedDecisionId ? '查看成绩' : '查看处理状态'}
-                          </Badge>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                  {item.attempts.length < assignment.maxAttempts &&
-                  (assignment.allowLate || new Date() <= assignment.dueAt) ? (
+                  {versions}
+                  {acceptsAnswer ? (
                     <SubmissionEditor
                       itemId={item.id}
                       initial={draft}

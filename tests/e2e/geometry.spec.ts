@@ -1,6 +1,6 @@
 import { prepareLogin } from './identity-login';
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync } from 'node:fs';
 import { choose, settings, closePanels, properties } from './editor-controls';
 import { performanceDocument } from '../geometry-fixtures';
 async function login(page: Page, who = 'teacher') {
@@ -13,7 +13,32 @@ async function login(page: Page, who = 'teacher') {
 async function draw(page: Page, tool: string, x = 150, y = 130) {
   await choose(page, tool);
   const svg = page.locator('.geo-active svg');
+  const segmentsBefore = await svg.locator('[data-kind=segment]').count();
   await svg.click({ position: { x, y } });
+  if (tool === '实线' || tool === '虚线') {
+    // A pre-existing problem stem can already contain segments in an answer document.
+    await expect(svg.locator('[data-kind=segment]')).toHaveCount(segmentsBefore);
+    await svg.click({ position: { x: x + 47, y: y + 19 } });
+    await page
+      .getByRole('region', { name: 'CAD 命令' })
+      .getByRole('button', { name: '完成', exact: true })
+      .click();
+  }
+  if (tool === '辅助线') await svg.click({ position: { x: x + 40, y: y + 18 } });
+}
+async function selectSegment(page: Page, style: string) {
+  const shape = page
+    .locator(`.geo-active [data-kind=segment][data-style="${style}"] > line`)
+    .first();
+  const p = await shape.evaluate((el) => {
+    const line = el as SVGLineElement;
+    const pos = new DOMPoint(
+      (line.x1.baseVal.value + line.x2.baseVal.value) / 2,
+      (line.y1.baseVal.value + line.y2.baseVal.value) / 2,
+    ).matrixTransform(line.getScreenCTM()!);
+    return { x: pos.x, y: pos.y };
+  });
+  await page.mouse.click(p.x, p.y);
 }
 test('anonymous geometry visits return through login and a lost session returns to login', async ({
   page,
@@ -29,6 +54,8 @@ test('anonymous geometry visits return through login and a lost session returns 
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/geometry');
   await expect(page.locator('.geometry-editor')).toBeVisible();
+  await expect(page.getByRole('main', { name: '独立几何作图' })).toBeVisible();
+  await expect(page.getByRole('contentinfo', { name: '网站信息' })).toHaveCount(0);
   await context.clearCookies();
   await page.reload();
   await expect(page).toHaveURL('/login?callbackUrl=%2Fgeometry');
@@ -59,13 +86,13 @@ test('JSON validation, projection links, touch zoom and the multi-object mobile 
   await choose(page, '投影关联');
   await page.locator('[data-kind=point]').nth(0).locator('circle').first().click();
   await page.locator('[data-kind=point]').nth(1).locator('circle').first().click();
-  await expect(page.locator('.geo-status').first()).toContainText('投影关联已记录');
+  await expect(page.locator('.cad-step-message')).toContainText('投影关联已记录');
   await page.getByLabel('加载几何 JSON').setInputFiles({
     name: 'invalid.json',
     mimeType: 'application/json',
     buffer: Buffer.from('{"schemaVersion":"invalid"}'),
   });
-  await expect(page.locator('.geo-status').first()).toContainText('加载失败');
+  await expect(page.locator('.cad-step-message')).toContainText('加载失败');
   await expect(page.locator('[data-kind=point]')).toHaveCount(2);
   const fixture = performanceDocument();
   // Importers may choose stable view IDs and projection conventions independently of the UI.
@@ -139,20 +166,37 @@ test('four editors load, draw, undo, export, and keep mobile views and raw pen s
     await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(0);
     await page.getByRole('button', { name: '恢复', exact: true }).click();
     await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(1);
+    await selectSegment(page, 'ANSWER_VISIBLE');
     await properties(page);
-    await page.getByRole('combobox', { name: '线型', exact: true }).selectOption('CONSTRUCTION');
+    const style = page.getByRole('combobox', { name: '线型', exact: true });
+    await expect(style.locator('option[value=CONSTRUCTION]')).toHaveCount(0);
+    await style.selectOption('ANSWER_HIDDEN');
     await choose(page, '确认属性');
-    await expect(page.locator('.geo-active [data-kind=line]')).toHaveCount(1);
+    await expect(
+      page.locator('.geo-active [data-kind=segment][data-style=ANSWER_HIDDEN]'),
+    ).toHaveCount(1);
     await page.getByRole('combobox', { name: '线型', exact: true }).selectOption('ANSWER_VISIBLE');
     await choose(page, '确认属性');
     await expect(page.locator('.geo-active [data-kind=segment]')).toHaveCount(1);
     await draw(page, '圆', 220, 80);
     await page.locator('.geo-active svg').click({ position: { x: 250, y: 80 } });
     await expect(page.locator('.geo-active [data-kind=circle]')).toHaveCount(1);
-    await draw(page, '圆弧', 220, 220);
-    await page.locator('.geo-active svg').click({ position: { x: 250, y: 220 } });
-    await page.locator('.geo-active svg').click({ position: { x: 220, y: 190 } });
-    await expect(page.locator('.geo-active [data-kind=arc]')).toHaveCount(1);
+    const canvas = page.locator('.geo-active svg');
+    const step = page.getByRole('region', { name: 'CAD 命令' });
+    await choose(page, '圆弧');
+    await expect(step).toContainText('选择圆心');
+    // Use raw click coordinates for the arc surrounded by previously drawn outlines.
+    await page.keyboard.down('Alt');
+    try {
+      await canvas.click({ position: { x: 220, y: 220 } });
+      await expect(step).toContainText('选择起点');
+      await canvas.click({ position: { x: 250, y: 220 } });
+      await expect(step).toContainText('选择终点');
+      await canvas.click({ position: { x: 220, y: 190 } });
+    } finally {
+      await page.keyboard.up('Alt');
+    }
+    await expect(canvas.locator('[data-kind=arc]')).toHaveCount(1);
     const download = page.waitForEvent('download');
     await choose(page, '导出 JSON');
     await closePanels(page);
@@ -223,8 +267,18 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await teacher.getByLabel('题目要求').fill('补全对应投影，保留辅助线。');
   await teacher.getByLabel('点的投影规律', { exact: true }).check();
   await teacher.getByLabel('作答方式').selectOption('VHW_PROJECTION');
+  await teacher
+    .locator('.geometry-editor')
+    .getByRole('button', { name: '展开编辑', exact: true })
+    .click();
+  await expect(teacher.locator('.geometry-editor.geo-expanded')).toBeVisible();
   await draw(teacher, '实线');
   await expect(teacher.locator('[data-style=PROBLEM_VISIBLE][data-kind=segment]')).toHaveCount(1);
+  await teacher
+    .locator('.geometry-editor')
+    .getByRole('button', { name: '退出展开', exact: true })
+    .click();
+  await expect(teacher).toHaveURL('/teacher/questions/new');
   await teacher.getByLabel('参考作图与关键步骤').fill('对应投影的横坐标一致。');
   await teacher.getByLabel('我已检查参考答案与等价正确解法，确认可作为判分依据').check();
   await teacher.getByLabel('我已确认题意、参考答案和评分细则（保存为新版本）').check();
@@ -245,21 +299,48 @@ test('teacher geometry question is versioned and student submits a pure vector s
   const assignment = new URL(teacher.url()).pathname.replace('/teacher/', '/student/');
   await teacher.getByRole('button', { name: '确认名单并正式发布' }).click();
   await login(student, 'student');
+  await student.setViewportSize({ width: 1440, height: 900 });
   await student.goto(assignment);
+  const task = student.getByRole('complementary', { name: '本题作答' });
+  await expect(task.getByRole('heading', { name: title })).toBeVisible();
+  await expect(task).toContainText('第 1 / 1 题');
+  await expect(task).toContainText('补全对应投影，保留辅助线。');
+  await expect(task.getByText('未保存', { exact: true })).toBeVisible();
   await draw(student, '虚线', 180, 140);
   await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
   await draw(student, '辅助线', 120, 100);
   await choose(student, '新增投影轴');
   await student.getByRole('button', { name: '开始定位新轴', exact: true }).click();
   const sheet = student.locator('.geo-active svg');
-  await sheet.click({ position: { x: 100, y: 80 } });
-  await sheet.click({ position: { x: 100, y: 140 } });
-  await sheet.click({ position: { x: 70, y: 110 } });
+  const axisCanvas = (await sheet.boundingBox())!;
+  const axisPoint = (x: number, y: number) =>
+    sheet.click({ position: { x: axisCanvas.width * x, y: axisCanvas.height * y } });
+  await axisPoint(0.3, 0.46);
+  await axisPoint(0.3, 0.7);
+  await axisPoint(0.22, 0.57);
   await student.getByRole('button', { name: '确认新轴', exact: true }).click();
   await expect(student.locator('[data-axis-id]')).toHaveCount(1);
   await choose(student, '平行线');
+  await selectSegment(student, 'PROBLEM_VISIBLE');
   await sheet.click({ position: { x: 300, y: 180 } });
   await choose(student, '确认创建');
+  await expect(task.getByText('有未保存修改', { exact: true })).toBeVisible();
+  await student.getByRole('button', { name: '展开编辑', exact: true }).click();
+  const taskBox = (await task.boundingBox())!;
+  const canvasBox = (await sheet.boundingBox())!;
+  expect(taskBox.x).toBeGreaterThanOrEqual(canvasBox.x + canvasBox.width - 1);
+  mkdirSync('docs/evidence/cad-workspace', { recursive: true });
+  await student.screenshot({ path: 'docs/evidence/cad-workspace/assignment-desktop.png' });
+  await student.setViewportSize({ width: 390, height: 844 });
+  const toggle = student.getByRole('button', { name: '查看题目与提交' });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(task).toBeVisible();
+  const rubric = task.getByText('查看评分细则', { exact: true });
+  await rubric.click();
+  await expect(rubric.locator('..')).toHaveAttribute('open', '');
+  await rubric.click();
+  await student.screenshot({ path: 'docs/evidence/cad-workspace/assignment-phone.png' });
   const draftResponse = student.waitForResponse(
     (response) =>
       response.url().endsWith('/api/actions/draft') && response.request().method() === 'POST',
@@ -267,7 +348,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await student.getByRole('button', { name: '保存草稿', exact: true }).click();
   const draftRequest = (await draftResponse).request().postDataJSON();
   expect(draftRequest.geometry.auxiliarySystems).toHaveLength(1);
-  expect(draftRequest.geometry.schemaVersion).toBe('tuheng.geometry/2.1.0');
+  expect(draftRequest.geometry.schemaVersion).toBe('tuheng.geometry/3.0.0');
   expect(draftRequest.geometry.referenceRelations.length).toBeGreaterThan(0);
   const missingReference = structuredClone(draftRequest);
   missingReference.geometry.referenceRelations[0].reference = {
@@ -299,6 +380,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   });
   expect(deniedAxis.status()).toBe(403);
   await expect(student.getByText('草稿已保存，可稍后继续。')).toBeVisible();
+  await expect(task.getByText('已保存', { exact: true })).toBeVisible();
   await student.reload();
   await expect(student.locator('[data-axis-id]')).toHaveCount(1);
   await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
@@ -308,6 +390,10 @@ test('teacher geometry question is versioned and student submits a pure vector s
   const id = student.url().split('/').at(-1);
   await teacher.goto(`/teacher/reviews/${id}`);
   await expect(teacher.locator('.geometry-editor')).toBeVisible();
+  await expect(teacher.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
+  await expect(
+    teacher.locator('.geometry-editor').getByRole('button', { name: '撤销', exact: true }),
+  ).toBeDisabled();
   await teacher.close();
   await student.close();
 });

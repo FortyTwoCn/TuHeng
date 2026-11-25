@@ -1,10 +1,21 @@
 import { createId } from '@tuheng/contracts';
 import type { GeometryDocument, Vec2, GeometryTargetRef } from '@tuheng/contracts';
-import { add, distance, foot, intersect, lineGeometry, scale, sub, dot, unit } from './math';
+import { add, cross, distance, foot, length, scale, sub, dot, unit } from './math';
 import { viewAxes } from './projections';
 import { mergePoints } from './topology';
 import { transact } from './document';
-import { referenceGeometry, referenceKey, closestReference, resolveReference } from './references';
+import { referenceGeometry, referenceKey, closestReference } from './references';
+import {
+  curvedSnapPositions,
+  geometricIntersections,
+  nearbyEntries,
+  snapIndex,
+  objectSnapEnabled,
+  directionalEndpoint,
+  tangentAtCircleOrigin,
+  type ObjectSnapType,
+} from './snap-geometry';
+export type { ObjectSnapType } from './snap-geometry';
 import { localToSheet, sheetToLocal } from './sheet';
 import { writeReferenceRelation } from './reference-relations';
 export const interactionThresholds = {
@@ -12,7 +23,16 @@ export const interactionThresholds = {
   pen: { drag: 3, snap: 12, hit: 12 },
   touch: { drag: 7, snap: 16, hit: 18 },
 };
+export interface SnapGuide {
+  kind: 'parallel' | 'perpendicular' | 'tangent';
+  sourceId: string;
+  origin: Vec2;
+  contact: Vec2;
+  direction: Vec2;
+}
 export interface SnapCandidate {
+  positionOnly?: boolean;
+  tracks?: { point: Vec2; direction: Vec2 }[];
   id?: string;
   label?: string;
   reference?: GeometryTargetRef;
@@ -20,6 +40,13 @@ export interface SnapCandidate {
   position: Vec2;
   entityIds: string[];
   kind:
+    | 'NEAREST'
+    | 'TRACKING'
+    | 'ENDPOINT'
+    | 'CENTER'
+    | 'FOOT'
+    | 'TANGENT'
+    | 'QUADRANT'
     | 'COINCIDENT'
     | 'MIDPOINT'
     | 'INTERSECTION'
@@ -33,22 +60,65 @@ export interface SnapCandidate {
     | 'PERPENDICULAR'
     | 'PROJECTION_ALIGNMENT';
   distance: number;
+  guide?: SnapGuide;
+  pairedTangent?: { sourceId: string; contact: Vec2 };
 }
+export interface SnapOptions {
+  exclude?: string[];
+  hiddenLayers?: string[];
+  grid?: boolean;
+  gridSpacing?: number;
+  projection?: boolean;
+  threshold?: number;
+  previous?: SnapCandidate;
+  axes?: boolean;
+  objects?: boolean;
+  objectTypes?: readonly ObjectSnapType[];
+  direction?: boolean;
+  lineRelations?: boolean;
+}
+// Coincident snap positions are compared in local drawing millimetres, never in screen pixels.
+const samePosition = 1e-7;
+const pointFeatureOrder: Partial<Record<SnapCandidate['kind'], number>> = {
+  COINCIDENT: 0,
+  ENDPOINT: 1,
+  ORIGIN: 2,
+  INTERSECTION: 3,
+  CENTER: 4,
+  MIDPOINT: 5,
+  QUADRANT: 6,
+  GRID: 7,
+};
+
+function acceptsGuide(start: Vec2, end: Vec2, candidate: SnapCandidate): boolean {
+  const g = candidate.guide;
+  const v = sub(end, start),
+    size = length(v);
+  if (!g || size <= samePosition) return false;
+  if (g.kind === 'perpendicular') {
+    return (
+      Math.abs(dot(v, g.direction)) <= samePosition &&
+      (candidate.kind !== 'FOOT' || distance(end, g.contact) <= samePosition)
+    );
+  }
+  if (Math.abs(cross(v, g.direction)) > samePosition) return false;
+  if (g.kind === 'parallel') return true;
+  const fromStart = sub(g.contact, start);
+  const along = dot(fromStart, v) / size;
+  return (
+    Math.abs(cross(fromStart, g.direction)) <= samePosition &&
+    along >= -samePosition &&
+    along <= size + samePosition
+  );
+}
+
 export function snapCandidates(
   doc: GeometryDocument,
   viewId: string,
   p: Vec2,
   cssPixelsPerMm: number,
   origin?: Vec2,
-  options: {
-    exclude?: string[];
-    hiddenLayers?: string[];
-    grid?: boolean;
-    projection?: boolean;
-    threshold?: number;
-    previous?: SnapCandidate;
-    axes?: boolean;
-  } = {},
+  options: SnapOptions = {},
 ): SnapCandidate[] {
   const threshold = (options.threshold ?? 10) / cssPixelsPerMm,
     candidates: SnapCandidate[] = [];
@@ -58,11 +128,32 @@ export function snapCandidates(
     kind: SnapCandidate['kind'],
     reference?: GeometryTargetRef,
     label?: string,
+    positionOnly = false,
+    guide?: SnapGuide,
   ) => {
     const d = distance(position, p);
-    const id = reference ? `${kind}:${referenceKey(reference)}` : `${kind}:${entityIds.join(',')}`;
+    const feature =
+      positionOnly && ['TANGENT', 'QUADRANT', 'ENDPOINT'].includes(kind)
+        ? ':' +
+          (guide?.contact ?? position).x.toFixed(6) +
+          ',' +
+          (guide?.contact ?? position).y.toFixed(6)
+        : '';
+    const id =
+      (reference ? `${kind}:${referenceKey(reference)}` : `${kind}:${entityIds.join(',')}`) +
+      feature;
     if (d <= threshold * (options.previous?.id === id ? 1.5 : 1))
-      candidates.push({ id, position, entityIds, kind, distance: d, reference, label });
+      candidates.push({
+        id,
+        position,
+        entityIds,
+        kind,
+        distance: d,
+        reference,
+        label,
+        positionOnly,
+        ...(guide ? { guide } : {}),
+      });
   };
   if (options.axes !== false)
     for (const reference of referenceGeometry(doc)) {
@@ -76,25 +167,121 @@ export function snapCandidates(
       );
     }
   candidates.push(...intersectionCandidates(doc, viewId, p, cssPixelsPerMm, options));
+  const index = snapIndex(doc, viewId);
   const entities = doc.entities.filter(
-      (e) =>
-        e.viewId === viewId &&
-        !options.exclude?.includes(e.id) &&
-        !options.hiddenLayers?.includes(e.layerId),
-    ),
-    lines = entities.filter((e) => e.kind === 'line' || e.kind === 'segment');
-  for (const e of entities) if (e.kind === 'point') push(e.position, [e.id], 'COINCIDENT');
-  for (let i = 0; i < lines.length; i++) {
-    const e = lines[i],
-      a = lineGeometry(doc, e);
-    if (origin) {
-      for (const kind of ['PARALLEL', 'PERPENDICULAR'] as const) {
-        const direction = unit(kind === 'PARALLEL' ? a.d : { x: -a.d.y, y: a.d.x });
-        push(add(origin, scale(direction, dot(sub(p, origin), direction))), [e.id], kind);
+    (e) =>
+      e.viewId === viewId &&
+      !options.exclude?.includes(e.id) &&
+      !options.hiddenLayers?.includes(e.layerId),
+  );
+  if (objectSnapEnabled(options, 'endpoint'))
+    for (const e of entities)
+      if (
+        e.kind === 'point' &&
+        (!index.centerPoints.has(e.id) || index.endpoints.has(e.id) || e.labelVisible)
+      )
+        push(e.position, [e.id], 'COINCIDENT', undefined, e.name ? '端点 · ' + e.name : '端点');
+  for (const entry of nearbyEntries(doc, viewId, p, threshold * 1.5, options)) {
+    const e = entry.entity;
+    if (!e) continue;
+    for (const c of curvedSnapPositions(entry, p, origin, options))
+      push(c.position, [e.id], c.kind, undefined, c.label, true, c.guide);
+    if (entry.shape.kind !== 'line') continue;
+    const a = entry.shape.line;
+    if (objectSnapEnabled(options, 'perpendicular') && (origin || options.objectTypes)) {
+      const from = origin ?? p,
+        t = dot(sub(from, a.a), a.d) / dot(a.d, a.d);
+      if (!a.finite || (t >= 0 && t <= 1)) {
+        const contact = add(a.a, scale(a.d, t));
+        const guide =
+          options.lineRelations && origin
+            ? {
+                kind: 'perpendicular' as const,
+                sourceId: e.id,
+                origin: a.a,
+                contact,
+                direction: unit(a.d),
+              }
+            : undefined;
+        if (!guide || !origin || distance(contact, origin) > samePosition)
+          push(contact, [e.id], 'FOOT', undefined, '垂足 · ' + entry.name, true, guide);
       }
     }
-    push(foot(p, a), [e.id], 'POINT_ON_LINE');
-    if (a.finite) push(add(a.a, scale(a.d, 0.5)), [e.id], 'MIDPOINT');
+    if (!options.objectTypes)
+      push(foot(p, a), [e.id], 'POINT_ON_LINE', undefined, '线上点', e.viewId !== viewId);
+    if (a.finite && objectSnapEnabled(options, 'midpoint'))
+      push(add(a.a, scale(a.d, 0.5)), [e.id], 'MIDPOINT', undefined, '中点');
+  }
+  if (
+    origin &&
+    options.lineRelations &&
+    options.direction !== false &&
+    objectSnapEnabled(options, 'tangent')
+  ) {
+    for (const entry of nearbyEntries(doc, viewId, origin, 1e-8, options)) {
+      const guide = tangentAtCircleOrigin(entry, origin);
+      if (!guide) continue;
+      const end = directionalEndpoint(
+        origin,
+        p,
+        guide.direction,
+        cssPixelsPerMm,
+        options.previous?.guide?.sourceId === guide.sourceId && options.previous.kind === 'TANGENT',
+      );
+      if (end)
+        push(end, [guide.sourceId], 'TANGENT', undefined, '沿切线 · ' + entry.name, true, guide);
+    }
+  }
+  if (origin && options.direction !== false && options.objects !== false) {
+    for (const { entity: e, shape } of index.entries) {
+      if (
+        !e ||
+        shape.kind !== 'line' ||
+        options.exclude?.includes(e.id) ||
+        options.hiddenLayers?.includes(e.layerId)
+      )
+        continue;
+      const a = shape.line;
+      for (const kind of ['PARALLEL', 'PERPENDICULAR'] as const) {
+        if (
+          options.lineRelations &&
+          kind === 'PERPENDICULAR' &&
+          !objectSnapEnabled(options, 'perpendicular')
+        )
+          continue;
+        const sourceDirection = unit(a.d);
+        const direction =
+          kind === 'PARALLEL' ? sourceDirection : { x: -sourceDirection.y, y: sourceDirection.x };
+        const end = options.lineRelations
+          ? directionalEndpoint(
+              origin,
+              p,
+              direction,
+              cssPixelsPerMm,
+              options.previous?.kind === kind && options.previous.guide?.sourceId === e.id,
+            )
+          : add(origin, scale(direction, dot(sub(p, origin), direction)));
+        if (!end) continue;
+        const guide: SnapGuide | undefined = options.lineRelations
+          ? {
+              kind: kind === 'PARALLEL' ? 'parallel' : 'perpendicular',
+              sourceId: e.id,
+              origin: a.a,
+              contact: foot(origin, a),
+              direction: sourceDirection,
+            }
+          : undefined;
+        push(
+          end,
+          [e.id],
+          kind,
+          undefined,
+          kind === 'PARALLEL' ? '平行方向' : '垂直方向',
+          e.viewId !== viewId,
+          guide,
+        );
+      }
+    }
   }
   if (options.projection && ['VHW_PROJECTION', 'THREE_VIEW'].includes(doc.editorType)) {
     const derived = new Set(doc.auxiliarySystems?.map((a) => a.newViewId)),
@@ -120,10 +307,16 @@ export function snapCandidates(
           }
         }
   }
-  const grid = doc.settings.grid;
+  const grid =
+    options.gridSpacing !== undefined &&
+    Number.isFinite(options.gridSpacing) &&
+    options.gridSpacing >= 0.1 &&
+    options.gridSpacing <= 100
+      ? options.gridSpacing
+      : doc.settings.grid;
   if (options.grid)
     push({ x: Math.round(p.x / grid) * grid, y: Math.round(p.y / grid) * grid }, [], 'GRID');
-  if (origin)
+  if (origin && options.direction !== false)
     for (const axis of Object.values(viewAxes(doc, viewId))) {
       const d = unit(axis);
       push(add(origin, scale(d, dot(sub(p, origin), d))), [], 'AXIS_DIRECTION');
@@ -131,30 +324,66 @@ export function snapCandidates(
   const previous = options.previous;
   // Recompute candidates at the current pointer. Never reuse a stale foot on a continuous axis.
   const priority = (c: SnapCandidate) =>
-    c.kind === 'COINCIDENT'
+    c.kind === 'COINCIDENT' || c.kind === 'ENDPOINT' || c.kind === 'CENTER'
       ? 0
       : c.kind === 'ORIGIN'
         ? 0.05
         : c.kind === 'INTERSECTION'
           ? 0.2
-          : c.kind === 'MIDPOINT'
+          : c.kind === 'MIDPOINT' ||
+              c.kind === 'QUADRANT' ||
+              c.kind === 'TANGENT' ||
+              (c.kind === 'FOOT' && !!c.guide)
             ? 0.4
             : c.kind === 'GRID'
               ? 1.4
               : c.kind === 'AXIS_DIRECTION'
                 ? 1.6
                 : 0.65;
-  const sticky = (c: SnapCandidate) => (previous && c.id === previous.id ? -0.18 : 0);
+  const featureRadius = Math.min(4 / cssPixelsPerMm, threshold * 0.4);
+  const score = (candidate: SnapCandidate) => {
+    const rank = priority(candidate);
+    // Release a tracked line near a vertex, origin or intersection. Distances use CSS pixels.
+    const preciseFeature = rank <= 0.2 && candidate.distance <= featureRadius;
+    const trackingBonus = previous?.id === candidate.id ? 0.18 : 0;
+    return (
+      candidate.distance / threshold + rank * 0.4 - trackingBonus - (preciseFeature ? 0.35 : 0)
+    );
+  };
+  // Equal directions may arise from several parallel edges. Prefer the
+  // reference nearest the start, while retaining the tracked candidate above.
+  const referenceDistance = (c: SnapCandidate) =>
+    origin && c.guide ? distance(origin, c.guide.contact) : Infinity;
   const sorted = candidates.sort(
     (a, b) =>
-      a.distance / threshold +
-      priority(a) * 0.4 +
-      sticky(a) -
-      (b.distance / threshold + priority(b) * 0.4 + sticky(b)),
+      score(a) - score(b) ||
+      (a.guide && b.guide
+        ? referenceDistance(a) - referenceDistance(b) ||
+          a.guide.sourceId.localeCompare(b.guide.sourceId)
+        : 0),
   );
-  return sorted
-    .filter((c, i) => !sorted.slice(0, i).some((p) => distance(c.position, p.position) < 1e-7))
-    .slice(0, 8);
+  const result: SnapCandidate[] = [];
+  const guides = origin && options.lineRelations ? sorted.filter((c) => c.guide) : [];
+  const features = guides.length
+    ? sorted
+        .filter((c) => pointFeatureOrder[c.kind] !== undefined)
+        .sort((a, b) => pointFeatureOrder[a.kind]! - pointFeatureOrder[b.kind]!)
+    : [];
+  for (const candidate of sorted) {
+    if (result.some((other) => distance(other.position, candidate.position) < samePosition))
+      continue;
+    // Keep the node/reference and its exact coordinates. A visual relation is
+    // valid only if the segment to that unchanged feature actually satisfies it.
+    const feature = features.find((f) => distance(f.position, candidate.position) < samePosition);
+    const guide =
+      feature && origin
+        ? guides.find((c) => acceptsGuide(origin, feature.position, c))?.guide
+        : undefined;
+    const winner = feature && (candidate.guide || guide) ? feature : candidate;
+    result.push(guide ? { ...winner, guide } : winner);
+    if (result.length === 8) break;
+  }
+  return result;
 }
 export function confirmSnap(
   before: GeometryDocument,
@@ -163,6 +392,7 @@ export function confirmSnap(
   sourceId?: string,
   role: 'teacher' | 'student' = 'teacher',
 ) {
+  if (candidate.positionOnly) return after;
   if (candidate.references && sourceId)
     return transact(
       after,
@@ -237,56 +467,5 @@ export function intersectionCandidates(
   pixels: number,
   options: Parameters<typeof snapCandidates>[5] = {},
 ): SnapCandidate[] {
-  const p = localToSheet(doc, viewId, position),
-    threshold = (options.threshold ?? 10) / pixels;
-  const references = [
-    ...(options.axes === false ? [] : referenceGeometry(doc).filter((r) => r.direction)),
-    ...doc.entities
-      .filter(
-        (e) =>
-          (e.viewId === viewId || e.scope === 'SHEET') &&
-          ['line', 'segment'].includes(e.kind) &&
-          !options.exclude?.includes(e.id) &&
-          !options.hiddenLayers?.includes(e.layerId),
-      )
-      .map((e) => resolveReference(doc, { kind: 'entity', entityId: e.id })),
-  ].filter((r) => distance(p, closestReference(p, r)) <= threshold * 1.5);
-  const result: SnapCandidate[] = [];
-  for (let i = 0; i < references.length; i++)
-    for (let j = i + 1; j < references.length; j++) {
-      const a = references[i],
-        b = references[j];
-      if (!a.direction || !b.direction) continue;
-      const q = intersect(
-        { a: a.anchor, d: a.direction, finite: a.extent === 'segment' },
-        { a: b.anchor, d: b.direction, finite: b.extent === 'segment' },
-      );
-      if (
-        !q ||
-        distance(q, closestReference(q, a)) > 1e-7 ||
-        distance(q, closestReference(q, b)) > 1e-7
-      )
-        continue;
-      const d = distance(p, q);
-      const refs = [a.ref, b.ref].sort((a, b) => referenceKey(a).localeCompare(referenceKey(b)));
-      const id = 'INTERSECTION:' + refs.map(referenceKey).join(',');
-      if (d > threshold * (options.previous?.id === id ? 1.5 : 1)) continue;
-      const legacy =
-        a.ref.kind === 'entity' &&
-        b.ref.kind === 'entity' &&
-        a.viewId === viewId &&
-        b.viewId === viewId;
-      result.push({
-        id,
-        kind: 'INTERSECTION',
-        label: `交点 · ${a.name} / ${b.name}`,
-        position: sheetToLocal(doc, viewId, q),
-        distance: d,
-        entityIds: legacy ? refs.flatMap((r) => (r.kind === 'entity' ? [r.entityId] : [])) : [],
-        ...(legacy ? {} : { references: refs }),
-      });
-    }
-  return result
-    .sort((a, b) => a.distance - b.distance || a.id!.localeCompare(b.id!))
-    .filter((c, i, all) => !all.slice(0, i).some((p) => distance(p.position, c.position) < 1e-7));
+  return geometricIntersections(doc, viewId, position, (options.threshold ?? 10) / pixels, options);
 }

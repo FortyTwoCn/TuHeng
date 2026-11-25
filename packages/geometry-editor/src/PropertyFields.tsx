@@ -1,12 +1,15 @@
 'use client';
 import { useState } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
+import { isCadEntity } from '@tuheng/contracts';
+import { CadFields } from './CadFields';
 import {
   availableLineStyles,
   propertyValues,
   applyProperties,
   editable,
   angle,
+  formatCadAngle,
   length,
   lineGeometry,
   unbindReferences,
@@ -28,6 +31,12 @@ export const entityNames = {
   polyline: '笔迹',
   curve: '插值曲线',
   plane: '历史空间平面',
+  ellipse: '椭圆',
+  text: '文字',
+  symbol: '方向符号',
+  dimension: '尺寸标注',
+  engineeringAnnotation: '工程标注',
+  hatch: '剖面线',
 };
 export function PropertyFields({
   document: doc,
@@ -79,7 +88,7 @@ export function PropertyFields({
       <input
         aria-label={label}
         type="text"
-        inputMode={key === 'name' ? 'text' : 'decimal'}
+        inputMode={['name', 'content', 'textOverride', 'label', 'toleranceCode', 'method'].includes(key) ? 'text' : 'decimal'}
         value={values[key] ?? ''}
         disabled={locked}
         onChange={(event) => setValues((v) => ({ ...v, [key]: event.target.value }))}
@@ -116,6 +125,16 @@ export function PropertyFields({
       </p>
       {e.kind === 'curve' && <p>依次经过 {e.pointIds.length} 个点；拖动经过点可调整曲线。</p>}
       <div className="geo-fields">
+        {isCadEntity(e) && (
+          <CadFields
+            doc={doc}
+            e={e}
+            field={field}
+            values={values}
+            locked={locked}
+            change={(key, value) => setValues((v) => ({ ...v, [key]: value }))}
+          />
+        )}
         {e.kind === 'point' && (
           <>
             {field('name', '点名称')}
@@ -251,7 +270,7 @@ export function PropertyFields({
         <code>{e.id}</code>
         {e.kind === 'segment' && (
           <p>
-            当前局部方向 {angle(lineGeometry(doc, e).d).toFixed(2)}°，长度{' '}
+            当前局部方向 {formatCadAngle(angle(lineGeometry(doc, e).d), 2)}°，长度{' '}
             {length(lineGeometry(doc, e).d).toFixed(3)} mm
           </p>
         )}

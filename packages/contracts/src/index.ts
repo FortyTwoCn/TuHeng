@@ -119,6 +119,7 @@ export const GradingRequest = z
       'geometry-review/1.2.0',
       'geometry-review/1.3.0',
       'geometry-review/1.4.0',
+      'geometry-review/1.5.0',
     ]),
     modelConfigId: z.string().nullable(),
     teacherRequirements: z.string().max(4000).optional(),
@@ -141,6 +142,7 @@ export const GradingRequest = z
         'geometry-review/1.2.0',
         'geometry-review/1.3.0',
         'geometry-review/1.4.0',
+        'geometry-review/1.5.0',
       ].includes(r.promptVersion),
     '几何证据需要新版提示词',
   )
@@ -163,6 +165,12 @@ export const GradingRequest = z
       r.geometryEvidence?.schemaVersion !== 'tuheng.geometry/2.2.0' ||
       r.promptVersion === 'geometry-review/1.4.0',
     'v2.2 曲线需要兼容的提示词版本',
+  )
+  .refine(
+    (r) =>
+      r.geometryEvidence?.schemaVersion !== 'tuheng.geometry/3.0.0' ||
+      r.promptVersion === 'geometry-review/1.5.0',
+    'CAD 作答需要包含关联标注与样条区间的评分证据版本',
   );
 export type GradingRequest = z.infer<typeof GradingRequest>;
 export const Analysis = z.object({

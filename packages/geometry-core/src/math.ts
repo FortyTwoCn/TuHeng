@@ -1,24 +1,10 @@
 import type { GeometryDocument, GeometryEntity, Vec2, Vec3 } from '@tuheng/contracts';
+import { isCadEntity } from '@tuheng/contracts';
+import { cadDrawing, textCorners } from './cad-geometry';
 import { flattenCurve } from './curves';
 import { projectPoint } from './projections';
-export const add = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x + b.x, y: a.y + b.y });
-export const sub = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x - b.x, y: a.y - b.y });
-export const scale = (a: Vec2, n: number): Vec2 => ({ x: a.x * n || 0, y: a.y * n || 0 });
-export const dot = (a: Vec2, b: Vec2) => a.x * b.x + a.y * b.y;
-export const cross = (a: Vec2, b: Vec2) => a.x * b.y - a.y * b.x;
-export const length = (a: Vec2) => Math.hypot(a.x, a.y);
-export const distance = (a: Vec2, b: Vec2) => length(sub(a, b));
-export const angle = (a: Vec2) => (Math.atan2(a.y, a.x) * 180) / Math.PI;
-export const unit = (a: Vec2) => scale(a, 1 / (length(a) || 1));
-export const parallel = (a: Vec2, b: Vec2, tolerance = 0.001) =>
-  Math.abs(cross(unit(a), unit(b))) <= tolerance;
-export const perpendicular = (a: Vec2, b: Vec2, tolerance = 0.001) =>
-  Math.abs(dot(unit(a), unit(b))) <= tolerance;
-export function point(doc: GeometryDocument, id: string): Vec2 {
-  const p = doc.entities.find((e) => e.id === id);
-  if (p?.kind !== 'point') throw new Error('点引用不存在');
-  return p.position;
-}
+import { add, sub, scale, dot, cross, distance, angle, point } from './vectors';
+export * from './vectors';
 export function lineGeometry(doc: GeometryDocument, e: GeometryEntity) {
   if (e.kind === 'line') return { a: e.anchor, d: e.direction, finite: false };
   if (e.kind === 'segment') {
@@ -111,8 +97,18 @@ export function entityPath(doc: GeometryDocument, e: GeometryEntity, box: Bounds
   if (e.kind === 'point') return [e.position];
   if (e.kind === 'line' || e.kind === 'segment') return clipLine(lineGeometry(doc, e), box) ?? [];
   if (e.kind === 'polyline') return e.points;
-  if (e.kind === 'curve') return flattenCurve(e.pointIds.map((id) => point(doc, id)));
+  if (e.kind === 'curve')
+    return flattenCurve(
+      e.pointIds.map((id) => point(doc, id)),
+      0.02,
+      e.parameterRange,
+      e.interpolation,
+    );
   if (e.kind === 'plane') return planeOutline(doc, e);
+  if (isCadEntity(e)) {
+    const drawing = cadDrawing(doc, e);
+    return [...drawing.strokes, ...drawing.labels.map(textCorners)].flat();
+  }
   const c = point(doc, e.center),
     start = e.kind === 'arc' ? e.startAngle : 0,
     sweep = e.kind === 'arc' ? e.sweep : 360;
@@ -140,28 +136,6 @@ export function planeOutline(
         z: e.origin.z + 10 * (u.z * a + v.z * b),
       },
       e.viewId,
-    ),
-  );
-}
-export function hitDistance(doc: GeometryDocument, e: GeometryEntity, p: Vec2, box: Bounds) {
-  if (e.kind === 'point') return distance(e.position, p);
-  if (e.kind === 'circle') return Math.abs(distance(point(doc, e.center), p) - e.radius);
-  if (e.kind === 'arc') {
-    const c = point(doc, e.center),
-      delta = (angle(sub(p, c)) - e.startAngle + 720) % 360;
-    if ((e.sweep > 0 && delta <= e.sweep) || (e.sweep < 0 && (360 - delta) % 360 <= -e.sweep))
-      return Math.abs(distance(c, p) - e.radius);
-    return Math.min(
-      distance(p, arcPoint(c, e.radius, e.startAngle)),
-      distance(p, arcPoint(c, e.radius, e.startAngle + e.sweep)),
-    );
-  }
-  const path = entityPath(doc, e, box);
-  return Math.min(
-    ...path.map((a, i) =>
-      i
-        ? distance(p, foot(p, { a: path[i - 1], d: sub(a, path[i - 1]), finite: true }))
-        : distance(p, a),
     ),
   );
 }

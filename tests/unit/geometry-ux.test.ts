@@ -67,6 +67,15 @@ describe('UX references and snapping', () => {
       closestReference({ x: 5, y: 4 }, resolveReference(d, { kind: 'baseAxis', axisId: 'X' })),
     ).toEqual({ x: 0, y: 0 });
   });
+  it.each([2, 4, 8])('acquires a nearby origin while tracking its axis at %s px/mm', scale => {
+    const doc = createDocument('VHW_PROJECTION');
+    const previous = snapCandidates(doc, 'view-0', { x: 0, y: 20 }, scale)[0];
+    expect(previous.kind).toBe('POINT_ON_REFERENCE');
+    const near = snapCandidates(doc, 'view-0', { x: 2/scale, y: 2/scale }, scale, undefined, { previous });
+    expect(near[0]).toMatchObject({ kind: 'ORIGIN', position: { x: 0, y: 0 } });
+    const away = snapCandidates(doc, 'view-0', { x: 0, y: 7/scale }, scale, undefined, { previous });
+    expect(away[0].kind).toBe('POINT_ON_REFERENCE');
+  });
 });
 describe('UX exact selection', () => {
   it('separates containment from crossing for circles, arcs and infinite lines', () => {
@@ -145,7 +154,7 @@ describe('UX commands and dependencies', () => {
     );
     const line = d.entities.at(-1)!;
     expect(line).toMatchObject({ kind: 'segment', startPoint: p.id });
-    expect(d.schemaVersion).toBe('tuheng.geometry/2.1.0');
+    expect(d.schemaVersion).toBe('tuheng.geometry/3.0.0');
     expect(GeometryDocument.parse(d)).toEqual(d);
     const bound = bindToReference(d, p.id, { kind: 'baseAxis', axisId: 'Z' }, 'student');
     expect(point(previewTransform(bound, [p.id], { x: 9, y: 4 }, 'student'), p.id)).toEqual({
@@ -258,6 +267,9 @@ describe('UX version and safety regressions', () => {
       'student',
     );
     const request = requestFixture();
+    // These fixtures specifically represent historical, already queued requests.
+    d.schemaVersion = 'tuheng.geometry/2.0.0';
+    revised.schemaVersion = 'tuheng.geometry/2.1.0';
     const evidence = (answer: GeometryDocument) => ({
       schemaVersion: answer.schemaVersion,
       editorType: answer.editorType,

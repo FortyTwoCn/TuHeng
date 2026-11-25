@@ -17,6 +17,7 @@ import {
   closestReference,
   renameProjectionAxis,
   angle,
+  formatCadAngle,
   length,
   lineGeometry,
   previewTransform,
@@ -241,15 +242,15 @@ export function FloatingInspector({
         >
           删除
         </button>
-        {expanded && (
-          <button
-            type="button"
-            className="geo-collapse-details"
-            onClick={() => p.dispatch({ type: 'patch', patch: { panel: null } })}
-          >
-            收起
-          </button>
-        )}
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() =>
+            p.dispatch({ type: 'patch', patch: { panel: expanded ? null : 'properties' } })
+          }
+        >
+          {expanded ? '收起详情' : '编辑属性'}
+        </button>
         <button
           type="button"
           aria-label="关闭对象属性"
@@ -262,22 +263,24 @@ export function FloatingInspector({
         </button>
       </div>
       <div className="geo-compact-summary">
-        {entity?.kind === 'segment'
-          ? `长度 ${length(lineGeometry(doc, entity).d).toFixed(2)} mm · ${angle(lineGeometry(doc, entity).d).toFixed(1)}°`
-          : entity?.kind === 'point'
-            ? `u ${entity.position.x.toFixed(2)} · v ${entity.position.y.toFixed(2)} mm`
-            : entity?.kind === 'circle'
-              ? `半径 ${entity.radius.toFixed(2)} mm`
-              : '参考与属性'}
+        {many
+          ? selectedStyles.size === 1
+            ? styleLabels[[...selectedStyles][0]]
+            : '多个值'
+          : entity?.kind === 'segment'
+            ? `长度 ${length(lineGeometry(doc, entity).d).toFixed(2)} mm · ${formatCadAngle(angle(lineGeometry(doc, entity).d), 1)}°`
+            : entity?.kind === 'point'
+              ? `u ${entity.position.x.toFixed(2)} · v ${entity.position.y.toFixed(2)} mm`
+              : entity?.kind === 'circle'
+                ? `半径 ${entity.radius.toFixed(2)} mm`
+                : entity?.kind === 'arc'
+                  ? `半径 ${entity.radius.toFixed(2)} mm · 扫角 ${formatCadAngle(entity.sweep, 1)}°`
+                  : entity?.kind === 'ellipse'
+                    ? `半轴 ${entity.majorRadius.toFixed(2)} / ${entity.minorRadius.toFixed(2)} mm`
+                    : entity?.kind === 'text'
+                      ? entity.content
+                      : '参考与属性'}
         {!cap.editable ? ' · 只读' : ''}
-        <button
-          type="button"
-          onClick={() =>
-            p.dispatch({ type: 'patch', patch: { panel: expanded ? null : 'properties' } })
-          }
-        >
-          {expanded ? '收起详情' : '编辑属性'}
-        </button>
       </div>
       <div className="geo-card-details">
         {!many && entity && (
@@ -301,7 +304,7 @@ export function FloatingInspector({
                       axis.method
                     ]
                   }{' '}
-                  · 方向 {angle(axis.tangent).toFixed(1)}° · 保留{' '}
+                  · 方向 {formatCadAngle(angle(axis.tangent), 1)}° · 保留{' '}
                   {doc.views.find((v) => v.id === axis.retainedViewId)?.name} · 替换{' '}
                   {doc.views.find((v) => v.id === axis.replacedViewId)?.name} · 新面{' '}
                   {doc.views.find((v) => v.id === axis.newViewId)?.name} · 沿轴正向的
