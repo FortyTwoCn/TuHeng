@@ -21,6 +21,7 @@
 | 组织关系、版本、迁移与回退              | [数据与迁移](DATABASE.md)                     |
 | 编辑器状态、坐标、命令和业务接入        | [编辑器架构](GEOMETRY_EDITOR_ARCHITECTURE.md) |
 | GeometryDocument 版本、引用和 JSON 示例 | [几何契约](GEOMETRY_EDITOR_SCHEMA.md)         |
+| CAD 命令、离线参考审查、设备验收与性能 | [功能矩阵](CAD_EDITOR_PARITY.md) · [最新验收](CAD_REFERENCE_ALIGNMENT.md) · [性能报告](CAD_CORE_PERFORMANCE.md) |
 | AI 建议、几何证据与教师正式成绩的边界   | [评分架构](GRADING_ARCHITECTURE.md)           |
 | 隔离测试环境、验证命令及未测条件        | [测试指南](TESTING.md)                        |
 

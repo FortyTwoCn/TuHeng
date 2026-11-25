@@ -1,0 +1,177 @@
+{
+  "schemaVersion": "tuheng.geometry/3.0.0",
+  "editorType": "ISOMETRIC",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "轴测图",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "59ace45e-ecb4-4924-a3c4-97a02109716c-0",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {},
+      "kind": "point",
+      "position": {
+        "x": -19.33012412211422,
+        "y": -11.160252365371527
+      },
+      "name": "P1",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "59ace45e-ecb4-4924-a3c4-97a02109716c-1",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {},
+      "kind": "point",
+      "position": {
+        "x": 20.66987587788578,
+        "y": -11.160252365371527
+      },
+      "name": "P2",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "59ace45e-ecb4-4924-a3c4-97a02109716c-2",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {},
+      "kind": "segment",
+      "startPoint": "59ace45e-ecb4-4924-a3c4-97a02109716c-0",
+      "endPoint": "59ace45e-ecb4-4924-a3c4-97a02109716c-1"
+    },
+    {
+      "id": "296dff29-cc29-4c5d-8060-d5c0aa8c9c4d-0",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {},
+      "kind": "point",
+      "position": {
+        "x": 20.66987587788578,
+        "y": -31.160252365371527
+      },
+      "name": "P4",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "296dff29-cc29-4c5d-8060-d5c0aa8c9c4d-1",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {},
+      "kind": "segment",
+      "startPoint": "59ace45e-ecb4-4924-a3c4-97a02109716c-1",
+      "endPoint": "296dff29-cc29-4c5d-8060-d5c0aa8c9c4d-0"
+    },
+    {
+      "id": "ad011114-bd2f-4fab-af82-3fe170bc0e13-0",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {},
+      "kind": "point",
+      "position": {
+        "x": -9.33012412211422,
+        "y": -31.160252365371523
+      },
+      "name": "P6",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "ad011114-bd2f-4fab-af82-3fe170bc0e13-1",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {},
+      "kind": "segment",
+      "startPoint": "296dff29-cc29-4c5d-8060-d5c0aa8c9c4d-0",
+      "endPoint": "ad011114-bd2f-4fab-af82-3fe170bc0e13-0"
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": ""
+  }
+}

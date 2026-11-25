@@ -44,7 +44,7 @@ Course、CourseOffering、TeachingClass 各自保存 `archived`。有效状态�
 | StoredAsset                                        | 私有对象 key、owner、用途、原图与派生 `parentId` 链。         |
 | BackgroundJob / OutboxEvent / AuditLog             | 提交事务、可靠投递和追加审计。                                |
 
-几何文档保存在已有 JSONB 及版本字段中。v1、2.0、2.1、2.2 继续读取；新编辑副本才升级，历史正式数据不回填。详见[几何契约](GEOMETRY_EDITOR_SCHEMA.md)。
+几何文档保存在已有 JSONB 及版本字段中。新文档和编辑事务使用 3.0，读取历史正式数据保留提交时的版本。详见[几何契约](GEOMETRY_EDITOR_SCHEMA.md)。
 
 AIProviderVersion、AIModelVersion、AITaskBindingVersion 和 AIInvocation 记录配置及调用快照；旧 ModelConfigurationVersion 保留用于历史读取。SMTPConfigurationVersion、SiteConfigurationVersion 追加配置版本。SecretRecord 密文需要对应部署主密钥才能恢复。
 

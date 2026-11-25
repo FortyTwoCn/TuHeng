@@ -31,17 +31,21 @@ A=(30,20,40) 的纸面位置为 V=(-30,40)、H=(-30,-20)、W=(20,40)。学生实
 
 ## 会话、预览和界面
 
-文档仅包含正式几何。session reducer 保存工具、选择、自动识别的最近作图框架、面板和分步构造；useViewportCamera 单独管理镜头与容器尺寸；手势快照、预览文档、HUD 和字段草稿独立保存。geometry-core/sheet.drawingViewAt 按图纸位置与现有对象解析新操作归属，Viewport 固定每次手势及多步命令的 viewId；不再通过下拉选择作图框架。开始操作固定 revision 与 CTM，外部更换文档取消旧操作；受控父级同内容回传不重置历史。
+文档只保存正式几何。`WorkspaceSession.activity` 互斥表示 CAD 取点、教学构造、换面轴或普通选择/导航/电子笔。`useCadCommand` 通过同一个 reducer 更新会话，`DocumentHistory` 保存所有提交。geometry-core/sheet.drawingViewAt 按图纸位置与现有对象解析新操作归属，Viewport 固定每次手势及多步命令的 viewId；不再通过下拉选择作图框架。开始操作固定 revision 与 CTM，外部更换文档取消旧操作；受控父级同内容回传不重置历史。
 
-`preview.ts` 只更新受影响点及必要依赖，不在每次 move 做完整 Zod、分析/自然语言导出或 JSON.stringify。`primitive-preview.ts` 让显示的吸附几何和最终提交共用计算结果。完整验证在提交边界，一次操作一条历史。OperationRecovery 用原始结果与自动调整结果替换当前命令；新编辑使旧恢复入口失效。
+`preview.ts` 只更新受影响点及必要依赖，不在每次 move 做完整 Zod、分析/自然语言导出或 JSON.stringify。`cadStep` 与 `cadPreview` 让显示的吸附几何和最终提交共用计算结果。完整验证在提交边界，一次操作一条历史。OperationRecovery 用原始结果与自动调整结果替换当前命令；新编辑使旧恢复入口失效。
 
-`commands.ts`（editor）为工具栏和对象卡提供统一有类型注册表与可用性原因。`EditorToolbar` 处理 roving focus；快捷键限定当前编辑器并避开文本输入。`FloatingInspector` 的紧凑摘要与展开属性共用 `PropertyFields`，不复制属性命令。单一 `@floating-ui/dom`（MIT）处理 SVG 虚拟锚点及尺寸/滚动更新，关闭清理订阅。
+`commands.ts`（editor）为工具栏和对象卡提供统一有类型注册表与可用性原因。`workspace-controls.tsx` 和 `workspace-rails.tsx` 负责五个区域的布局及命令入口；快捷键限定当前编辑器并避开文本输入。`FloatingInspector` 的紧凑摘要与展开属性共用 `PropertyFields`，不复制属性命令。单一 `@floating-ui/dom`（MIT）处理 SVG 虚拟锚点及尺寸/滚动更新，关闭清理订阅。
 
 CSS 使用容器宽度和剩余高度布局；手机摘要保留在对象旁，详细属性抽屉占用内部网格空间。文件、图层、显示和吸附细项按需展开，不重新引入三套独立画板。
 
 ## 版本和教学边界
 
-`geometry-v1.ts` 保留原始解析器；新编辑文档使用 v2，新增类型化参考关系使用 2.1，曲线使用 2.2。普通读取和序列化不会改写历史快照。`upgradeGeometryDocument` 仅为新的编辑草稿补充明确变换，不改变原局部点坐标。详见 [Schema](GEOMETRY_EDITOR_SCHEMA.md)。
+CAD 命令目录位于 `cad-registry.ts`。每个命令声明工具组、别名、参数、可接受的选集和步骤。每个实例的 `cad-session.ts` 记录基准文档、锁定框架、已确认点和引用，阶段为选集、选点和确认。坐标解析、正式几何求值及权限检查在 geometry-core 中完成。界面把指针和文本转换为同一种事件。浏览器捕捉预览调用同一套核心计算，确认时运行完整契约校验并写入一次历史。
+
+原生构造使用 `cad-primitives.ts`，曲线边界求交与裁剪使用 `parametric-geometry.ts` 和 `cad-cut.ts`，变换在 `cad-transforms.ts`，区域识别及剖面计算位于 `cad-region.ts`、`hatch.ts`。出题、独立作图、学生作答和复核通过同一 GeometryEditor 生成 SVG。场景实例和浮层均不拥有第二份正式作答。
+
+新建文档和编辑事务使用 v3。普通读取和序列化保留历史快照。契约包含投影变换、几何引用、派生轴及工程标注，详见 [Schema](GEOMETRY_EDITOR_SCHEMA.md)。
 
 `combineAnswer` 逐项保护数据库冻结题干、基准视图、已有轴、图层、原点和投影配置，同时依据 `sheet.allowAuxiliaryViews` 允许新增学生轴和其派生视图。不能通过新增轴、伪造所有权或修改基准变换绕过校验。新增字段位于已有 JSONB 文档及字符串版本列，不需要数据库 DDL；历史正式作答不回填或重算。
 
@@ -59,6 +63,6 @@ CSS 使用容器宽度和剩余高度布局；手机摘要保留在对象旁，�
 
 geometry-core/curves.ts 定义弦长三次 Hermite 插值、精确 SVG 路径和命中细分；pointIds 与既有点、拓扑、预览、复制、依赖、权限及导出共用。curve-snapping.ts 对已拟合的笔迹曲线执行交点定位，保留原始输入；snapping.ts 统一枚举实体、基准射线和换面轴的真实交点，没有第二套轴几何。
 
-geometry-editor/curve-session.ts 保存端点和经过点草稿、顺序及结束端，CurveControls 仅提供步骤提示与确认/回退/取消。Viewport 复用当前坐标变换、指针生命周期和单条提交历史。正式文档不包含标记状态或预览。曲线确认、电子笔拟合都通过现有 geometry-core 命令和运行时校验进入文档。
+样条使用 geometry-core/cad-session.ts 的统一命令会话，按点选顺序记录插值节点、原始坐标和吸附候选。点击「完成」后，cad-primitives.ts 生成曲线和节点引用，并记录接受的交点定位关系。数值坐标输入、触屏点选和桌面点击共享此流程。视口预览和输入草稿只保存在会话中。自由笔迹继续由 pen.ts 拟合，原始采样支持恢复。
 
-domain 原有草稿/提交用例接受 2.2，并选择 grading-core 的 geometry-review/1.4.0 解释曲线及类型化交点关系。已有队列与 Provider 不变；集成测试验证新旧版本、冻结题干及历史不变，正式成绩仍由教师确认。
+domain 根据冻结作答的几何版本选取已有评分流程的提示版本。v3 使用 geometry-review/1.5.0，传递曲线区间、标注几何实测值及显示文本。集成测试覆盖草稿、冻结提交、任务证据和复核引用。正式成绩由教师确认。

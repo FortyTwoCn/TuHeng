@@ -1,0 +1,286 @@
+{
+  "schemaVersion": "tuheng.geometry/3.0.0",
+  "editorType": "VHW_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "x",
+        "y"
+      ],
+      "signs": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "view-2",
+      "name": "W",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": [
+        "y",
+        "z"
+      ],
+      "signs": [
+        1,
+        1
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "p0",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 4,
+        "y": 8
+      },
+      "name": "A",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "p1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 14,
+        "y": 8
+      },
+      "name": "B",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "edge",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "p0",
+      "endPoint": "p1"
+    },
+    {
+      "id": "cad.ellipse",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "ellipse",
+      "center": "p0",
+      "majorRadius": 8,
+      "minorRadius": 5,
+      "angle": 20,
+      "startAngle": 0,
+      "sweep": 360
+    },
+    {
+      "id": "cad.bore",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "circle",
+      "center": "p0",
+      "radius": 2
+    },
+    {
+      "id": "cad.hatch",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "hatch",
+      "loops": [
+        [
+          "cad.ellipse"
+        ],
+        [
+          "cad.bore"
+        ]
+      ],
+      "origin": {
+        "x": 4,
+        "y": 8
+      },
+      "angle": 45,
+      "spacing": 1.2
+    },
+    {
+      "id": "cad.size",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "dimension",
+      "dimensionType": "ALIGNED",
+      "referenceIds": [
+        "p0",
+        "p1"
+      ],
+      "position": {
+        "x": 6,
+        "y": 14
+      },
+      "precision": 2,
+      "textOverride": "",
+      "textSize": 2.5,
+      "arrowStyle": "CLOSED"
+    },
+    {
+      "id": "cad.note",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "text",
+      "position": {
+        "x": 4,
+        "y": 20
+      },
+      "angle": 0,
+      "size": 3,
+      "content": "剖面 A"
+    },
+    {
+      "id": "cad.symbol",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "symbol",
+      "position": {
+        "x": 20,
+        "y": 10
+      },
+      "angle": 45,
+      "size": 3,
+      "symbolType": "RIGHT_ROTATION"
+    },
+    {
+      "id": "cad.tolerance",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "engineeringAnnotation",
+      "position": {
+        "x": 18,
+        "y": 15
+      },
+      "angle": 0,
+      "size": 2,
+      "annotationType": "GEOMETRIC_TOLERANCE",
+      "fields": [
+        "∥",
+        "0.02",
+        "A"
+      ]
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": "带孔剖面与关联尺寸"
+  }
+}

@@ -1,92 +1,48 @@
-# GeometryDocument v2.2 与兼容
+# GeometryDocument 3.0
 
-[返回文档目录](README.md) · [运行时契约源码](../packages/contracts/src/geometry.ts)
+新建图纸的版本是 `tuheng.geometry/3.0.0`。编辑、出题、作答与复核以同一份工程几何 JSON 为依据。单位是毫米，角度是度。打开已保存的快照保持其版本和内容。在编辑副本上提交几何命令时，新事务写入 3.0。数据库继续使用既有题目版本、草稿、提交与评分记录中的 JSON 字段。本轮无需数据库 DDL 或历史数据回填。[运行时契约](../packages/contracts/src/geometry.ts) · [可导入 CAD 示例](geometry-examples/CAD-V3.json)
 
-基本编辑文档使用 `tuheng.geometry/2.0.0`；首次写入类型化参考关系时升级为 `tuheng.geometry/2.1.0`，首次创建插值曲线升级为 `tuheng.geometry/2.2.0`。各版本的 units 为 `mm`，coordinateSystem 为 `VIEW_LOCAL_WITH_SHEET_TRANSFORM`。`geometry-v1.ts` 保留 `tuheng.geometry/1.0.0` 原契约；`loadGeometryDocument` 和序列化不迁移历史记录，编辑器及新的编辑事务显式调用 `upgradeGeometryDocument`。
+## 坐标与身份
 
-## 局部坐标 → 图纸坐标
+每个 view 的 transform 有 origin、xAxis 和 yAxis。图纸坐标等于 origin + x·xAxis + y·yAxis。两个基向量互相垂直且长为 1。V 的局部 (x,z) 映射为图纸 (-x,z)，H 的局部 (x,-y) 映射为 (-x,-y)，W 的局部 (y,z) 映射为 (y,z)。图纸原点为 (0,0)。正等轴测和斜二等轴测各有一个作图框架。新建斜二等轴测图的深度方向为 -135°、比例为 0.5。
 
-每个 view 新增 `transform: {origin,xAxis,yAxis}`。局部点 (x,y) 对应 origin+x*xAxis+y*yAxis。轴向单位向量正交，保持统一毫米比例。`sheet.origin=(0,0)`；图纸 U 向右、T 向上。局部坐标仍使用旧 mapping/signs 的语义，迁移不直接把旧坐标当新图纸坐标。
+实体各有 id、viewId、layerId 和 lineStyle。基准轴使用类型化引用。点、线和圆心间通过稳定 ID 关联。一个答案实体可以使用同框架的题干点。题干实体的依赖必须全部来自冻结题干。学生提交时，服务端将题干、基准框架和教师轴与冻结版本逐项核对。
 
-默认 V 局部 (x,z) 经 xAxis=(-1,0)、yAxis=(0,1) 变为 (-x,z)；H 局部 (x,-y) 变为 (-x,-y)；W 局部 (y,z) 保持 (y,z)。三个基准框架和最多 24 个派生框架使用同一镜头；轴测图保留一个框架。
+| 实体 | 持久化参数 | 几何解释 |
+| --- | --- | --- |
+| point | position、name、spatial、labelVisible | 局部位置必须有效。未知空间位置为 null。合点后可记录 aliases 和 mergedFrom。 |
+| segment、line | startPoint/endPoint，或 anchor/direction | 两个正式节点定义有限线段。锚点和非零方向定义无限线，scope=SHEET 可用于图纸辅助线。矩形与正多边形使用共享节点的闭合线段集合。 |
+| circle、arc | center、radius、startAngle/sweep | center 引用同框架点。弧保存有向扫角，允许整周。 |
+| ellipse | center、majorRadius、minorRadius、angle、startAngle、sweep | 长短半轴为正，长半轴大于等于短半轴。局部参数点为中心加上旋转后的 (a cos t,b sin t)。扫角保存修剪后的区间。 |
+| curve | pointIds、interpolation=CUBIC_HERMITE、parameterRange | 3 至 128 个有序插值点。各段使用弦长加权的三次 Hermite 切向。选填区间按每段等分到 [0,1]，裁剪时按端点位置及导数重新参数化原三次曲线。 |
+| polyline | points、fitStatus=UNFITTED | 电子笔未拟合笔迹。samples 和 sampling 保留压力、比例与采样框架。恢复原笔迹重建该轨迹。 |
+| text、symbol | position、angle、size、content 或 symbolType | 中文文本作为文字编码。方向符号可为 DIRECTION、LEFT_ROTATION 或 RIGHT_ROTATION。 |
+| dimension | dimensionType、referenceIds、position、precision、textSize、arrowStyle、textOverride | 真实尺寸由引用求值，覆盖文字单独保存。绘图样式由尺寸对象负责。 |
+| engineeringAnnotation | annotationType、position、angle、size、fields | 基准、表面粗糙度、形位公差框、上下偏差。用户填写的字段不能证明任何几何关系或公差符合性。 |
+| hatch | loops、origin、angle、spacing | 每环是闭合圆、整周椭圆或通过共享点闭合的一组线段。按图纸毫米生成剖面线，多个边界采用奇偶填充，可保留内孔。边界变化后重新求交。 |
 
-## 新字段
+每个对象可指定 appearance.widthMm、十六进制 appearance.color 和 appearance.pattern。图案支持实线、虚线、点划线、双点划线。调整颜色、可见线型或宽度都保持对象图层与所有者。网格、镜头、工具、预览、临时测量和选择状态独立于作答实体。
 
-- `sheet.allowAuxiliaryViews`：题目允许学生新增换面轴，服务端与冻结题干逐项比较。
-- `auxiliarySystems`：ProjectionAxis 数组，包含 id/name/version、owner/locked、parentId、retainedViewId/replacedViewId/newViewId、anchor/tangent、side/positiveNormal、oldAxis 的锚点/切向/正法向、method/referenceEntityId 及参考方向校验状态。
-- 点可保留 `aliases/mergedFrom`。合点删除源实体并重写正式引用；跨投影不合点，题干对象本身保持不变。
-- 无限辅助线可带 `scope: SHEET`。viewId 仍记录其作图框架，显示跨越整张图纸。
-- `constraints.mode` 区分 POSITION、BINDING、ANALYSIS；status 为 SATISFIED、INVALID、UNVERIFIED。服务端导出依据实际几何重算，客户端状态不可信。
-- 笔迹实体保存 samples；sampling 记录 cssPixelsPerMm 和采样框架变换。旧任意三维 plane 迁移后带 legacyReadOnly，不猜测成换面轴。
+## 标注的关联与实测值
 
-Schema 拒绝非有限数字、重复 ID、悬空/错误引用、零长线、图层与线型不匹配、循环几何/绑定/换面依赖、退化变换、无效新旧轴关系及非法参考对象。总上限保持 2MB 输入、2000 实体、1000 约束、500 投影组、30000 笔迹坐标；单段最多 4096 采样，坐标 ±10000mm。
+线性和对齐尺寸引用两个点。线性尺寸将差向量投影到 linearAngle 所示局部方向，缺省按 linearAxis 或水平轴。对齐尺寸取欧氏距离。角度尺寸引用顶点、第一射线点和第二射线点，取两条射线的夹角。半径和直径尺寸引用实际圆或圆弧。文本精度仅影响显示。修改几何会更新实测值。移除被引用的实体时，关联标注和失去边界的剖面随同该事务移除，撤销恢复引用。
 
-## 2.1 类型化参考关系
+粗糙度的 roughnessMode 可为 BASIC、REMOVAL_REQUIRED 或 REMOVAL_PROHIBITED。公差文字 fields 保留基本尺寸、上偏差、下偏差三个槽位，支持单侧偏差。尺寸覆盖文字和公差框均为用户注释。[几何求值](../packages/geometry-core/src/cad-geometry.ts) · [剖面计算](../packages/geometry-core/src/hatch.ts)
 
-`referenceRelations` 为可选数组，最多 1000 条；2.1 和 2.2 文档允许此字段。基准轴没有伪造为学生实体，轴 ID 不进入只允许实体的 entityIds。引用为以下判别联合：
+## 参考、捕捉与换面
 
-```ts
-type GeometryTargetRef =
-  | { kind: 'entity'; entityId: string }
-  | { kind: 'baseAxis'; axisId: 'X' | 'Z' | 'Y_H' | 'Y_W' | 'x' | 'y' | 'z' }
-  | { kind: 'projectionAxis'; systemId: string }
-  | { kind: 'origin'; frameId: string };
-```
+referenceRelations 的引用可为实体、基准轴、投影轴或原点。POSITION 记录一次定位或方向调整，BINDING 表达显式有向依赖。关系状态可以是 SATISFIED、INVALID 或 UNVERIFIED。保存和评分描述使用实际几何检查，不能依靠声明标签确认学生答案。合并端点会重写引用，只允许同一投影。跨投影的对应点保留不同节点。
 
-每条关系保存 id、targetId、reference、kind（POINT_ON_REFERENCE / THROUGH_POINT / PARALLEL / PERPENDICULAR）、mode（POSITION / BINDING）、source（USER / SNAP_CONFIRMED）及 status。POSITION 记录一次定位/方向事实，不承诺持续维护；BINDING 由显式有向依赖维护。status 依据真实几何重算，声明和计算结果分开；导出与评分不调用绑定求解去改正学生答案。
+auxiliarySystems 记录父投影系、保留面、替换面、新面、轴锚点、单位切向、展开侧、正法向和旧轴。换面计算使用带符号距离。创建轴不会自动填充学生答案。sheet.allowAuxiliaryViews 和冻结题干共同限制学生的新增操作。[换面轴示例](geometry-examples/v2/axes.json)
 
-运行时检查引用存在性、框架作用域、目标类型、重复、自引用、循环和共享端点冲突。冻结题干的关系不可修改，也不能伪造新增关系来控制或重新声明题干。合点重写相关引用；复制内部关系同时映射 ID，外部持续绑定要求先解除或连同参考对象选择，不静默丢失。删除参考对象检查依赖。
+## 校验与评分
 
-渲染/命中使用的临时 key、吸附候选、选中集合、输入草稿、相机、HUD 均不是文档字段。示例见 [2.1 换面轴引用](geometry-examples/ux-v2/reference-axis.json)、[方向绑定](geometry-examples/ux-v2/direction-binding.json)、[合点](geometry-examples/ux-v2/merged.json)。
+文档上限为 2 MB、2000 个实体、1000 条显式约束和 500 个投影组。坐标范围为 ±10000 mm。笔迹总采样量限制为 30000，单段最多 4096 点。剖面边界须闭合，自交或零面积的线段环会被拒绝。密集填充超过 4096 排或单图计算预算时，应增加间距。所有依赖须存在且作用域有效。约束、节点或投影系产生环时拒绝提交。
 
-## 保存与权限
+GeometryEvidence 保存同版 answerDocument、冻结 problemDocument、实测 derivedRelations 和 narrative。3.0 文档使用 geometry-review/1.5.0。描述列出真实尺寸与显示文字、样条有效区间和剖面边界。没有计算规则的公差符合性保留未知。评分任务、教师复核和正式成绩继续使用原有业务链。[评分请求契约](../packages/contracts/src/index.ts) · [评分提示版本](../packages/grading-core/src/prompts.ts)
 
-旧 JSON 原样读取；重新编辑得到新 v2 草稿。已有正式快照和批改请求不被就地改写。`combineAnswer` 锁定原有题干、框架、轴、原点、配置和关系，只允许题目许可的 STUDENT 轴及对应派生框架；学生不能声明教师所有权。现有 JSONB 列与版本字符串列足以承载 v2/2.1/2.2，无新增表或 DDL。新的 2.2 曲线评分请求使用 geometry-review/1.4.0；2.1 评分请求使用 geometry-review/1.3.0；2.0 继续使用 1.2.0，v1 与旧队列请求继续接受原版本。新提示词仅扩展已有 grading-core，不在编辑器调用 AI。
+计算关系按稳定顺序保留最多 3000 条。3.0 关系 ID 使用冒号分隔类型与对象 ID，可区分名称中带句点的对象。点击复核评语时，页面从产生该评语的评分运行快照定位直接引用的对象及关系参与者。评分用叙述达到 100 万字符时按完整行节选并提示，结构化对象和已计算关系仍保留。手动导出的自然语言图纸使用完整叙述。
 
-关系 status 和轴 referenceStatus 是计算结果。新答案校验在题干与作答的副本上统一重算这些字段，再比较受保护定义，兼容 v1 缺少状态字段的题目。此过程不调整几何坐标，也不改写历史数据。
+## 示例
 
-四份 v1 示例继续保留在 `geometry-examples/`。v2 示例位于 `geometry-examples/v2/`：标准三面投影、两级新轴、合点引用以及完整图纸 SVG。
-
-## 可导入笔迹样本
-
-使用与设备无关的 `tuheng.stroke/1.0.0`：
-
-```json
-{
-  "schemaVersion": "tuheng.stroke/1.0.0",
-  "coordinateSpace": "VIEW_LOCAL_MM",
-  "viewId": "view-0",
-  "cssPixelsPerMm": 3,
-  "pointerType": "pen",
-  "samples": [
-    { "x": 0, "y": 0, "pressure": 0.5 },
-    { "x": 1, "y": 1, "pressure": 0.5 }
-  ]
-}
-```
-
-样本通过独立运行时 Schema 后，使用现有 addPenStroke 应用到当前操作框架。合成测试样本在 `geometry-examples/v2/stroke-circle.json`，明确不代表真实设备采集；真实设备可输出相同格式，不需要照片识别服务。
-
-## 轴测默认值与电子笔线型
-
-新建 OBLIQUE_DIMETRIC 文档的 depthAngle 为 -135°、depthScale 为 0.5：图纸 x 向右、z 向上、y 向左下。角度基于图纸 x 正向逆时针，非屏幕 y 向下坐标。历史文件的显式角度（包括原默认 45°）读取和重存时保留，既有题干和学生历史快照不回填。默认参数由 `geometry-core/projections.ts` 创建，显式历史参数按原值保留。
-
-电子笔会话线型不成为新 JSON 字段；使用既有 lineStyle、layerId 与实体 kind 表达结果。辅助直线保存为 line(anchor, direction)，方向归一化，不能通过拉长 segment 假装无限。line 也保留既有 samples、sampling 字段；恢复后 polyline 继承线型与采样证据。未增加契约版本、数据库迁移或第二套笔迹格式。
-
-## 2.2 插值曲线
-
-`curve` 保存有序 `pointIds`（3–128 个同投影面的点）及 `interpolation: CUBIC_HERMITE`。首末点是端点，其间为按作图顺序排列的经过点；每段穿过相邻两点，点不是贝塞尔控制柄。弦长参数定义 dt[i]=|P[i+1]-P[i]|，端点切向为单侧差商，内部切向为 (P[i+1]-P[i-1])/(dt[i-1]+dt[i])；每段按 dt 缩放切向。渲染及 SVG 使用精确三次路径，命中与框选使用自适应细分（默认 0.02mm 容差、最多 10 层）。
-
-复用已存在端点的 ID；新经过点是正式 point 实体。合点、复制、拖动、删除依赖会处理 pointIds；禁止跨面、悬空、重复引用和相邻点坐标重合。学生可以引用题干点，但不能移动或覆盖该点；题干曲线不能依赖学生点。
-
-电子笔曲线保留原始 samples 与 sampling（像素比例及采样变换），经过点位置表达最终曲线。交点吸附不改写 samples；取消吸附与恢复原笔迹分别恢复未吸附曲线、原始 polyline。现有实线、虚线、辅助线图层语义继续适用；辅助直线仍为无限 line，辅助曲线保持有限曲线。
-
-同视图实体交点沿用 INTERSECTION 约束；涉及基准轴、新轴或跨视图 SHEET 辅助线时，在经过点上记录两条 POINT_ON_REFERENCE / POSITION 类型化关系，并分别校验实际满足情况。不会把轴 ID 塞入实体数组，也不默认持续绑定参考对象。
-
-v1、2.0、2.1 可继续加载、导出及读取历史。只有新编辑副本在创建曲线时升级到 2.2；新曲线不能标记为旧版本，写入参考关系不会将 2.2 降级。既有 JSONB 可承载，无数据库 DDL 或历史数据回填。完整示例：[点选曲线](geometry-examples/curves/manual.json)、[电子笔交点吸附](geometry-examples/curves/pen.json)。
-
-## 示例文件的用途
-
-`geometry-examples/` 根目录的四份 JSON 是旧版兼容输入；`v2/standard-sheet.json`、`v2/axes.json`、`ux-v2/merged.json`、`curves/` 和 `pen-direction/` 中的文档用于核对正式实体与引用。`v2/stroke-circle.json` 是独立笔迹样本，需要走笔迹导入入口。
-
-`verification.json`、`performance.json` 等记录是测试结果，不是可直接导入的 GeometryDocument。历史截图与样本不代表当前版本或真实硬件的全量验收。
+CAD-V3.json 展示椭圆截面、圆孔、可编辑剖面、尺寸和工程标注。旧版 1.0 图纸以及 v2、ux-v2、curves、pen-direction 子目录的样本用于回归旧快照读取。tuheng.stroke/1.0.0 样本需通过独立笔迹导入入口使用。[示例目录](geometry-examples)

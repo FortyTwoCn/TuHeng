@@ -1,0 +1,61 @@
+{
+  "runtime": "v26.13.0",
+  "os": "win32 x64",
+  "cpu": "AMD Ryzen 9 8940HX with Radeon Graphics        ",
+  "scenarios": [
+    {
+      "counts": {
+        "point": 140,
+        "segment": 256,
+        "ellipse": 3,
+        "arc": 3,
+        "circle": 3,
+        "curve": 3,
+        "hatch": 1
+      },
+      "total": 409,
+      "snap": {
+        "iterations": 120,
+        "medianMs": 0.2645,
+        "p95Ms": 0.67
+      },
+      "drag40": {
+        "iterations": 120,
+        "medianMs": 0.0938,
+        "p95Ms": 0.1122
+      },
+      "undoRedo": {
+        "iterations": 120,
+        "medianMs": 0.0003,
+        "p95Ms": 0.0003
+      }
+    },
+    {
+      "counts": {
+        "point": 646,
+        "segment": 1239,
+        "ellipse": 16,
+        "arc": 17,
+        "circle": 17,
+        "curve": 16,
+        "hatch": 1
+      },
+      "total": 1952,
+      "snap": {
+        "iterations": 120,
+        "medianMs": 0.7795,
+        "p95Ms": 5.0784
+      },
+      "drag40": {
+        "iterations": 120,
+        "medianMs": 0.2031,
+        "p95Ms": 0.2938
+      },
+      "undoRedo": {
+        "iterations": 120,
+        "medianMs": 0.0002,
+        "p95Ms": 0.0002
+      }
+    }
+  ]
+}

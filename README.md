@@ -107,4 +107,4 @@ npm run test:e2e
 
 集成与浏览器测试必须使用隔离的数据库、Redis 队列和对象存储桶，不能直接连接业务实例。测试环境准备、关键用例和实际验证范围见 [TESTING](docs/TESTING.md)。
 
-模块职责见 [ARCHITECTURE](docs/ARCHITECTURE.md)，数据迁移见 [DATABASE](docs/DATABASE.md)，几何操作与 JSON 兼容见[编辑器指南](docs/GEOMETRY_EDITOR_INTERACTION.md)和[几何契约](docs/GEOMETRY_EDITOR_SCHEMA.md)。贡献修改前请阅读 [AGENTS.md](AGENTS.md)。
+模块职责见 [ARCHITECTURE](docs/ARCHITECTURE.md)，数据迁移见 [DATABASE](docs/DATABASE.md)。二维 CAD 的操作、图纸格式及浏览器验收见[编辑器指南](docs/GEOMETRY_EDITOR_INTERACTION.md)、[几何契约](docs/GEOMETRY_EDITOR_SCHEMA.md)和[实际验收](docs/CAD_REFERENCE_ALIGNMENT.md)。贡献修改前请阅读 [AGENTS.md](AGENTS.md)。
