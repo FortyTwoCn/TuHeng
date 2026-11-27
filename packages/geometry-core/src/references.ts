@@ -1,4 +1,10 @@
-import { GeometryTargetRef, type GeometryDocument, type Vec2 } from '@tuheng/contracts';
+import {
+  GeometryTargetRef,
+  geometryEditorTopology,
+  hasGeometryBaseAxis,
+  type GeometryDocument,
+  type Vec2,
+} from '@tuheng/contracts';
 import { add, sub, dot, scale, unit, lineGeometry, clipLine, type Bounds } from './math';
 import { localToSheet, orthographic, viewTransform } from './sheet';
 import { viewAxes } from './projections';
@@ -26,18 +32,25 @@ export function targetFromKey(key: string): GeometryTargetRef {
   if (key.startsWith('system:')) return { kind: 'projectionAxis', systemId: key.slice(7) };
   return { kind: 'entity', entityId: key };
 }
+function originFrameId(doc: GeometryDocument) {
+  if (doc.editorType !== 'VH_PROJECTION') return doc.views[0].id;
+  return doc.views.find((v) =>
+    v.name === 'V' && !doc.auxiliarySystems?.some((a) => a.newViewId === v.id),
+  )!.id;
+}
 export function resolveReference(doc: GeometryDocument, ref: GeometryTargetRef): ReferenceGeometry {
   if (ref.kind === 'origin')
     return {
       ref,
       name:
-        ref.frameId === doc.views[0].id
+        ref.frameId === originFrameId(doc)
           ? '原点 O'
           : `原点 ${doc.views.find((v) => v.id === ref.frameId)?.name}`,
       anchor: viewTransform(doc, ref.frameId).origin,
       extent: 'point',
     };
   if (ref.kind === 'baseAxis') {
+    if (!hasGeometryBaseAxis(doc.editorType, ref.axisId)) throw Error('基准轴不存在');
     const directions: Record<string, Vec2> = orthographic(doc)
       ? {
           X: { x: -1, y: 0 },
@@ -47,13 +60,13 @@ export function resolveReference(doc: GeometryDocument, ref: GeometryTargetRef):
           MITER_45: { x: 1, y: -1 },
         }
       : viewAxes(doc, doc.views[0].id);
-    if (!directions[ref.axisId]) throw Error('基准轴不存在');
+    const twoPlane = doc.editorType === 'VH_PROJECTION';
     return {
       ref,
-      name: ref.axisId === 'MITER_45' ? '45° 传宽线' : `${ref.axisId} 轴`,
+      name: twoPlane ? 'X-O 轴' : ref.axisId === 'MITER_45' ? '45° 传宽线' : `${ref.axisId} 轴`,
       anchor: doc.sheet?.origin ?? { x: 0, y: 0 },
       direction: unit(directions[ref.axisId]),
-      extent: 'ray',
+      extent: twoPlane ? 'line' : 'ray',
     };
   }
   if (ref.kind === 'projectionAxis') {
@@ -85,8 +98,10 @@ export function resolveReference(doc: GeometryDocument, ref: GeometryTargetRef):
   };
 }
 export function referenceGeometry(doc: GeometryDocument) {
-  const keys = orthographic(doc) ? (['X', 'Z', 'Y_H', 'Y_W', 'MITER_45'] as const) : (['x', 'y', 'z'] as const);
-  const origins = doc.views.map((v) => resolveReference(doc, { kind: 'origin', frameId: v.id }));
+  const keys = geometryEditorTopology[doc.editorType].baseAxes;
+  const first = originFrameId(doc);
+  const origins = [first, ...doc.views.map((v) => v.id).filter((id) => id !== first)]
+    .map((frameId) => resolveReference(doc, { kind: 'origin', frameId }));
   return [
     ...origins.filter(
       (r, i) =>
@@ -130,7 +145,7 @@ export function targetCapabilities(
     return absent;
   if (
     ref.kind === 'baseAxis' &&
-    !(orthographic(doc) ? ['X', 'Z', 'Y_H', 'Y_W', 'MITER_45'] : ['x', 'y', 'z']).includes(ref.axisId)
+    !hasGeometryBaseAxis(doc.editorType, ref.axisId)
   )
     return absent;
   let editable = false,

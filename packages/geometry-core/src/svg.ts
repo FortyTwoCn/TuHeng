@@ -62,6 +62,12 @@ export function exportSheetSvg(doc: GeometryDocument, box: Bounds = sheetBounds(
     `<text transform="translate(${x} ${y}) scale(1 -1)" font-size="3" fill="currentColor" stroke="none">${escape(text)}</text>`;
   for (const r of referenceGeometry(doc)) {
     const ends = clipReference(r, box);
+    if (!ends && r.ref.kind === 'origin' && doc.editorType === 'VH_PROJECTION') {
+      const { x, y } = r.anchor;
+      parts.push(
+        `<g data-reference-id="${escape(referenceKey(r.ref))}" fill="#64748b"><circle cx="${x}" cy="${y}" r="0.55"/>${label(x + 1.5, y - 3.5, r.name === '原点 O' ? 'O' : r.name)}</g>`,
+      );
+    }
     if (ends)
       parts.push(
         `<g data-reference-id="${escape(referenceKey(r.ref))}" ${r.ref.kind === 'projectionAxis' ? `data-axis-id="${escape(r.ref.systemId)}"` : ''} stroke="#64748b"${r.ref.kind === 'baseAxis' && r.ref.axisId === 'MITER_45' ? ' stroke-dasharray="4 5" opacity="0.55"' : ''}>${line(ends[0], ends[1], true)}${label(r.ref.kind === 'baseAxis' ? ends[1].x * 0.9 : r.anchor.x + 2, r.ref.kind === 'baseAxis' ? ends[1].y * 0.9 : r.anchor.y + 2, r.name)}</g>`,

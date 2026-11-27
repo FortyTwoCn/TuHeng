@@ -28,9 +28,13 @@ beforeAll(async () => {
   await ai.bind('grading.assignment');
 });
 afterAll(() => prisma.$disconnect());
-it.each([false, true])(
-  'freezes geometry answers (curve=%s), denies stem tampering and cross-student access, and passes structured evidence through the existing worker',
-  async (withCurve) => {
+it.each([
+  ['VHW_PROJECTION', false],
+  ['VHW_PROJECTION', true],
+  ['VH_PROJECTION', true],
+] as const)(
+  'freezes %s geometry answers (curve=%s), denies stem tampering and cross-student access, and passes structured evidence through the existing worker',
+  async (editorType, withCurve) => {
     const teacher: Actor = {
         id: 'teacher',
         name: '教师',
@@ -57,7 +61,7 @@ it.each([false, true])(
       };
     const fixture = requestFixture();
     const stem = addDrawing(
-      createDocument('VHW_PROJECTION'),
+      createDocument(editorType),
       'segment',
       'view-0',
       [
@@ -227,7 +231,10 @@ it.each([false, true])(
     };
     await expect(saveDraft(db, student, item.id, [], badReference)).rejects.toThrow();
     const forgedAxis = structuredClone(answer);
-    forgedAxis.views[0].transform!.origin.x = 3;
+    if (editorType === 'VH_PROJECTION') {
+      forgedAxis.views[0].signs[0] = -1;
+      forgedAxis.views[0].transform!.xAxis.x = 1;
+    } else forgedAxis.views[0].transform!.origin.x = 3;
     await expect(saveDraft(db, student, item.id, [], forgedAxis)).rejects.toMatchObject({
       code: 'GEOMETRY_STEM_CHANGED',
     });
@@ -277,7 +284,8 @@ it.each([false, true])(
     expect(attempt.id).toBe(retry.id);
     expect(attempt.geometryAnswer).toEqual(answer);
     await expect(viewAttempt(db, other, attempt.id)).rejects.toMatchObject({ status: 403 });
-    const changed = addDrawing(stem, 'point', 'view-2', [{ x: 30, y: 20 }], 'teacher');
+    const revisionView = stem.views.at(-1)!.id;
+    const changed = addDrawing(stem, 'point', revisionView, [{ x: 30, y: 20 }], 'teacher');
     const next = await createQuestion(
       db,
       teacher,
@@ -292,13 +300,15 @@ it.each([false, true])(
       student,
       item.id,
       [],
-      addDrawing(answer, 'point', 'view-2', [{ x: 10, y: 20 }], 'student'),
+      addDrawing(answer, 'point', revisionView, [{ x: 10, y: 20 }], 'student'),
     );
     expect((await db.get('submissionAttempt', attempt.id))?.geometryAnswer).toEqual(answer);
     const run = (await db.list('gradingRun', { attemptId: attempt.id }))[0];
     const request = GradingRequest.parse(run.request);
     expect(request.submissionAssets).toEqual([]);
     expect(request.geometryEvidence?.narrative).toContain('线');
+    if (editorType === 'VH_PROJECTION')
+      expect(request.geometryEvidence?.narrative).toContain('对应点在纸面垂直对齐');
     expect(request.geometryEvidence?.problemDocument).toEqual(stem);
     const evaluation = evaluationFixture();
     const cited = request.geometryEvidence!.derivedRelations[0];

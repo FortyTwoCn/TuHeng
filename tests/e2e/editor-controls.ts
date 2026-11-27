@@ -17,6 +17,8 @@ const groups: Record<string, string> = {
   形位公差: '工程符号',
   公差文本: '工程符号',
   '打开 JSON 或图纸包 ZIP': '文件',
+  '导入 DXF': '文件',
+  '导出 DXF': '文件',
   '导出 JSON': '文件',
   '下载图纸 JSON Schema': '文件',
   '导出展开图 SVG': '文件',

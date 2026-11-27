@@ -193,44 +193,38 @@ export function QuestionEditor({
             </label>
           ))}
         </div>
-        {!selftest && (
-          <>
-            <label>
-              作答方式
-              <select
-                aria-label="作答方式"
-                value={geometry?.editorType ?? 'IMAGE'}
-                onChange={(e) => {
-                  if (
-                    geometry?.entities.length &&
-                    !window.confirm('切换作答方式将清空当前未保存的几何图形，是否继续？')
-                  )
-                    return;
-                  setGeometry(
-                    e.target.value === 'IMAGE'
-                      ? null
-                      : createDocument(e.target.value as EditorType),
-                  );
-                }}
-              >
-                <option value="IMAGE">图片作答</option>
-                {Object.entries(editorRegistry).map(([id, def]) => (
-                  <option key={id} value={id}>
-                    {def.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {geometry && (
-              <GeometryEditor
-                key={geometry.editorType}
-                value={geometry}
-                onChange={setGeometry}
-                role="teacher"
-                documentName="题干图纸"
-              />
-            )}
-          </>
+        <label>
+          作答方式
+          <select
+            aria-label="作答方式"
+            value={geometry?.editorType ?? 'IMAGE'}
+            onChange={(e) => {
+              if (
+                geometry?.entities.length &&
+                !window.confirm('切换作答方式将清空当前未保存的几何图形，是否继续？')
+              )
+                return;
+              setGeometry(
+                e.target.value === 'IMAGE' ? null : createDocument(e.target.value as EditorType),
+              );
+            }}
+          >
+            <option value="IMAGE">图片作答</option>
+            {Object.entries(editorRegistry).map(([id, def]) => (
+              <option key={id} value={id}>
+                {def.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {geometry && (
+          <GeometryEditor
+            key={geometry.editorType}
+            value={geometry}
+            onChange={setGeometry}
+            role="teacher"
+            documentName="题干图纸"
+          />
         )}
         <Uploader
           value={assets}

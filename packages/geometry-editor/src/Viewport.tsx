@@ -147,7 +147,7 @@ export function Viewport(
     svg,
     doc,
     props.zoom,
-    props.fitKey,
+    props.fit,
     props.focusKey,
     viewId,
     busy,
@@ -322,9 +322,15 @@ export function Viewport(
     const position = sheetToLocal(doc, frameId, sheet);
     const output = props.cursorStatusRef?.current;
     if (output) {
-      const frame = doc.views.find((v) => v.id === frameId)?.name ?? frameId;
+      const view = doc.views.find((v) => v.id === frameId);
+      const frame = view?.name ?? frameId;
+      const baseVH = doc.editorType === 'VH_PROJECTION' && view &&
+        !doc.auxiliarySystems?.some((axis) => axis.newViewId === frameId);
+      const coords = baseVH
+        ? `X ${(position.x * view.signs[0]).toFixed(4)} · ${view.mapping[1].toUpperCase()} ${(position.y * view.signs[1]).toFixed(4)}`
+        : `u ${position.x.toFixed(4)} · v ${position.y.toFixed(4)}`;
       output.replaceChildren(
-        `${frame} · u ${position.x.toFixed(4)} · v ${position.y.toFixed(4)} mm`,
+        `${frame} · ${coords} mm`,
       );
     }
   }

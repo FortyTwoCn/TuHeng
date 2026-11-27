@@ -1,8 +1,8 @@
-import { GeometryDocument, type Vec2 } from '@tuheng/contracts';
+import { GeometryDocument, geometryEditorTopology, type Vec2 } from '@tuheng/contracts';
 import { add, sub, scale, dot, entityPath, type Bounds } from './math';
 
 export const orthographic = (doc: GeometryDocument) =>
-  ['VHW_PROJECTION', 'THREE_VIEW'].includes(doc.editorType);
+  geometryEditorTopology[doc.editorType].orthographic;
 export function defaultTransform(doc: GeometryDocument, view: GeometryDocument['views'][number]) {
   return {
     origin: { x: 0, y: 0 },
@@ -59,15 +59,17 @@ export function drawingViewAt(
     ancestors.add(ancestor);
     ancestor = systems.find((a) => a.newViewId === ancestor)?.retainedViewId;
   }
-  // Each base face is the positive spatial quadrant in its own transformed frame.
-  // This also handles imported IDs, signs, offsets and rotations without guessing from names.
+  // 两面投影在 X-O 两侧各占一个半平面。三面展开沿用各基准面的正象限。
   const candidates = doc.views
     .filter((v) => !systems.some((a) => a.newViewId === v.id))
     .map((v) => {
       const p = sheetToLocal(doc, v.id, position);
       return {
         id: v.id,
-        distance: Math.hypot(Math.min(0, p.x * v.signs[0]), Math.min(0, p.y * v.signs[1])),
+        distance: Math.hypot(
+          doc.editorType === 'VH_PROJECTION' ? 0 : Math.min(0, p.x * v.signs[0]),
+          Math.min(0, p.y * v.signs[1]),
+        ),
         order: ['x,z', 'x,y', 'y,z'].indexOf(v.mapping.join(',')),
       };
     });
@@ -99,18 +101,18 @@ export function drawingViewAt(
   }
   return viewId;
 }
-export function sheetBounds(doc: GeometryDocument): Bounds {
-  let minX = -60,
-    maxX = 40,
-    minY = -40,
-    maxY = 60;
+export function sheetBounds(doc: GeometryDocument, { drawingOnly = false } = {}): Bounds {
+  let minX = drawingOnly ? Infinity : -60,
+    maxX = drawingOnly ? -Infinity : 40,
+    minY = drawingOnly ? Infinity : -40,
+    maxY = drawingOnly ? -Infinity : 60;
   const include = (p: Vec2) => {
     minX = Math.min(minX, p.x);
     maxX = Math.max(maxX, p.x);
     minY = Math.min(minY, p.y);
     maxY = Math.max(maxY, p.y);
   };
-  for (const axis of doc.auxiliarySystems ?? []) include(axis.anchor);
+  if (!drawingOnly) for (const axis of doc.auxiliarySystems ?? []) include(axis.anchor);
   for (const e of doc.entities) {
     if (e.kind === 'line') {
       include(localToSheet(doc, e.viewId, e.anchor));
@@ -119,6 +121,7 @@ export function sheetBounds(doc: GeometryDocument): Bounds {
     for (const p of entityPath(doc, e, { x: -10000, y: -10000, width: 20000, height: 20000 }))
       include(localToSheet(doc, e.viewId, p));
   }
+  if (minX === Infinity) return { x: -70, y: -50, width: 120, height: 120 };
   return { x: minX - 10, y: minY - 10, width: maxX - minX + 20, height: maxY - minY + 20 };
 }
 export function localBounds(doc: GeometryDocument, viewId: string, box: Bounds): Bounds {

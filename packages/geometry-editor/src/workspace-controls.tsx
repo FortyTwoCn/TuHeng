@@ -54,7 +54,17 @@ interface TopbarProps {
   fit: () => void;
   toggleExpanded: () => void;
   fileActions: Record<
-    'importJson' | 'json' | 'schema' | 'svg' | 'png' | 'viewPng' | 'zip' | 'narrative' | 'inspect',
+    | 'importJson'
+    | 'importDxf'
+    | 'json'
+    | 'dxf'
+    | 'schema'
+    | 'svg'
+    | 'png'
+    | 'viewPng'
+    | 'zip'
+    | 'narrative'
+    | 'inspect',
     () => void
   >;
 }
@@ -138,7 +148,11 @@ export function WorkspaceTopbar(p: TopbarProps) {
             onClick={p.fileActions.importJson}
             disabled={p.readOnly}
           />
+          {!p.readOnly && (
+            <WorkspaceAction label="导入 DXF" icon={Upload} onClick={p.fileActions.importDxf} />
+          )}
           <WorkspaceAction label="导出 JSON" icon={FileJson} onClick={p.fileActions.json} />
+          <WorkspaceAction label="导出 DXF" icon={ScanLine} onClick={p.fileActions.dxf} />
           <WorkspaceAction
             label="下载图纸 JSON Schema"
             icon={FileJson}
@@ -177,6 +191,7 @@ function DraftIcon() {
 interface StatusProps {
   cad: CadController;
   viewName: string;
+  axisLabel?: string;
   toolName: string;
   message: string;
   entityCount: number;
@@ -273,7 +288,10 @@ export function WorkspaceStatus({ cursorStatusRef, ...p }: StatusProps) {
       <div className="cad-status-modes">
         <div className="cad-coordinate-readout">
           <Crosshair size={14} aria-hidden="true" />
-          <span>{p.viewName}</span>
+          <span>
+            {p.viewName}
+            {p.axisLabel && ' · ' + p.axisLabel}
+          </span>
           <output ref={cursorStatusRef} aria-label="图纸坐标" aria-live="off">
             —, — mm
           </output>

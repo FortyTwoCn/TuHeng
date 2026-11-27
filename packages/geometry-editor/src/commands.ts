@@ -1,4 +1,4 @@
-import type { GeometryDocument } from '@tuheng/contracts';
+import { geometryEditorTopology, type GeometryDocument } from '@tuheng/contracts';
 import { editable, resolveReference, targetFromKey } from '@tuheng/geometry-core';
 import type { Tool } from './types';
 export type CommandId =
@@ -90,8 +90,8 @@ export function commandUnavailable(
   editorType: GeometryDocument['editorType'],
 ): string | undefined {
   if (readOnly && entry.requiresEdit) return '当前文档只读';
-  if (entry.id === 'new-axis' && editorType !== 'VHW_PROJECTION' && editorType !== 'THREE_VIEW')
-    return '换面轴用于 VHW 或三视图展开图';
+  if (entry.id === 'new-axis' && !geometryEditorTopology[editorType].orthographic)
+    return '换面轴用于正投影展开图';
 }
 export function contextCommandAvailable(
   entry: CommandEntry,

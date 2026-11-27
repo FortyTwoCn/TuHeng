@@ -1,4 +1,4 @@
-import { defaultTransform } from './sheet';
+import { defaultTransform, orthographic } from './sheet';
 import {
   GEOMETRY_DOCUMENT_VERSION,
   type EditorType,
@@ -8,14 +8,14 @@ import {
 } from '@tuheng/contracts';
 export const editorRegistry = {
   VHW_PROJECTION: { name: 'VHW 面投影', labels: true, views: ['V', 'H', 'W'] },
+  VH_PROJECTION: { name: '两面投影（V/H，仅 X-O 轴）', labels: true, views: ['V', 'H'] },
   THREE_VIEW: { name: '三视图', labels: false, views: ['主视图', '俯视图', '左视图'] },
   ISOMETRIC: { name: '正等轴测图', labels: true, views: ['轴测图'] },
   OBLIQUE_DIMETRIC: { name: '斜二等轴图', labels: true, views: ['斜二等轴图'] },
 } satisfies Record<EditorType, { name: string; labels: boolean; views: string[] }>;
 export const radians = (degrees: number) => (degrees * Math.PI) / 180;
 export function viewAxes(doc: GeometryDocument, viewId: string): Record<string, Vec2> {
-  if (doc.editorType === 'ISOMETRIC' || doc.editorType === 'OBLIQUE_DIMETRIC')
-    return projectionAxes(doc);
+  if (!orthographic(doc)) return projectionAxes(doc);
   const view = doc.views.find((v) => v.id === viewId)!;
   return {
     [view.mapping[0]]: { x: view.signs[0], y: 0 },
@@ -70,7 +70,7 @@ export function createDocument(editorType: EditorType): GeometryDocument {
   return doc;
 }
 export function projectPoint(doc: GeometryDocument, point: Vec3, viewId: string): Vec2 {
-  if (doc.editorType === 'VHW_PROJECTION' || doc.editorType === 'THREE_VIEW') {
+  if (orthographic(doc)) {
     const view = doc.views.find((v) => v.id === viewId);
     if (!view) throw new Error('视图不存在');
     return { x: point[view.mapping[0]] * view.signs[0], y: point[view.mapping[1]] * view.signs[1] };

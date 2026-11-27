@@ -8,6 +8,7 @@ import {
   serializeGeometryDocument,
   exportSheetSvg,
   exportGeometryNarrative,
+  exportDocumentToDxf,
   readGeometryJson,
   parseGeometryDocument,
   importPenStroke,
@@ -16,22 +17,24 @@ import {
 } from '@tuheng/geometry-core';
 import { downloadBlob } from './cad-download';
 
-export type DrawingTextKind = 'json' | 'narrative' | 'svg';
+export type DrawingTextKind = 'json' | 'narrative' | 'svg' | 'dxf';
+
+const drawingTextFormats = {
+  json: { export: serializeGeometryDocument, mime: 'application/json', extension: 'json' },
+  svg: { export: exportSheetSvg, mime: 'image/svg+xml', extension: 'svg' },
+  dxf: { export: exportDocumentToDxf, mime: 'application/dxf', extension: 'dxf' },
+  narrative: { export: exportGeometryNarrative, mime: 'text/plain', extension: 'txt' },
+};
 
 export function downloadDrawingText(
   doc: GeometryDocument,
   kind: DrawingTextKind,
   onExport?: (text: string, kind: DrawingTextKind) => void,
 ) {
-  const text =
-    kind === 'json'
-      ? serializeGeometryDocument(doc)
-      : kind === 'svg'
-        ? exportSheetSvg(doc)
-        : exportGeometryNarrative(doc);
+  const format = drawingTextFormats[kind];
+  const text = format.export(doc);
   onExport?.(text, kind);
-  const mime = { json: 'application/json', narrative: 'text/plain', svg: 'image/svg+xml' }[kind];
-  downloadBlob(new Blob([text], { type: mime }), `tuheng.${kind === 'narrative' ? 'txt' : kind}`);
+  downloadBlob(new Blob([text], { type: format.mime }), `tuheng.${format.extension}`);
 }
 
 export function downloadDrawingSchema() {

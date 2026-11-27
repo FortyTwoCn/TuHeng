@@ -163,6 +163,29 @@ export function ViewportDrawing({
           />
         )}
         {props.axes &&
+          doc.editorType === 'VH_PROJECTION' &&
+          (
+            [
+              ['V', '正立投影面', box.y + box.height - 18 / scale, 1],
+              ['H', '水平投影面', box.y + 10 / scale, -1],
+            ] as const
+          ).map(
+            ([name, label, y, side]) =>
+              y * side > 0 && (
+                <text
+                  key={name}
+                  data-projection-face={name}
+                  aria-label={`${name} ${label}`}
+                  fill="var(--cad-axis,#638894)"
+                  transform={`translate(${box.x + 10 / scale} ${y}) scale(1 -1)`}
+                  fontSize={12 / scale}
+                  pointerEvents="none"
+                >
+                  {name}
+                </text>
+              ),
+          )}
+        {props.axes &&
           references.map((r) => {
             const key = referenceKey(r.ref),
               selected = props.selected.includes(key) || props.highlighted.includes(key);
@@ -240,7 +263,7 @@ export function ViewportDrawing({
                 >
                   {axis
                     ? `${axis.name} · ${doc.views.find((v) => v.id === axis.newViewId)?.name}`
-                    : r.ref.kind === 'baseAxis' && !miter
+                    : r.ref.kind === 'baseAxis' && !miter && doc.editorType !== 'VH_PROJECTION'
                       ? r.ref.axisId
                       : r.name}
                 </text>

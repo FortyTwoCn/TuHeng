@@ -6,7 +6,7 @@ import { hatchFaceAt } from './cad-faces';
 import { hatchStrokes } from './hatch';
 import { engineeringPlacement } from './engineering-parameters';
 import { boundaryShape, nearestOnShape } from './parametric-geometry';
-import { deleteEntities, deletionSet, editable, pointReferences, transact } from './document';
+import { clearEditable, deleteEntities, deletionSet, editable, transact } from './document';
 import { add, angle, arcPoint, cross, distance, sub } from './math';
 import { localToSheet, sheetToLocal, viewTransform } from './sheet';
 import { transformSelection } from './cad-transforms';
@@ -173,21 +173,6 @@ function requiredPoints(s: CadSession) {
   }
 }
 
-function clearEditable(doc: GeometryDocument, role: CadSession['role']) {
-  const keep = new Set<string>(
-    doc.auxiliarySystems?.flatMap((a) => (a.referenceEntityId ? [a.referenceEntityId] : [])) ?? [],
-  );
-  for (const e of doc.entities) if (e.kind === 'plane' || !editable(doc, e, role)) keep.add(e.id);
-  for (const id of keep) {
-    const e = doc.entities.find((x) => x.id === id);
-    if (e) for (const p of pointReferences(e)) keep.add(p);
-  }
-  return deleteEntities(
-    doc,
-    doc.entities.filter((e) => !keep.has(e.id)).map((e) => e.id),
-    role,
-  );
-}
 function build(s: CadSession, doc: GeometryDocument, preview: boolean) {
   const cmd = s.commandId,
     p = s.parameters,

@@ -16,7 +16,7 @@ import {
   type ObjectSnapType,
 } from './snap-geometry';
 export type { ObjectSnapType } from './snap-geometry';
-import { localToSheet, sheetToLocal } from './sheet';
+import { localToSheet, orthographic, sheetToLocal } from './sheet';
 import { writeReferenceRelation } from './reference-relations';
 export const interactionThresholds = {
   mouse: { drag: 4, snap: 10, hit: 10 },
@@ -131,6 +131,7 @@ export function snapCandidates(
     label?: string,
     positionOnly = false,
     guide?: SnapGuide,
+    tracks?: SnapCandidate['tracks'],
   ) => {
     const d = distance(position, p);
     const feature =
@@ -154,6 +155,7 @@ export function snapCandidates(
         label,
         positionOnly,
         ...(guide ? { guide } : {}),
+        ...(tracks ? { tracks } : {}),
       });
   };
   if (options.axes !== false)
@@ -284,7 +286,7 @@ export function snapCandidates(
       }
     }
   }
-  if (options.projection && ['VHW_PROJECTION', 'THREE_VIEW'].includes(doc.editorType)) {
+  if (options.projection && orthographic(doc)) {
     const derived = new Set(doc.auxiliarySystems?.map((a) => a.newViewId)),
       view = doc.views.find((v) => v.id === viewId)!;
     if (!derived.has(viewId))
@@ -293,6 +295,7 @@ export function snapCandidates(
           e.kind === 'point' &&
           e.viewId !== viewId &&
           !derived.has(e.viewId) &&
+          !options.exclude?.includes(e.id) &&
           !options.hiddenLayers?.includes(e.layerId)
         ) {
           const other = doc.views.find((v) => v.id === e.viewId)!;
@@ -300,10 +303,18 @@ export function snapCandidates(
             const i = view.mapping.indexOf(axis),
               j = other.mapping.indexOf(axis),
               value = (j === 0 ? e.position.x : e.position.y) * other.signs[j] * view.signs[i];
+            const twoPlane = doc.editorType === 'VH_PROJECTION';
             push(
               i === 0 ? { x: value, y: p.y } : { x: p.x, y: value },
               [e.id],
               'PROJECTION_ALIGNMENT',
+              undefined,
+              twoPlane ? 'V-H 长对正' : undefined,
+              false,
+              undefined,
+              twoPlane
+                ? [{ point: sheetToLocal(doc, viewId, localToSheet(doc, other.id, e.position)), direction: { x: 0, y: 1 } }]
+                : undefined,
             );
           }
         }
@@ -453,7 +464,7 @@ export function confirmSnap(
   return transact(after, (d) =>
     d.constraints.push({
       id: createId(),
-      kind: candidate.kind as 'COINCIDENT' | 'MIDPOINT' | 'INTERSECTION' | 'POINT_ON_LINE',
+      kind: candidate.kind as 'MIDPOINT' | 'INTERSECTION' | 'POINT_ON_LINE' | 'PROJECTION_ALIGNMENT',
       entityIds: [created.id, ...candidate.entityIds],
       source: 'SNAP_CONFIRMED',
     }),

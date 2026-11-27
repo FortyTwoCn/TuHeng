@@ -101,7 +101,11 @@ export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation
       }
     }
   }
-  for (const group of doc.projectionGroups) {
+  const projectionPairs = doc.editorType === 'VH_PROJECTION'
+    ? [...doc.projectionGroups, ...doc.constraints.filter((c) => c.kind === 'PROJECTION_ALIGNMENT')]
+    : doc.projectionGroups;
+  const recordedPairs = new Set<string>();
+  for (const group of projectionPairs) {
     const members = group.entityIds.map((id) => doc.entities.find((e) => e.id === id)!);
     for (let i = 0; i < members.length; i++)
       for (const other of members.slice(i + 1)) {
@@ -115,14 +119,19 @@ export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation
             : e.kind === 'segment'
               ? [point(doc, e.startPoint), point(doc, e.endPoint)]
               : [];
-        if (doc.auxiliarySystems?.some((a) => [v.id, w.id].includes(a.newViewId))) continue;
+        if (v.id === w.id || doc.auxiliarySystems?.some((a) => [v.id, w.id].includes(a.newViewId))) continue;
+        const firstPoints = coordinates(first), otherPoints = coordinates(other);
+        if (!firstPoints.length || firstPoints.length !== otherPoints.length) continue;
+        const pair = [first.id, other.id].sort().join(':');
+        if (doc.editorType === 'VH_PROJECTION' && recordedPairs.has(pair)) continue;
+        recordedPairs.add(pair);
         for (const axis of v.mapping.filter((a) => w.mapping.includes(a))) {
           const vi = v.mapping.indexOf(axis),
             wi = w.mapping.indexOf(axis);
-          const a = coordinates(first)
+          const a = firstPoints
             .map((p) => (vi === 0 ? p.x : p.y) * v.signs[vi])
             .sort((a, b) => a - b);
-          const b = coordinates(other)
+          const b = otherPoints
             .map((p) => (wi === 0 ? p.x : p.y) * w.signs[wi])
             .sort((a, b) => a - b);
           const deviation = Math.max(...a.map((value, i) => Math.abs(value - b[i])));
@@ -130,7 +139,9 @@ export function analyzeGeometryDocument(doc: GeometryDocument): GeometryRelation
             'PROJECTION_ALIGNMENT',
             [first.id, other.id],
             deviation,
-            `${v.name} 与 ${w.name} 的 ${axis} 坐标偏差 ${deviation.toFixed(3)} mm`,
+            doc.editorType === 'VH_PROJECTION'
+              ? `V-H 长对正的 X 坐标偏差 ${deviation.toFixed(3)} mm`
+              : `${v.name} 与 ${w.name} 的 ${axis} 坐标偏差 ${deviation.toFixed(3)} mm`,
           );
         }
       }
@@ -173,6 +184,10 @@ export function exportGeometryNarrative(
     ...referenceDescriptions,
     `${editorRegistry[doc.editorType].name}，单位 mm。计算距离容差 ${doc.settings.tolerance} mm。`,
   ];
+  if (doc.editorType === 'VH_PROJECTION')
+    lines.push(
+      '基准原点 O 位于水平 X-O 轴上，+X 向左。V 正立投影在轴上方，使用 X/Z 坐标。H 水平投影在轴下方，使用 X/Y 坐标。两面长对正时对应点在纸面垂直对齐，共用同一 X 坐标。',
+    );
   if (relations.length === 3000)
     lines.push('计算关系达到 3000 条上限，以下仅列出部分关系。原始几何对象完整保留。');
   for (const a of doc.auxiliarySystems ?? [])

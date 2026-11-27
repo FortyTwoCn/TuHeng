@@ -1,6 +1,7 @@
 import { useState, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import { sheetBounds, localToSheet, type Bounds } from '@tuheng/geometry-core';
+import type { CameraFit } from './types';
 function zoomCamera(
   canvas: SVGSVGElement,
   localZoom: number,
@@ -27,7 +28,7 @@ export function useViewportCamera(
   svg: RefObject<SVGSVGElement | null>,
   doc: GeometryDocument,
   zoom: number,
-  fitKey: number,
+  fit: CameraFit,
   focusKey: number,
   viewId: string,
   busy: () => boolean,
@@ -37,11 +38,11 @@ export function useViewportCamera(
     [pan, setPan] = useState({ x: 0, y: 0 }),
     [localZoom, setLocalZoom] = useState(1),
     [fitted, setFitted] = useState<Bounds>(() => sheetBounds(doc));
-  const [previous, setPrevious] = useState({ fitKey, focusKey });
-  if (previous.fitKey !== fitKey || previous.focusKey !== focusKey) {
-    setPrevious({ fitKey, focusKey });
-    if (previous.fitKey !== fitKey) {
-      setFitted(sheetBounds(doc));
+  const [previous, setPrevious] = useState({ fit, focusKey });
+  if (previous.fit !== fit || previous.focusKey !== focusKey) {
+    setPrevious({ fit, focusKey });
+    if (previous.fit !== fit) {
+      setFitted(fit.bounds ?? sheetBounds(doc));
       setFitSize(size);
       setPan({ x: 0, y: 0 });
       setLocalZoom(1);

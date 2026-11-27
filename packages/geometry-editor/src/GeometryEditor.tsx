@@ -20,8 +20,10 @@ import {
   targetCapabilities,
   deleteProjectionAxis,
   resolveReference,
+  sheetBounds,
   CAD_COMMANDS,
   type Bounds,
+  type DxfImportReport,
 } from '@tuheng/geometry-core';
 import { Viewport } from './Viewport';
 import { WorkspaceTopbar, WorkspaceStatus } from './workspace-controls';
@@ -37,9 +39,10 @@ import {
   downloadDrawingText,
   type DrawingTextKind,
 } from './DrawingFiles';
+import { DxfImportDialog, dxfImportSummary } from './DxfImportDialog';
 import { commandRegistry, commandUnavailable, textEntry, type CommandId } from './commands';
 import { sessionReducer, viewportSession } from './session';
-import type { Ruler } from './types';
+import type { CameraFit, Ruler } from './types';
 import { useDrawingDocument } from './useDrawingDocument';
 import './styles.css';
 // 服务端可以先呈现布局，浏览器完成挂载后再接收编辑操作。
@@ -124,7 +127,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     }
     const [skipSnap, setSkipSnap] = useState(false),
       [zoom, setZoom] = useState(1),
-      [fitKey, setFitKey] = useState(0),
+      [cameraFit, setCameraFit] = useState<CameraFit>({}),
       [focusKey, setFocusKey] = useState(0);
     const [ruler, setRuler] = useState<Ruler>({
       visible: false,
@@ -141,6 +144,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       return () => document.removeEventListener('fullscreenchange', change);
     }, []);
     const fileInput = useRef<HTMLInputElement>(null);
+    const dxfDialog = useRef<HTMLDialogElement>(null);
     const cursorStatusRef = useRef<HTMLOutputElement>(null);
     useEffect(() => {
       const el = root.current;
@@ -196,9 +200,37 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     }
     const undo = () => stepHistory('undo'),
       redo = () => stepHistory('redo');
-    const fit = () => {
+    const requestFit = (bounds?: Bounds) => {
       setZoom(1);
-      setFitKey((k) => k + 1);
+      setCameraFit({ bounds });
+    };
+    const fit = () => requestFit();
+    const resetAfterLoad = () => {
+      dispatch({ type: 'tool', tool: 'select' });
+      select([]);
+    };
+    const drawingLoaded = () => {
+      resetAfterLoad();
+      fit();
+    };
+    const applyDxf = (result: DxfImportReport) => {
+      if (result.importedCount) {
+        const applied = drawing.commit(result.document, '导入 DXF');
+        if (applied) {
+          resetAfterLoad();
+          const bounds = sheetBounds(applied, { drawingOnly: true });
+          const current = camera.current;
+          if (
+            !current ||
+            bounds.x < current.x ||
+            bounds.y < current.y ||
+            bounds.x + bounds.width > current.x + current.width ||
+            bounds.y + bounds.height > current.y + current.height
+          )
+            requestFit(bounds);
+        }
+      }
+      report(dxfImportSummary(result));
     };
     useImperativeHandle(ref, () => ({
       getDocument: () => doc,
@@ -355,10 +387,18 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         setSettings((s) => ({ ...s, selectionMode })),
     };
     const importJson = () => fileInput.current?.click();
-    const output = (kind: DrawingTextKind) => downloadDrawingText(doc, kind, onExport);
+    const output = (kind: DrawingTextKind) => {
+      try {
+        downloadDrawingText(doc, kind, onExport);
+      } catch (error) {
+        report('导出失败，' + (error instanceof Error ? error.message : '图纸内容无效'));
+      }
+    };
     const fileActions = {
       importJson,
+      importDxf: () => dxfDialog.current?.showModal(),
       json: () => output('json'),
+      dxf: () => output('dxf'),
       schema: downloadDrawingSchema,
       svg: () => output('svg'),
       narrative: () => output('narrative'),
@@ -524,12 +564,11 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           report={report}
           importStroke={(stroke) => commit(stroke, '导入笔迹')}
           replaceDocument={drawing.load}
-          loaded={() => {
-            dispatch({ type: 'tool', tool: 'select' });
-            select([]);
-            fit();
-          }}
+          loaded={drawingLoaded}
         />
+        {!readOnly && (
+          <DxfImportDialog dialogRef={dxfDialog} doc={doc} role={role} apply={applyDxf} />
+        )}
         <div className="geo-workspace-body">
           <DrawingRail {...railProps} />
           <div className="geo-views">
@@ -558,7 +597,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
               onRulerChange={setRuler}
               zoom={zoom}
               highlighted={[...highlightedEntityIds, ...linked]}
-              fitKey={fitKey}
+              fit={cameraFit}
               session={session}
               dispatch={dispatch}
               runCommand={runCommand}
@@ -580,6 +619,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         <WorkspaceStatus
           cad={cad}
           viewName={doc.views.find((v) => v.id === activeView)?.name ?? activeView}
+          axisLabel={doc.editorType === 'VH_PROJECTION' ? 'X-O' : undefined}
           toolName={
             CAD_COMMANDS.find((c) => c.id === activeCommand)?.name ??
             commandRegistry.find((c) => c.id === activeCommand)?.name ??

@@ -204,23 +204,46 @@ export function deletionSet(doc: GeometryDocument, ids: string[], role: 'teacher
 }
 export function deleteEntities(doc: GeometryDocument, ids: string[], role: 'teacher' | 'student') {
   const removed = deletionSet(doc, ids, role);
+  return transact(doc, (draft) => removeEntities(draft, removed, role), role);
+}
+
+function removeEntities(draft: GeometryDocument, removed: ReadonlySet<string>, role: 'teacher' | 'student') {
   const possibleOrphans = new Set(
-    doc.entities.filter((e) => removed.has(e.id)).flatMap((e) => pointReferences(e)),
+    draft.entities.filter((e) => removed.has(e.id)).flatMap((e) => pointReferences(e)),
   );
-  return transact(
-    doc,
-    (d) => {
-      d.entities = d.entities.filter((e) => !removed.has(e.id));
-      d.constraints = d.constraints.filter((r) => r.entityIds.every((id) => !removed.has(id)));
-      if (d.referenceRelations)
-        d.referenceRelations = d.referenceRelations.filter((r) => !removed.has(r.targetId));
-      d.projectionGroups = d.projectionGroups.filter((r) =>
-        r.entityIds.every((id) => !removed.has(id)),
-      );
-      removeUnusedControlPoints(d, possibleOrphans, role);
-    },
-    role,
+  draft.entities = draft.entities.filter((e) => !removed.has(e.id));
+  draft.constraints = draft.constraints.filter((r) => r.entityIds.every((id) => !removed.has(id)));
+  if (draft.referenceRelations)
+    draft.referenceRelations = draft.referenceRelations.filter((r) => !removed.has(r.targetId));
+  draft.projectionGroups = draft.projectionGroups.filter((r) =>
+    r.entityIds.every((id) => !removed.has(id)),
   );
+  removeUnusedControlPoints(draft, possibleOrphans, role);
+}
+
+/** 清除与当前编辑权限相符的图形，保留依赖中的换面参考与题干。 */
+export function clearEditable(
+  doc: GeometryDocument,
+  role: 'teacher' | 'student',
+  { preserveSurvivors = false } = {},
+) {
+  const keep = new Set<string>(
+    doc.auxiliarySystems?.flatMap((a) => (a.referenceEntityId ? [a.referenceEntityId] : [])) ?? [],
+  );
+  const entities = new Map(doc.entities.map((e) => [e.id, e]));
+  for (const e of doc.entities) if (e.kind === 'plane' || !editable(doc, e, role)) keep.add(e.id);
+  for (const id of keep) {
+    const e = entities.get(id);
+    if (e) for (const p of pointReferences(e)) keep.add(p);
+  }
+  const toRemove = doc.entities.filter((e) => !keep.has(e.id)).map((e) => e.id);
+  if (!preserveSurvivors) return deleteEntities(doc, toRemove, role);
+
+  // 文件导入保留现有节点、关系状态和换面轴的原始值。引用校验与普通清空共用。
+  const removed = deletionSet(doc, toRemove, role);
+  const draft = structuredClone(doc);
+  removeEntities(draft, removed, role);
+  return GeometryDocument.parse(draft);
 }
 /** Never remove labelled, protected or independently referenced points with their former owner. */
 export function removeUnusedControlPoints(

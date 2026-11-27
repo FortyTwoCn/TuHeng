@@ -34,3 +34,6 @@ export * from './hatch';
 export * from './grips';
 export * from './drafting-guides';
 export * from './engineering-parameters';
+export * from './dxf-export';
+export * from './dxf-import';
+export { DXF_MAX_BYTES, decodeDxfBytes } from './dxf-format';

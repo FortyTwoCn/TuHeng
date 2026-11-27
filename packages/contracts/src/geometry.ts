@@ -9,11 +9,19 @@ export { HATCH_ROW_LIMIT, HATCH_WORK_LIMIT } from './hatch-validation';
 import { GeometryDocument as LegacyGeometryDocument } from './geometry-v1';
 export { LegacyGeometryDocument };
 
-export const EditorType = z.enum(['VHW_PROJECTION', 'THREE_VIEW', 'ISOMETRIC', 'OBLIQUE_DIMETRIC']);
+export const EditorType = z.enum([
+  'VHW_PROJECTION',
+  'VH_PROJECTION',
+  'THREE_VIEW',
+  'ISOMETRIC',
+  'OBLIQUE_DIMETRIC',
+]);
 export type EditorType = z.infer<typeof EditorType>;
 export const GEOMETRY_DOCUMENT_VERSION = 'tuheng.geometry/3.0.0';
 export const GEOMETRY_DOCUMENT_MAX_BYTES = 2_000_000;
+export const GEOMETRY_DOCUMENT_MAX_ENTITIES = 2000;
 export const LayerRole = z.enum(['PROBLEM_STEM', 'STUDENT_ANSWER', 'CONSTRUCTION']);
+export type LayerRole = z.infer<typeof LayerRole>;
 export const LineStyle = z.enum([
   'CONSTRUCTION',
   'ANSWER_VISIBLE',
@@ -42,6 +50,22 @@ export const GeometryTargetRef = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('origin'), frameId: id }).strict(),
 ]);
 export type GeometryTargetRef = z.infer<typeof GeometryTargetRef>;
+type BaseAxisId = Extract<GeometryTargetRef, { kind: 'baseAxis' }>['axisId'];
+const threePlaneAxes = ['X', 'Z', 'Y_H', 'Y_W', 'MITER_45'] as const;
+const axonometricAxes = ['x', 'y', 'z'] as const;
+export const geometryEditorTopology = {
+  VHW_PROJECTION: { orthographic: true, baseViewCount: 3, baseAxes: threePlaneAxes },
+  VH_PROJECTION: { orthographic: true, baseViewCount: 2, baseAxes: ['X'] },
+  THREE_VIEW: { orthographic: true, baseViewCount: 3, baseAxes: threePlaneAxes },
+  ISOMETRIC: { orthographic: false, baseViewCount: 1, baseAxes: axonometricAxes },
+  OBLIQUE_DIMETRIC: { orthographic: false, baseViewCount: 1, baseAxes: axonometricAxes },
+} as const satisfies Record<
+  EditorType,
+  { orthographic: boolean; baseViewCount: number; baseAxes: readonly BaseAxisId[] }
+>;
+export function hasGeometryBaseAxis(editorType: EditorType, axisId: BaseAxisId) {
+  return geometryEditorTopology[editorType].baseAxes.some((axis) => axis === axisId);
+}
 export const ReferenceRelation = z
   .object({
     id,
@@ -436,7 +460,7 @@ export const GeometryDocument = z
       .array(z.object({ id, role: LayerRole }).strict())
       .min(3)
       .max(3),
-    entities: z.array(GeometryEntity).max(2000),
+    entities: z.array(GeometryEntity).max(GEOMETRY_DOCUMENT_MAX_ENTITIES),
     constraints: z.array(GeometryConstraint).max(1000),
     referenceRelations: z.array(ReferenceRelation).max(1000).optional(),
     projectionGroups: z.array(ProjectionGroup).max(500),
@@ -479,7 +503,7 @@ export const GeometryDocument = z
     ];
     if (new Set(all.map((e) => e.id)).size !== all.length) fail('对象或关系 ID 重复');
     if (new Set(doc.layers.map((l) => l.role)).size !== 3) fail('图层角色必须唯一');
-    const orthographic = ['VHW_PROJECTION', 'THREE_VIEW'].includes(doc.editorType);
+    const { orthographic, baseViewCount } = geometryEditorTopology[doc.editorType];
     if (
       doc.referenceRelations &&
       !['tuheng.geometry/2.1.0', 'tuheng.geometry/2.2.0', 'tuheng.geometry/3.0.0'].includes(
@@ -487,7 +511,7 @@ export const GeometryDocument = z
       )
     )
       fail('类型化参考关系需要 2.1 文档');
-    if (doc.views.length !== (orthographic ? 3 + (doc.auxiliarySystems?.length ?? 0) : 1))
+    if (doc.views.length !== baseViewCount + (doc.auxiliarySystems?.length ?? 0))
       fail('视图数量与编辑器类型不一致');
     if (doc.views.some((view) => view.mapping[0] === view.mapping[1]))
       fail('视图的两个映射轴不能相同');
@@ -514,6 +538,28 @@ export const GeometryDocument = z
     const systems = doc.auxiliarySystems ?? [];
     if (!orthographic && systems.length) fail('轴测图不支持换面');
     const createdViews = new Set(systems.map((a) => a.newViewId));
+    if (doc.editorType === 'VH_PROJECTION') {
+      if (doc.schemaVersion !== GEOMETRY_DOCUMENT_VERSION) fail('两面投影需要 3.0 文档');
+      const baseViews = doc.views.filter((v) => !createdViews.has(v.id));
+      for (const [name, mapping, verticalSign] of [
+        ['V', 'x,z', 1],
+        ['H', 'x,y', -1],
+      ] as const) {
+        const view = baseViews.find((v) => v.name === name && v.mapping.join(',') === mapping);
+        const frame = view?.transform;
+        if (
+          !view ||
+          !frame ||
+          frame.origin.x !== 0 ||
+          frame.origin.y !== 0 ||
+          frame.xAxis.x * view.signs[0] !== -1 ||
+          frame.xAxis.y !== 0 ||
+          frame.yAxis.x !== 0 ||
+          frame.yAxis.y * view.signs[1] !== verticalSign
+        )
+          fail('两面投影必须沿 X-O 轴展开 V/H');
+      }
+    }
     if (
       createdViews.size !== systems.length ||
       new Set(systems.map((a) => a.name)).size !== systems.length
@@ -601,6 +647,11 @@ export const GeometryDocument = z
           doc.schemaVersion !== 'tuheng.geometry/3.0.0'
         )
           fail('平行或垂直新轴只能选择一个参考');
+        if (
+          a.referenceAxis.kind === 'baseAxis' &&
+          !hasGeometryBaseAxis(doc.editorType, a.referenceAxis.axisId)
+        )
+          fail('基准轴不属于当前投影体系');
         if (a.referenceAxis.kind === 'projectionAxis') {
           const referenceId = a.referenceAxis.systemId;
           const ref = systems.find((s) => s.id === referenceId);
@@ -814,10 +865,7 @@ export const GeometryDocument = z
       }
       if (ref.kind === 'entity' && (!source || source.id === target.id))
         fail('参考对象不存在或自引用');
-      if (
-        ref.kind === 'baseAxis' &&
-        !(orthographic ? ['X', 'Z', 'Y_H', 'Y_W', 'MITER_45'] : ['x', 'y', 'z']).includes(ref.axisId)
-      )
+      if (ref.kind === 'baseAxis' && !hasGeometryBaseAxis(doc.editorType, ref.axisId))
         fail('基准轴不属于当前投影体系');
       if (ref.kind === 'origin' && !doc.views.some((v) => v.id === ref.frameId))
         fail('原点框架不存在');

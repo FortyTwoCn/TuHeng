@@ -2,7 +2,7 @@ import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import type { EditorSession, SessionAction } from './session';
 import type { CommandId } from './commands';
 import type { CadController } from './useCadCommand';
-import type { ObjectSnapType } from '@tuheng/geometry-core';
+import type { Bounds, ObjectSnapType } from '@tuheng/geometry-core';
 import type { Appearance } from './CadPreferences';
 export type Tool = 'select' | 'pan' | 'box' | 'pen' | 'projection';
 export interface Ruler {
@@ -10,6 +10,9 @@ export interface Ruler {
   origin: Vec2;
   angle: number;
   length: number;
+}
+export interface CameraFit {
+  bounds?: Bounds;
 }
 export interface EditorControls {
   cursorStatusRef?: import('react').RefObject<HTMLOutputElement | null>;
@@ -46,7 +49,7 @@ export interface EditorControls {
   zoom: number;
   highlighted: string[];
   hiddenLayers: string[];
-  fitKey: number;
+  fit: CameraFit;
   revision: object;
   axesSnap: boolean;
   referenceFilter: boolean;

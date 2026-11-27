@@ -1,4 +1,10 @@
-import type { GeometryDocument, GeometryEntity, GeometryTargetRef, Vec2 } from '@tuheng/contracts';
+import {
+  hasGeometryBaseAxis,
+  type GeometryDocument,
+  type GeometryEntity,
+  type GeometryTargetRef,
+  type Vec2,
+} from '@tuheng/contracts';
 import {
   boundaryShape,
   atPiece,
@@ -11,7 +17,7 @@ import {
   type BoundaryShape,
 } from './parametric-geometry';
 import { referenceGeometry, referenceKey, resolveReference } from './references';
-import { orthographic, sheetDeltaToLocal, sheetToLocal, localToSheet } from './sheet';
+import { sheetDeltaToLocal, sheetToLocal, localToSheet } from './sheet';
 import { distance, foot, add, dot, sub, unit, scale, cross, length, lineGeometry } from './math';
 import { diffPoly, polynomialRoots, evalPoly } from './curve-roots';
 import type { SnapCandidate, SnapGuide, SnapOptions } from './snapping';
@@ -207,7 +213,7 @@ export function geometricIntersections(
 /** The transfer ray crosses the unused quadrant of the unfolded sheet. A bordering
  * line can belong to either view. Use paper coordinates without merging their nodes. */
 function transferIntersections(doc:GeometryDocument, viewId:string, p:Vec2, radius:number, options:SnapOptions) {
-  if (options.axes===false || !orthographic(doc)) return [];
+  if (options.axes===false || !hasGeometryBaseAxis(doc.editorType, 'MITER_45')) return [];
   const ref = resolveReference(doc,{kind:'baseAxis',axisId:'MITER_45'});
   const a = sheetToLocal(doc,viewId,ref.anchor), axis = sheetDeltaToLocal(doc,viewId,ref.direction!);
   if (Math.abs(cross(sub(p,a),unit(axis)))>radius || dot(sub(p,a),unit(axis))<-radius) return [];

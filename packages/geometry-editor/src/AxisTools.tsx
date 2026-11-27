@@ -25,10 +25,12 @@ export function AxisTools({
     [method, setMethod] = useState<AxisConstruction['method']>('FREE'),
     [name, setName] = useState(''),
     [viewName, setViewName] = useState('');
+  const auxiliaryViews = new Set(doc.auxiliarySystems?.map((a) => a.newViewId));
+  const baseViews = doc.views.filter((v) => !auxiliaryViews.has(v.id));
   const system = doc.auxiliarySystems?.find((a) => a.id === parent),
     pair = system
       ? [system.retainedViewId, system.newViewId]
-      : doc.views.slice(0, 3).map((v) => v.id);
+      : baseViews.map((v) => v.id);
   const [replaced, setReplaced] = useState(doc.views[0].id);
   const retainedId = pair.includes(retained) ? retained : (pair[1] ?? pair[0]),
     replacedId = pair.includes(replaced) ? replaced : pair[0];
@@ -60,8 +62,8 @@ export function AxisTools({
             onChange={(e) => {
               setParent(e.target.value);
               const a = doc.auxiliarySystems?.find((a) => a.id === e.target.value);
-              setRetained(a?.newViewId ?? doc.views[1].id);
-              setReplaced(a?.retainedViewId ?? doc.views[0].id);
+              setRetained(a?.newViewId ?? baseViews[1].id);
+              setReplaced(a?.retainedViewId ?? baseViews[0].id);
             }}
           >
             <option value="">基准投影系</option>

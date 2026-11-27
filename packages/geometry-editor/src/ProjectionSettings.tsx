@@ -1,4 +1,4 @@
-import type { GeometryDocument } from '@tuheng/contracts';
+import { geometryEditorTopology, type GeometryDocument } from '@tuheng/contracts';
 import { transact } from '@tuheng/geometry-core';
 export function ProjectionSettings({
   document: doc,
@@ -7,12 +7,15 @@ export function ProjectionSettings({
   document: GeometryDocument;
   perform: (operation: () => GeometryDocument) => void;
 }) {
-  const orthographic = doc.editorType === 'VHW_PROJECTION' || doc.editorType === 'THREE_VIEW';
+  const side =
+    geometryEditorTopology[doc.editorType].baseViewCount === 3
+      ? doc.views.find((v) => v.mapping.join(',') === 'y,z')
+      : undefined;
   return (
     <details>
       <summary>投影参数</summary>
       <div className="geo-fields">
-        {orthographic && (
+        {side && (
           <>
             <label>
               侧视约定
@@ -24,10 +27,10 @@ export function ProjectionSettings({
                       const convention = event.target
                         .value as GeometryDocument['projectionConfig']['convention'];
                       d.projectionConfig.convention = convention;
-                      const side = d.views[2];
-                      side.signs[0] = convention === 'FIRST_ANGLE_LEFT' ? 1 : -1;
+                      const sideView = d.views.find((v) => v.id === side.id)!;
+                      sideView.signs[0] = convention === 'FIRST_ANGLE_LEFT' ? 1 : -1;
                       if (d.editorType === 'THREE_VIEW')
-                        side.name = convention === 'FIRST_ANGLE_LEFT' ? '左视图' : '右视图';
+                        sideView.name = convention === 'FIRST_ANGLE_LEFT' ? '左视图' : '右视图';
                     }),
                   )
                 }
