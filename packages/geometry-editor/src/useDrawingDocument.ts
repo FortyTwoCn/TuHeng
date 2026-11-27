@@ -91,6 +91,7 @@ export function useDrawingDocument({
     return combineAnswer(
       problemDocument ?? {
         ...doc,
+        constructionAnimation: undefined,
         entities: stem,
         constraints: doc.constraints.filter((relation) =>
           relation.entityIds.every((id) => ids.has(id)),

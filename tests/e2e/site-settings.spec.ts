@@ -18,7 +18,7 @@ async function restore(page: Page, filingNumber: string) {
   expect(response.status()).toBe(200);
 }
 
-test('site settings persist and appear once across login, workspaces and geometry on desktop/tablet/phone', async ({
+test('site settings persist across login and workspaces while geometry uses its standalone layout', async ({
   page,
   browser,
 }) => {
@@ -62,11 +62,14 @@ test('site settings persist and appear once across login, workspaces and geometr
         fullPage: true,
       });
     }
-    for (const url of ['/admin/users', '/admin/settings/mail', '/geometry?realm=STAFF']) {
+    for (const url of ['/admin/users', '/admin/settings/mail']) {
       await page.goto(url);
       await expect(footer(page)).toContainText(filingNumber);
       await expect(footer(page)).toHaveCount(1);
     }
+    await page.goto('/geometry?realm=STAFF');
+    await expect(page.getByRole('main', { name: '独立几何作图' })).toBeVisible();
+    await expect(footer(page)).toHaveCount(0);
     for (const [width, height] of [
       [1366, 768],
       [390, 844],

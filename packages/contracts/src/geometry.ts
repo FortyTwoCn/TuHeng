@@ -7,16 +7,10 @@ import {
 } from './hatch-validation';
 export { HATCH_ROW_LIMIT, HATCH_WORK_LIMIT } from './hatch-validation';
 import { GeometryDocument as LegacyGeometryDocument } from './geometry-v1';
+import { EditorType, geometryId as id, geometryScalar as scalar, Vec2 } from './geometry-values';
+import { ConstructionAnimationDocument, checkConstructionAnimationReferences } from './construction-animation';
 export { LegacyGeometryDocument };
-
-export const EditorType = z.enum([
-  'VHW_PROJECTION',
-  'VH_PROJECTION',
-  'THREE_VIEW',
-  'ISOMETRIC',
-  'OBLIQUE_DIMETRIC',
-]);
-export type EditorType = z.infer<typeof EditorType>;
+export { EditorType, Vec2 } from './geometry-values';
 export const GEOMETRY_DOCUMENT_VERSION = 'tuheng.geometry/3.0.0';
 export const GEOMETRY_DOCUMENT_MAX_BYTES = 2_000_000;
 export const GEOMETRY_DOCUMENT_MAX_ENTITIES = 2000;
@@ -29,12 +23,6 @@ export const LineStyle = z.enum([
   'PROBLEM_VISIBLE',
   'PROBLEM_HIDDEN',
 ]);
-const id = z
-  .string()
-  .min(1)
-  .max(100)
-  .regex(/^[\w.-]+$/);
-const scalar = z.number().finite().min(-10000).max(10000);
 const degrees = z.number().finite().min(-360).max(360);
 const signedSweep = degrees.refine((n) => Math.abs(n) > 0.001, '扫角必须非零');
 const paperSize = scalar.positive().max(100);
@@ -78,8 +66,6 @@ export const ReferenceRelation = z
   })
   .strict();
 export type ReferenceRelation = z.infer<typeof ReferenceRelation>;
-export const Vec2 = z.object({ x: scalar, y: scalar }).strict();
-export type Vec2 = z.infer<typeof Vec2>;
 export const Vec3 = Vec2.extend({ z: scalar });
 export type Vec3 = z.infer<typeof Vec3>;
 const base = {
@@ -472,10 +458,18 @@ export const GeometryDocument = z
       })
       .strict(),
     metadata: z.object({ title: z.string().max(200) }).strict(),
+    constructionAnimation: ConstructionAnimationDocument.optional(),
   })
   .strict()
   .superRefine((doc, ctx) => {
     const fail = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if (doc.constructionAnimation) {
+      if (doc.schemaVersion !== GEOMETRY_DOCUMENT_VERSION)
+        ctx.addIssue({ code: 'custom', path: ['constructionAnimation'], message: '内嵌动画需要 3.0 图纸' });
+      checkConstructionAnimationReferences(doc.constructionAnimation, doc, (path, message) =>
+        ctx.addIssue({ code: 'custom', path: ['constructionAnimation', ...path], message }),
+      );
+    }
     if (new TextEncoder().encode(JSON.stringify(doc)).length > GEOMETRY_DOCUMENT_MAX_BYTES)
       fail('几何文档超过 2MB');
     if (doc.schemaVersion === 'tuheng.geometry/1.0.0') {

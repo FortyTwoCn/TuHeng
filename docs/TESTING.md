@@ -6,7 +6,7 @@
 
 单元测试无需运行 Web、数据库或 Redis。集成和浏览器测试会真实创建账号、作业、文件与任务，必须使用隔离环境；部分用例会修改测试配置和账号，不要连接日常业务库。
 
-1. 准备数据库名以 `_test` 结尾的 PostgreSQL 数据库、独立 Redis 库/队列命名空间和私有测试桶。
+1. 准备数据库名以 `_test` 结尾的 PostgreSQL 数据库、独立 Redis 库/队列命名空间和私有测试桶。运行整套浏览器测试时使用隔离服务中的 `tuheng_test`，首位管理员用例会核对这个数据库名。
 2. 将部署模板复制为忽略的 `.env.test.local`，填写测试连接和独立的会话/SecretStore 密钥。设置 `SEED_TEST_ACCOUNTS=1`、自选至少 12 字符的 `SEED_PASSWORD`，不要使用真实管理员密码。
 3. 为测试 Web 指定独立端口，例如 `PORT=3318`，并令 `NEXTAUTH_URL`、`APP_ALLOWED_ORIGINS`、`TEST_APP_ORIGIN` 均指向 `http://localhost:3318`。
 4. 生成客户端，对测试库迁移并执行测试种子。种子仅允许显式测试库，会建立标记的测试学校、账号和教学数据；不是生产安装步骤。
@@ -65,6 +65,7 @@ AI 配置界面用例可通过 `TEST_AI_BASE_URL` 使用受控的本地测试地
 | 管理界面             | `school-teaching.spec.ts`、`ui-management.spec.ts`、`organization-layout.spec.ts`                                                  | 学校/人员/课程/班级真实深链接，搜索、导入、凭据、移动抽屉与实际点击。 |
 | 几何内核与教学保存   | `tests/unit/geometry*.test.ts`、`tests/integration/geometry.test.ts`                                                               | 坐标、拓扑、笔迹、曲线、绑定、历史 JSON 与服务端题干保护。            |
 | 编辑器浏览器交互     | `geometry-ux.spec.ts`、`geometry-components.spec.ts`、`geometry-pen.spec.ts`、`geometry-curves.spec.ts`、`geometry-repair.spec.ts` | 真鼠标拖动、松手前 HUD、吸附、合点、撤销、顶部动作、输入和导出。      |
+| 分步作图、审核与三维 | `tests/unit/construction-animation.test.ts`、`tests/unit/drawing-audit.test.ts`、`tests/unit/solid-reconstruction.test.ts`、`tests/e2e/geometry-milestone3.spec.ts` | 动画文件和笔顺、错误路径、投影审核、网格体积、孔道连通及桌面/手机三维联动。 |
 | 网络与登录           | `network-login.spec.ts`                                                                                                            | 指定应用地址下的登录/刷新/退出、非法源拒绝与编辑器使用。              |
 
 表中未写目录的 `*.test.ts` 位于集成测试目录（几何通配与单元标注除外），`*.spec.ts` 和 `onboarded-teaching.ts` 位于 `tests/e2e`。用 `npm run test:e2e -- tests/e2e/文件.spec.ts` 运行针对性用例，不以单个子集代替完整套件结果。

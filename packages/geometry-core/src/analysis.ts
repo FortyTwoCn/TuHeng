@@ -266,6 +266,7 @@ export function exportGeometryNarrative(
 export function exportGeometryBundle(doc: GeometryDocument) {
   // 评分证据使用校验后的原始字段，文件排版只用于面向用户的导出。
   const document = JSON.parse(JSON.stringify(GeometryDocument.parse(doc))) as GeometryDocument;
+  delete document.constructionAnimation;
   const derivedRelations = analyzeGeometryDocument(document);
   let narrative = exportGeometryNarrative(document, derivedRelations);
   if (narrative.length > GEOMETRY_EVIDENCE_NARRATIVE_LIMIT) {

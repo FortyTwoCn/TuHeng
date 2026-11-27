@@ -3,7 +3,11 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { choose, draw, settings, closePanels, properties } from './editor-controls';
 import { performanceDocument } from '../geometry-fixtures';
-import { loadGeometryDocument } from '@tuheng/geometry-core';
+import {
+  deriveDefaultConstructionAnimation,
+  loadGeometryDocument,
+  serializeConstructionAnimationJson,
+} from '@tuheng/geometry-core';
 async function login(page: Page, who = 'teacher') {
   const identifier = await prepareLogin(page, who);
   await identifier.fill(`${who}@tuheng.local`);
@@ -405,16 +409,38 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await student.reload();
   await expect(student.locator('[data-axis-id]')).toHaveCount(1);
   await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
+  const animation = deriveDefaultConstructionAnimation(draftRequest.geometry);
+  const firstStep = '核对作答快照的基准';
+  animation.steps[0].title = firstStep;
+  await student.getByLabel('加载动画 JSON', { exact: true }).setInputFiles({
+    name: 'submission.animation.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(serializeConstructionAnimationJson(animation)),
+  });
+  await expect(student.getByRole('heading', { name: firstStep })).toBeVisible();
+  await choose(student, '分步动画');
   await student.getByRole('button', { name: '正式提交并排队批改' }).click();
   await expect(student).toHaveURL(/\/student\/results\//);
   await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
+  await choose(student, '分步动画');
+  await expect(student.getByRole('heading', { name: firstStep })).toBeVisible();
   const id = student.url().split('/').at(-1);
+  await teacher.emulateMedia({ reducedMotion: 'reduce' });
   await teacher.goto(`/teacher/reviews/${id}`);
   await expect(teacher.locator('.geometry-editor')).toBeVisible();
   await expect(teacher.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
   await expect(
     teacher.locator('.geometry-editor').getByRole('button', { name: '撤销', exact: true }),
   ).toBeDisabled();
+  await choose(teacher, '分步动画');
+  await expect(teacher.getByRole('heading', { name: firstStep })).toBeVisible();
+  await expect(teacher.getByRole('button', { name: '编排步骤', exact: true })).toHaveCount(0);
+  const animated = teacher.locator('[data-construction-play-key] .geo-ink-trace').first();
+  const duration = await animated.evaluate((element) =>
+    parseFloat(getComputedStyle(element).animationDuration),
+  );
+  expect(duration).toBeGreaterThan(0);
+  expect(duration).toBeLessThan(0.2);
   await teacher.close();
   await student.close();
 });

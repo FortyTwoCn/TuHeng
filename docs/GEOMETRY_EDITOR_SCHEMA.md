@@ -10,9 +10,13 @@
 
 新画线段时，先定义两个 `point`，再在 `segment.startPoint` 和 `segment.endPoint` 引用它们的 ID。共享端点应复用同一个 ID。引用的对象和 `viewId`、`layerId` 都必须实际存在。JSON Schema 描述字段、范围和枚举。打开图纸时还会校验跨对象引用、视图归属、几何有效性及作答权限。字段错误会带 JSON 路径，例如 `$.entities[0].position.x`，数组下标从 0 开始。[Schema 生成源码](../packages/contracts/src/geometry-json-schema.ts)
 
+仓库中的两个 Schema 可用 `npm run geometry:schema` 从正式契约重新生成。[完整图纸 Schema](geometry-schemas/tuheng.geometry.schema.json) · [独立动画 Schema](geometry-schemas/tuheng.construction-animation.schema.json)
+
 ## 坐标与身份
 
 每个 view 的 transform 有 origin、xAxis 和 yAxis。图纸坐标等于 origin + x·xAxis + y·yAxis。两个基向量互相垂直且长为 1。V 的局部 (x,z) 映射为图纸 (-x,z)，H 的局部 (x,-y) 映射为 (-x,-y)，W 的局部 (y,z) 映射为 (y,z)。图纸原点为 (0,0)。正等轴测和斜二等轴测各有一个作图框架。新建斜二等轴测图的深度方向为 -135°、比例为 0.5。
+
+`VH_PROJECTION` 自 3.0 起使用两个基础视图。V 的 `mapping` 是 `["x", "z"]`，H 的 `mapping` 是 `["x", "y"]`。两个视图共用 X-O 基准，V 向上展开，H 向下展开。可用换面操作增加派生视图。
 
 实体各有 id、viewId、layerId 和 lineStyle。基准轴使用类型化引用。点、线和圆心间通过稳定 ID 关联。一个答案实体可以使用同框架的题干点。题干实体的依赖必须全部来自冻结题干。学生提交时，服务端将题干、基准框架和教师轴与冻结版本逐项核对。
 
@@ -42,6 +46,12 @@
 referenceRelations 的引用可为实体、基准轴、投影轴或原点。POSITION 记录一次定位或方向调整，BINDING 表达显式有向依赖。关系状态可以是 SATISFIED、INVALID 或 UNVERIFIED。保存和评分描述使用实际几何检查，不能依靠声明标签确认学生答案。合并端点会重写引用，只允许同一投影。跨投影的对应点保留不同节点。
 
 auxiliarySystems 记录父投影系、保留面、替换面、新面、轴锚点、单位切向、展开侧、正法向和旧轴。换面计算使用带符号距离。创建轴不会自动填充学生答案。sheet.allowAuxiliaryViews 和冻结题干共同限制学生的新增操作。[换面轴示例](geometry-examples/v2/axes.json)
+
+## 分步动画
+
+3.0 图纸可以在根级提供 `constructionAnimation`。该字段直接存放 `tuheng.construction-animation/1.0.0`，包含 `title`、`description`、可选的 `editorType`、`phases` 和 `steps`。阶段与步骤按从 0 开始的 `order` 排列。每步按笔顺引用 `entityIds`，并可引用辅助线和擦除对象。临时辅助线和定位点用统一图纸毫米坐标。图纸旧快照可省略该字段，播放时按现有图元自动编排。[字段、AI 说明与独立导入](GEOMETRY_EDITOR_ANIMATION_SCHEMA.md)
+
+图纸包、完整 JSON 和教学快照保存动画。评分证据使用剥离动画后的几何对象与实测关系。[带动画三视图](geometry-examples/construction/THREE-VIEW-CONSTRUCTION.json) · [同一图纸的独立动画](geometry-examples/construction/THREE-VIEW-CONSTRUCTION.animation.json)
 
 ## 校验与评分
 

@@ -3,6 +3,7 @@ export * from './site-settings';
 export { createId } from './id';
 import { z } from 'zod';
 export * from './geometry';
+export * from './construction-animation';
 export { geometryDocumentJsonSchema } from './geometry-json-schema';
 import { GeometryDocument, GeometryEvidence, GeometryAnnotation } from './geometry';
 export const Points = z.number().int().min(0).max(100000);

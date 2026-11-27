@@ -2,8 +2,9 @@ import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import type { EditorSession, SessionAction } from './session';
 import type { CommandId } from './commands';
 import type { CadController } from './useCadCommand';
-import type { Bounds, ObjectSnapType } from '@tuheng/geometry-core';
+import type { Bounds, DrawingAuditCheck, ObjectSnapType } from '@tuheng/geometry-core';
 import type { Appearance } from './CadPreferences';
+import type { ConstructionPlayback } from './construction-playback';
 export type Tool = 'select' | 'pan' | 'box' | 'pen' | 'projection';
 export interface Ruler {
   visible: boolean;
@@ -48,6 +49,10 @@ export interface EditorControls {
   axes: boolean;
   zoom: number;
   highlighted: string[];
+  playback?: ConstructionPlayback;
+  auditCheck?: DrawingAuditCheck;
+  hoverEntity?: (id?: string) => void;
+  fitTeachingViewport?: boolean;
   hiddenLayers: string[];
   fit: CameraFit;
   revision: object;

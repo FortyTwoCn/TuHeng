@@ -5,12 +5,14 @@ export function WorkspaceAction({
   icon: Icon,
   onClick,
   disabled,
+  pressed,
   className = '',
 }: {
   label: string;
   icon: LucideIcon;
   onClick: () => void;
   disabled?: boolean;
+  pressed?: boolean;
   className?: string;
 }) {
   return (
@@ -20,6 +22,7 @@ export function WorkspaceAction({
       title={label}
       aria-label={label}
       disabled={disabled}
+      aria-pressed={pressed}
       onClick={onClick}
     >
       <Icon size={17} strokeWidth={1.8} aria-hidden="true" />

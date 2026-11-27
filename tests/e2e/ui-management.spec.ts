@@ -169,6 +169,8 @@ test('S04: authorization is requested on save; cancellation and server expiry re
   const name = '[UI测试]再认证-' + Date.now();
   await page.getByRole('button', { name: '新增供应商', exact: true }).click();
   await page.getByLabel('显示名称', { exact: true }).fill(name);
+  if (process.env.TEST_AI_BASE_URL)
+    await page.getByLabel('Base URL（包含 API 前缀，如 /v1）').fill(process.env.TEST_AI_BASE_URL);
   let posts = 0;
   page.on('request', (request) => {
     if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/ai') posts++;

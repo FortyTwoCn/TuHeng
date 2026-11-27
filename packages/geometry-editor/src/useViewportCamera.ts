@@ -32,6 +32,7 @@ export function useViewportCamera(
   focusKey: number,
   viewId: string,
   busy: () => boolean,
+  adaptiveFit = false,
 ) {
   const [size, setSize] = useState({ width: 800, height: 600 }),
     [fitSize, setFitSize] = useState<{ width: number; height: number } | null>(null),
@@ -53,7 +54,7 @@ export function useViewportCamera(
     }
   }
   // 工具抽屉改变可见面积，图纸每毫米对应的像素数保持稳定。
-  const baseline = fitSize ?? size;
+  const baseline = adaptiveFit ? size : fitSize ?? size;
   const mmPerPixel =
     Math.max(fitted.height / baseline.height, fitted.width / baseline.width) / (zoom * localZoom);
   const height = size.height * mmPerPixel,

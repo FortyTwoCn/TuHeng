@@ -9,6 +9,7 @@ import { upgradeGeometryDocument } from './sheet';
 import { evaluateDependencies } from './dependencies';
 import { add } from './math';
 import { spatialTranslation } from './projections';
+import { retainConstructionAnimationReferences } from './construction-animation';
 
 export function editable(doc: GeometryDocument, e: GeometryEntity, role: 'teacher' | 'student') {
   return (
@@ -97,7 +98,9 @@ export function transact(
   doc = upgradeGeometryDocument(doc);
   const draft = structuredClone(doc);
   draft.schemaVersion = GEOMETRY_DOCUMENT_VERSION;
+  const animation = draft.constructionAnimation;
   change(draft);
+  if (animation && animation === draft.constructionAnimation) retainConstructionAnimationReferences(draft);
   evaluateDependencies(draft);
   const next = GeometryDocument.parse(draft);
   if (role === 'student') {
@@ -243,6 +246,7 @@ export function clearEditable(
   const removed = deletionSet(doc, toRemove, role);
   const draft = structuredClone(doc);
   removeEntities(draft, removed, role);
+  retainConstructionAnimationReferences(draft);
   return GeometryDocument.parse(draft);
 }
 /** Never remove labelled, protected or independently referenced points with their former owner. */

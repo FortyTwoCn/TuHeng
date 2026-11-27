@@ -44,6 +44,8 @@ import { commandRegistry, commandUnavailable, textEntry, type CommandId } from '
 import { sessionReducer, viewportSession } from './session';
 import type { CameraFit, Ruler } from './types';
 import { useDrawingDocument } from './useDrawingDocument';
+import { useTeachingWorkspace } from './useTeachingWorkspace';
+import { TeachingWorkspaceLayout } from './TeachingWorkspaceLayout';
 import './styles.css';
 // 服务端可以先呈现布局，浏览器完成挂载后再接收编辑操作。
 const browserReady = () => true;
@@ -181,6 +183,14 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         report(e instanceof Error ? e.message : '无法保存图纸');
       }
     };
+    const teaching = useTeachingWorkspace(
+      doc,
+      readOnly,
+      selected.filter((id) => targetFromKey(id).kind === 'entity'),
+      commit,
+      report,
+    );
+    const locked = readOnly || teaching.isPlayback;
     const replace = (next: GeometryDocument) => {
       try {
         return drawing.replace(next);
@@ -211,6 +221,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     };
     const drawingLoaded = () => {
       resetAfterLoad();
+      teaching.resetAfterLoad();
       fit();
     };
     const applyDxf = (result: DxfImportReport) => {
@@ -283,14 +294,14 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       fingerprint,
       activeView,
       role,
-      readOnly,
+      locked,
       selected,
       commit,
       report,
       appearance,
     );
     function startCad(id: CadId) {
-      if (readOnly) return;
+      if (locked) return;
       const group = CAD_COMMANDS.find((command) => command.id === id)?.group;
       if (id === 'point') setAppearance({ pattern: 'SOLID', ...linePresets.SOLID });
       if (group === '尺寸标注' || group === '高级标注')
@@ -301,7 +312,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
     const runCommand = (id: CommandId) => {
       const entry = commandRegistry.find((e) => e.id === id);
       if (!entry) return;
-      const reason = commandUnavailable(entry, readOnly, doc.editorType);
+      const reason = commandUnavailable(entry, locked, doc.editorType);
       if (reason) {
         report(reason);
         return;
@@ -378,7 +389,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           : tool);
     const railProps = {
       active: activeCommand,
-      readOnly,
+      readOnly: locked,
       editorType: doc.editorType,
       run: runCommand,
       start: startCad,
@@ -408,7 +419,15 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
       },
       zip: () => void downloadCadFile(doc, 'zip', report),
       inspect: () => dispatch({ type: 'patch', patch: { panel: 'file' } }),
+      ...teaching.files,
     };
+    function toggleAnimation() {
+      if (!teaching.animationMode) {
+        if (cad.session) cad.send({ type: 'cancel' });
+        dispatch({ type: 'patch', patch: { panel: null, construction: null } });
+      }
+      teaching.changeAnimationMode(teaching.animationMode ? null : 'play');
+    }
     return (
       <div
         ref={root}
@@ -427,6 +446,20 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         aria-label={`${editorRegistry[doc.editorType].name}编辑器`}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing || textEntry(e.target) || e.defaultPrevented) return;
+          if (teaching.isPlayback) {
+            if (e.target === e.currentTarget || e.target instanceof SVGSVGElement) {
+              if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                teaching.playback.jump(teaching.playback.index + (e.key === 'ArrowLeft' ? -1 : 1));
+              }
+              if (e.code === 'Space' && !e.repeat) {
+                e.preventDefault();
+                teaching.playback.togglePlay();
+              }
+              if (e.key === 'Escape') toggleAnimation();
+            }
+            return;
+          }
           if (
             (e.target === e.currentTarget || e.target instanceof SVGSVGElement) &&
             !panel &&
@@ -501,7 +534,16 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           }}
           expanded={expanded}
           standalone={standalone}
-          readOnly={readOnly}
+          readOnly={locked}
+          filesReadOnly={readOnly}
+          teaching={{
+            animation: !!teaching.animationMode,
+            audit: teaching.showAudit,
+            solid: teaching.showSolid,
+            toggleAnimation,
+            toggleAudit: () => teaching.setShowAudit(!teaching.showAudit),
+            toggleSolid: teaching.toggleSolid,
+          }}
           canUndo={history.canUndo}
           canRedo={history.canRedo}
           operations={history.operations}
@@ -538,14 +580,14 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
                 doc={doc}
                 selected={selected}
                 role={role}
-                readOnly={readOnly}
+                readOnly={locked}
                 commit={commit}
                 change={setAppearance}
                 report={report}
               />
               <GridSpacing
                 key={doc.settings.grid}
-                readOnly={readOnly}
+                readOnly={locked}
                 value={doc.settings.grid}
                 report={report}
                 change={(grid) =>
@@ -566,55 +608,103 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           replaceDocument={drawing.load}
           loaded={drawingLoaded}
         />
+        <input
+          ref={teaching.animationInput}
+          className="geo-file-input"
+          type="file"
+          accept=".json,application/json"
+          tabIndex={-1}
+          aria-label="加载动画 JSON"
+          disabled={readOnly}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (file) void teaching.importAnimation(file);
+          }}
+        />
         {!readOnly && (
           <DxfImportDialog dialogRef={dxfDialog} doc={doc} role={role} apply={applyDxf} />
         )}
-        <div className="geo-workspace-body">
-          <DrawingRail {...railProps} />
-          <div className="geo-views">
-            <Viewport
-              document={doc}
-              cad={cad}
-              cursorStatusRef={cursorStatusRef}
-              appearance={appearance}
-              cameraRef={camera}
-              gridSpacing={doc.settings.grid}
-              revision={revision}
-              viewId={activeView}
-              focusKey={focusKey}
-              replace={replace}
-              role={role}
-              readOnly={readOnly}
-              tool={tool}
-              selected={selected}
-              select={select}
-              commit={commit}
-              report={report}
-              {...settings}
-              skipSnap={skipSnap}
-              consumeSnap={() => setSkipSnap(false)}
-              ruler={ruler}
-              onRulerChange={setRuler}
-              zoom={zoom}
-              highlighted={[...highlightedEntityIds, ...linked]}
-              fit={cameraFit}
-              session={session}
-              dispatch={dispatch}
-              runCommand={runCommand}
-              deleteSelection={deleteSelection}
-              copySelection={copySelection}
-            />
+        {teaching.animationError && (
+          <div className="geo-animation-error" role="alert">
+            {teaching.animationError}
+            <button type="button" onClick={teaching.dismissAnimationError}>
+              关闭
+            </button>
           </div>
-          <ModifyRail
-            {...railProps}
-            erase={() => (selected.length ? deleteSelection() : startCad('erase'))}
-            canErase={
-              !readOnly &&
-              selected.every(
-                (id) => targetCapabilities(doc, targetFromKey(id), role, readOnly).deletable,
-              )
-            }
-          />
+        )}
+        <div
+          className={`geo-workspace-body${teaching.isPlayback ? ' geo-workspace-playback' : ''}`}
+        >
+          {!teaching.isPlayback && <DrawingRail {...railProps} />}
+          <div className="geo-views">
+            <TeachingWorkspaceLayout
+              workspace={teaching}
+              readOnly={readOnly}
+              selected={selected.filter((id) => targetFromKey(id).kind === 'entity')}
+              hasAnimation={!!doc.constructionAnimation}
+            >
+              <Viewport
+                document={doc}
+                cad={cad}
+                cursorStatusRef={cursorStatusRef}
+                appearance={appearance}
+                cameraRef={camera}
+                gridSpacing={doc.settings.grid}
+                revision={revision}
+                viewId={activeView}
+                focusKey={focusKey}
+                replace={replace}
+                role={role}
+                readOnly={locked}
+                tool={teaching.isPlayback ? 'pan' : tool}
+                selected={teaching.isPlayback ? [] : selected}
+                select={select}
+                commit={commit}
+                report={report}
+                {...settings}
+                skipSnap={skipSnap}
+                consumeSnap={() => setSkipSnap(false)}
+                ruler={teaching.isPlayback ? { ...ruler, visible: false } : ruler}
+                onRulerChange={setRuler}
+                zoom={zoom}
+                highlighted={[
+                  ...highlightedEntityIds,
+                  ...linked,
+                  ...teaching.linked2D,
+                  ...(teaching.selectedIssue?.entityIds ?? []),
+                ]}
+                playback={teaching.playback.presentation}
+                auditCheck={teaching.selectedIssue}
+                hoverEntity={
+                  teaching.showSolid && teaching.link ? teaching.setEntityHover : undefined
+                }
+                fitTeachingViewport={
+                  !!teaching.animationMode || teaching.showAudit || teaching.showSolid
+                }
+                fit={cameraFit}
+                session={
+                  teaching.isPlayback ? { ...session, construction: null, panel: null } : session
+                }
+                dispatch={dispatch}
+                runCommand={runCommand}
+                deleteSelection={deleteSelection}
+                copySelection={copySelection}
+              />
+            </TeachingWorkspaceLayout>
+          </div>
+          {!teaching.isPlayback && (
+            <ModifyRail
+              {...railProps}
+              erase={() => (selected.length ? deleteSelection() : startCad('erase'))}
+              canErase={
+                !readOnly &&
+                selected.every(
+                  (id) => targetCapabilities(doc, targetFromKey(id), role, readOnly).deletable,
+                )
+              }
+            />
+          )}
         </div>
         <WorkspaceStatus
           cad={cad}
@@ -676,7 +766,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
                   setSkipSnap,
                   ruler,
                   setRuler,
-                  readOnly,
+                  readOnly: locked,
                   role,
                   commit,
                   report,

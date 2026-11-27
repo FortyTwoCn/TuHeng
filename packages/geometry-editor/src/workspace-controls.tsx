@@ -1,10 +1,13 @@
 import { useRef, type ReactNode, type RefObject } from 'react';
 import {
   Check,
+  Box,
+  ClipboardCheck,
   CornerUpLeft,
   Crosshair,
   FileJson,
   FileText,
+  Film,
   Eraser,
   Focus,
   FolderOpen,
@@ -34,6 +37,7 @@ import { EditorPopover } from './EditorPopover';
 import type { CadController, CadId } from './useCadCommand';
 import { WorkspaceAction } from './WorkspaceAction';
 import { CommandParameters, CommandSetup } from './CommandParameters';
+import type { ConstructionFileActions } from './ConstructionPanelWorkspace';
 
 interface TopbarProps {
   title: string;
@@ -45,6 +49,15 @@ interface TopbarProps {
   standalone: boolean;
   startCad: (id: CadId) => void;
   readOnly: boolean;
+  filesReadOnly: boolean;
+  teaching: {
+    animation: boolean;
+    audit: boolean;
+    solid: boolean;
+    toggleAnimation: () => void;
+    toggleAudit: () => void;
+    toggleSolid: () => void;
+  };
   canUndo: boolean;
   canRedo: boolean;
   operations: { label: string; applied: boolean }[];
@@ -66,7 +79,8 @@ interface TopbarProps {
     | 'narrative'
     | 'inspect',
     () => void
-  >;
+  > &
+    ConstructionFileActions;
 }
 export function WorkspaceTopbar(p: TopbarProps) {
   return (
@@ -131,6 +145,26 @@ export function WorkspaceTopbar(p: TopbarProps) {
         {p.styleControls}
       </div>
       <div className="cad-view-actions">
+        <div className="cad-teaching-actions" role="group" aria-label="作图教学">
+          <WorkspaceAction
+            label="分步动画"
+            icon={Film}
+            pressed={p.teaching.animation}
+            onClick={p.teaching.toggleAnimation}
+          />
+          <WorkspaceAction
+            label="格式审核"
+            icon={ClipboardCheck}
+            pressed={p.teaching.audit}
+            onClick={p.teaching.toggleAudit}
+          />
+          <WorkspaceAction
+            label="立体图 3D"
+            icon={Box}
+            pressed={p.teaching.solid}
+            onClick={p.teaching.toggleSolid}
+          />
+        </div>
         <WorkspaceAction label="完整展开图" icon={Focus} onClick={p.fit} />
         <EditorPopover
           label="文件"
@@ -146,9 +180,9 @@ export function WorkspaceTopbar(p: TopbarProps) {
             label="打开 JSON 或图纸包 ZIP"
             icon={Upload}
             onClick={p.fileActions.importJson}
-            disabled={p.readOnly}
+            disabled={p.filesReadOnly}
           />
-          {!p.readOnly && (
+          {!p.filesReadOnly && (
             <WorkspaceAction label="导入 DXF" icon={Upload} onClick={p.fileActions.importDxf} />
           )}
           <WorkspaceAction label="导出 JSON" icon={FileJson} onClick={p.fileActions.json} />
@@ -162,6 +196,18 @@ export function WorkspaceTopbar(p: TopbarProps) {
           <WorkspaceAction label="下载预览 PNG" icon={Image} onClick={p.fileActions.png} />
           <WorkspaceAction label="下载当前视图 PNG" icon={Image} onClick={p.fileActions.viewPng} />
           <WorkspaceAction label="下载图纸包 ZIP" icon={Package} onClick={p.fileActions.zip} />
+          <WorkspaceAction
+            label="导入动画 JSON"
+            icon={Upload}
+            onClick={p.fileActions.importAnimation}
+            disabled={p.filesReadOnly}
+          />
+          <WorkspaceAction label="导出动画 JSON" icon={Film} onClick={p.fileActions.animation} />
+          <WorkspaceAction
+            label="下载动画 JSON Schema"
+            icon={FileJson}
+            onClick={p.fileActions.animationSchema}
+          />
           <WorkspaceAction label="导出关系描述" icon={FileText} onClick={p.fileActions.narrative} />
           <WorkspaceAction label="查看文档" icon={FileJson} onClick={p.fileActions.inspect} />
         </EditorPopover>

@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, type CSSProperties, type ReactElement, type SVGProps } from 'react';
 import {
   isCadEntity,
   type GeometryDocument,
@@ -20,8 +20,11 @@ import {
   drawingRunLength,
   localToSheet,
   ellipseAt,
+  type ConstructionVisual,
 } from '@tuheng/geometry-core';
 import { semanticLineStyles } from '@tuheng/geometry-core';
+import { constructionInk } from './construction-playback';
+import { ProgressiveStroke } from './ProgressiveStroke';
 export const lineStyles = semanticLineStyles;
 export const EntityShape = memo(function EntityShape({
   document: doc,
@@ -32,6 +35,7 @@ export const EntityShape = memo(function EntityShape({
   scale,
   sourceDocument,
   sheetPoints,
+  playback,
 }: {
   document: GeometryDocument;
   entity: GeometryEntity;
@@ -41,6 +45,7 @@ export const EntityShape = memo(function EntityShape({
   scale: number;
   sourceDocument?: GeometryDocument;
   sheetPoints: ReadonlyMap<string, Vec2>;
+  playback?: { visual: ConstructionVisual; timing?: CSSProperties; linked: boolean };
 }) {
   const source = sourceDocument ?? doc;
   const baseStyle = drawingStyle(e, scale);
@@ -54,12 +59,29 @@ export const EntityShape = memo(function EntityShape({
     if (e.lineStyle === 'CONSTRUCTION') appearance.stroke = 'var(--cad-axis,#638894)';
     if (e.lineStyle.startsWith('PROBLEM')) appearance.stroke = 'var(--cad-stem,#4585dd)';
   }
+  if (playback) Object.assign(appearance, constructionInk(e, playback.visual, scale));
   const style = {
     ...appearance,
     strokeWidth: selected ? Math.max(appearance.strokeWidth + 1, 3) : appearance.strokeWidth,
     fill: 'none',
     vectorEffect: 'non-scaling-stroke' as const,
   };
+  if (playback?.linked) {
+    style.stroke = 'var(--cad-accent)';
+    style.strokeWidth += 1.2;
+  }
+  const trace = (shape: ReactElement<SVGProps<SVGElement>>) =>
+    playback?.timing && box ? (
+      <ProgressiveStroke
+        shape={shape}
+        timing={playback.timing}
+        box={box}
+        scale={scale}
+        width={style.strokeWidth}
+      />
+    ) : (
+      shape
+    );
 
   let shape;
   const at = (p: Vec2) => (sourceDocument ? localToSheet(source, e.viewId, p) : p);
@@ -79,7 +101,8 @@ export const EntityShape = memo(function EntityShape({
     if (cadGeometry) {
       shape = (
         <>
-          {cadGeometry.path && <path d={cadGeometry.path} vectorEffect="non-scaling-stroke" />}
+          {cadGeometry.path &&
+            trace(<path d={cadGeometry.path} vectorEffect="non-scaling-stroke" />)}
           {cadGeometry.labels.map((l, i) => (
             <text
               key={i}
@@ -125,17 +148,19 @@ export const EntityShape = memo(function EntityShape({
       e.kind === 'segment'
         ? [sheetPoints.get(e.startPoint)!, sheetPoints.get(e.endPoint)!]
         : box && clipLine({ a: e.anchor, d: e.direction, finite: false }, box);
-    shape = ends && (
-      <line
-        vectorEffect="non-scaling-stroke"
-        x1={ends[0].x}
-        y1={ends[0].y}
-        x2={ends[1].x}
-        y2={ends[1].y}
-      />
-    );
+    shape =
+      ends &&
+      trace(
+        <line
+          vectorEffect="non-scaling-stroke"
+          x1={ends[0].x}
+          y1={ends[0].y}
+          x2={ends[1].x}
+          y2={ends[1].y}
+        />,
+      );
   } else if (e.kind === 'curve')
-    shape = (
+    shape = trace(
       <path
         vectorEffect="non-scaling-stroke"
         d={curvePath(
@@ -143,24 +168,26 @@ export const EntityShape = memo(function EntityShape({
           e.parameterRange,
           e.interpolation,
         )}
-      />
+      />,
     );
   else if (e.kind === 'polyline')
-    shape = (
+    shape = trace(
       <polyline
         vectorEffect="non-scaling-stroke"
         points={e.points.map((p) => `${p.x},${p.y}`).join(' ')}
-      />
+      />,
     );
   else if (e.kind === 'plane')
     shape = (
       <>
-        <polyline
-          vectorEffect="non-scaling-stroke"
-          points={planeOutline(doc, e)
-            .map((p) => `${p.x},${p.y}`)
-            .join(' ')}
-        />
+        {trace(
+          <polyline
+            vectorEffect="non-scaling-stroke"
+            points={planeOutline(doc, e)
+              .map((p) => `${p.x},${p.y}`)
+              .join(' ')}
+          />,
+        )}
         <text
           transform={`translate(${projectPoint(doc, e.origin, e.viewId).x} ${projectPoint(doc, e.origin, e.viewId).y}) scale(1 -1)`}
           fontSize={10 / scale}
@@ -174,13 +201,13 @@ export const EntityShape = memo(function EntityShape({
   else {
     const c = sheetPoints.get(e.center)!;
     if (e.kind === 'circle')
-      shape = <circle vectorEffect="non-scaling-stroke" cx={c.x} cy={c.y} r={e.radius} />;
+      shape = trace(<circle vectorEffect="non-scaling-stroke" cx={c.x} cy={c.y} r={e.radius} />);
     else {
-      shape = (
+      shape = trace(
         <path
           vectorEffect="non-scaling-stroke"
           d={arcSvgPath(c, e.radius, e.startAngle, e.sweep)}
-        />
+        />,
       );
     }
   }
@@ -190,6 +217,9 @@ export const EntityShape = memo(function EntityShape({
       data-selected={selected}
       data-kind={e.kind}
       data-style={e.lineStyle}
+      data-construction-role={playback?.visual.role}
+      data-stroke-order={playback?.visual.order}
+      data-model-linked={playback?.linked || undefined}
       {...style}
     >
       <title>{e.id}</title>

@@ -16,6 +16,8 @@ import {
 import type { EditorControls } from './types';
 import { sheetDrawingDocument } from './sheet-drawing';
 import { EntityShape } from './rendering';
+import { ConstructionDrawing } from './ConstructionDrawing';
+import { DrawingAuditMarkers } from './DrawingAuditPanel';
 export function ViewportDrawing({
   controls: props,
   box,
@@ -46,26 +48,28 @@ export function ViewportDrawing({
     const active = new Set([...props.selected, ...props.highlighted]);
     const clip: number[] = [],
       sized: number[] = [];
-    const elements = doc.entities
-      .filter((e) => !props.hiddenLayers.includes(e.layerId))
-      .map((e, i) => {
-        const selected = active.has(e.id);
-        const labels = e.kind === 'point' && props.labels && e.labelVisible;
-        if (e.kind === 'line') clip.push(i);
-        if (selected || labels || e.appearance?.widthMm || e.kind === 'plane') sized.push(i);
-        return (
-          <EntityShape
-            key={e.id}
-            document={doc}
-            sourceDocument={props.document}
-            sheetPoints={sheetPoints}
-            entity={e}
-            labels={labels}
-            selected={selected}
-            scale={1}
-          />
-        );
-      });
+    const elements = props.playback
+      ? []
+      : doc.entities
+          .filter((e) => !props.hiddenLayers.includes(e.layerId))
+          .map((e, i) => {
+            const selected = active.has(e.id);
+            const labels = e.kind === 'point' && props.labels && e.labelVisible;
+            if (e.kind === 'line') clip.push(i);
+            if (selected || labels || e.appearance?.widthMm || e.kind === 'plane') sized.push(i);
+            return (
+              <EntityShape
+                key={e.id}
+                document={doc}
+                sourceDocument={props.document}
+                sheetPoints={sheetPoints}
+                entity={e}
+                labels={labels}
+                selected={selected}
+                scale={1}
+              />
+            );
+          });
     return { elements, clip, sized };
   }, [
     doc,
@@ -75,6 +79,7 @@ export function ViewportDrawing({
     props.selected,
     props.highlighted,
     props.hiddenLayers,
+    props.playback,
   ]);
   // 镜头变化时复用图形层，保留实体绘制顺序。可视范围和点标记半径单独更新。
   const geometry = useMemo(() => {
@@ -152,7 +157,7 @@ export function ViewportDrawing({
           height={box.height}
           fill="var(--cad-paper,#f8fbfc)"
         />
-        {props.grid && (
+        {props.grid && !props.playback && (
           <rect
             aria-hidden="true"
             x={box.x}
@@ -318,7 +323,20 @@ export function ViewportDrawing({
             strokeWidth={2 / scale}
           />
         )}
-        {geometry}
+        {props.playback ? (
+          <ConstructionDrawing
+            source={props.document}
+            doc={doc}
+            points={sheetPoints}
+            playback={props.playback}
+            box={box}
+            scale={scale}
+            highlighted={props.highlighted}
+          />
+        ) : (
+          geometry
+        )}
+        <DrawingAuditMarkers doc={props.document} check={props.auditCheck} scale={scale} />
         {preview.length > 0 && (
           <polyline
             data-transient="preview"

@@ -12,7 +12,7 @@ async function startDrawing(page: Page, doc: GeometryDocument, anchor: Vec2, tou
     el.style.width = '100%';
     (el.nextElementSibling as HTMLElement).hidden = true;
   });
-  const file = editor.locator('input[type=file]');
+  const file = editor.getByLabel('加载几何 JSON', { exact: true });
   await file.setInputFiles({
     name: 'reference.json',
     mimeType: 'application/json',

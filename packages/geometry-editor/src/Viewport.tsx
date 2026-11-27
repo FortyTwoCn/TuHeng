@@ -151,12 +151,13 @@ export function Viewport(
     props.focusKey,
     viewId,
     busy,
+    props.fitTeachingViewport,
   );
   useEffect(() => {
     props.cameraRef.current = box;
   }, [box, props.cameraRef]);
   const [inspectId, setInspectId] = useState<string>();
-  const inspected = readOnly ? doc.entities.find((e) => e.id === inspectId) : undefined;
+  const inspected = readOnly && !props.playback ? doc.entities.find((e) => e.id === inspectId) : undefined;
   const cssScale = () => {
     const m = svg.current?.getScreenCTM();
     return m ? Math.hypot(m.a, m.b) : size.width / box.width;
@@ -1075,7 +1076,11 @@ export function Viewport(
         }
         viewBox={`${box.x} ${-box.y - box.height} ${box.width} ${box.height}`}
         onPointerDown={down}
-        onPointerMove={queueMove}
+        onPointerMove={(event) => {
+          if (props.hoverEntity && event.pointerType !== 'touch')
+            props.hoverEntity((event.target as Element).closest('[data-entity-id]')?.getAttribute('data-entity-id') ?? undefined);
+          queueMove(event);
+        }}
         onPointerEnter={(e) => {
           if (cad && !gesture.current && e.pointerType !== 'touch') queueMove(e);
         }}
@@ -1105,6 +1110,7 @@ export function Viewport(
           props.dispatch({ type: 'patch', patch: { panel: 'properties' } });
         }}
         onPointerLeave={() => {
+          props.hoverEntity?.();
           tracking.leave();
           if (readOnly) setInspectId(undefined);
           if (!gesture.current && crosshair.current) crosshair.current.style.visibility = 'hidden';

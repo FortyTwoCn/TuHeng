@@ -71,7 +71,7 @@ test('Chinese text survives JSON reload and produces real PNG and packaged downl
     else {
       await page.evaluate(() => window.editorFixture.external());
       await e
-        .locator('input[type=file]')
+        .getByLabel('加载几何 JSON', { exact: true })
         .setInputFiles({ name: 'drawing.json', mimeType: 'application/json', buffer: bytes });
       await expect.poll(async () => (await read(page)).entities).toEqual(original.entities);
     }

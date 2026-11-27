@@ -12,7 +12,7 @@ async function open(page: Page) {
     (el.nextElementSibling as HTMLElement).hidden = true;
   });
   await editor
-    .locator('input[type=file]')
+    .getByLabel('加载几何 JSON', { exact: true })
     .setInputFiles({
       name: 'line.json',
       mimeType: 'application/json',
@@ -99,7 +99,7 @@ test('canvas keyboard commits a 40/20/30 mm chain with shared nodes, a world gri
     .attach('连续直线40-20-30mm.json', { body: bytes, contentType: 'application/json' });
   mkdirSync('test-results/workspace-line', { recursive: true });
   writeFileSync('test-results/workspace-line/continuous-line.json', bytes);
-  const input = editor.locator('input[type=file]');
+  const input = editor.getByLabel('加载几何 JSON', { exact: true });
   await input.setInputFiles({
     name: 'empty.json',
     mimeType: 'application/json',
@@ -146,13 +146,13 @@ test('a locked length uses the orthogonal pointer direction and skips an incompa
     'student',
   );
   await editor
-    .locator('input[type=file]')
+    .getByLabel('加载几何 JSON', { exact: true })
     .setInputFiles({
       name: 'anchor.json',
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(base)),
     });
-  await expect(editor.locator('input[type=file]')).toHaveValue('');
+  await expect(editor.getByLabel('加载几何 JSON', { exact: true })).toHaveValue('');
   await editor.getByRole('button', { name: '正交', exact: true }).click();
   await activateCommand(editor, 'segment');
   const a = await at(svg, -20, -8),
@@ -219,7 +219,7 @@ test('types precise measurements while dragging a segment endpoint and a circle 
     'student',
   );
   await editor
-    .locator('input[type=file]')
+    .getByLabel('加载几何 JSON', { exact: true })
     .setInputFiles({
       name: 'grips.json',
       mimeType: 'application/json',

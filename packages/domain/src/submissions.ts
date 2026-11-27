@@ -19,6 +19,8 @@ export async function scheduleRun(
   };
   const id = crypto.randomUUID();
   const bundle = attempt.geometryAnswer ? exportGeometryBundle(attempt.geometryAnswer) : undefined;
+  const problemDocument = question.geometryDocument && { ...question.geometryDocument };
+  if (problemDocument) delete problemDocument.constructionAnimation;
   const request = GradingRequest.parse({
     contractVersion: '1',
     runId: id,
@@ -42,7 +44,7 @@ export async function scheduleRun(
           geometryEvidence: {
             schemaVersion: bundle.document.schemaVersion,
             editorType: bundle.document.editorType,
-            problemDocument: question.geometryDocument,
+            problemDocument,
             answerDocument: bundle.document,
             derivedRelations: bundle.derivedRelations,
             narrative: bundle.narrative,

@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "tuheng.construction-animation/1.0.0"
+    },
+    "editorType": {
+      "type": "string",
+      "enum": [
+        "VHW_PROJECTION",
+        "VH_PROJECTION",
+        "THREE_VIEW",
+        "ISOMETRIC",
+        "OBLIQUE_DIMETRIC"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "phases": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[\\w.-]+$"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 199
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "title"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "steps": {
+      "minItems": 1,
+      "maxItems": 200,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[\\w.-]+$"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 199
+          },
+          "phaseId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[\\w.-]+$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "narration": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CENTERLINE",
+              "CONSTRUCT",
+              "DRAW",
+              "ERASE",
+              "DEEPEN"
+            ]
+          },
+          "entityIds": {
+            "maxItems": 2000,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[\\w.-]+$"
+            },
+            "description": "按笔顺排列的正式图元 ID，最先作图的实体排在最前。"
+          },
+          "constructionEntityIds": {
+            "maxItems": 2000,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[\\w.-]+$"
+            }
+          },
+          "temporaryGuides": {
+            "description": "统一图纸毫米坐标。viewId 用于标记所属视图。",
+            "maxItems": 120,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[\\w.-]+$"
+                },
+                "viewId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[\\w.-]+$"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "PROJECTION",
+                    "MITER",
+                    "EXTENSION",
+                    "ALIGNMENT"
+                  ]
+                },
+                "from": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": -10000,
+                      "maximum": 10000
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": -10000,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "additionalProperties": false
+                },
+                "to": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": -10000,
+                      "maximum": 10000
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": -10000,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "additionalProperties": false
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "focusPoints": {
+            "maxItems": 120,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[\\w.-]+$"
+                },
+                "position": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": -10000,
+                      "maximum": 10000
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": -10000,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "additionalProperties": false
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "SPECIAL",
+                    "GENERAL"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              },
+              "required": [
+                "id",
+                "position",
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "eraseEntityIds": {
+            "maxItems": 2000,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[\\w.-]+$"
+            }
+          },
+          "highlightRole": {
+            "type": "string",
+            "const": "INTERSECTION_CURVE"
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 250,
+            "maximum": 30000
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "title",
+          "narration",
+          "kind",
+          "entityIds"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "title",
+    "description",
+    "phases",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "title": "图衡分步作图动画 1.0",
+  "description": "阶段和步骤的 order 均从 0 连续递增。ID 唯一性、阶段归属和实体引用由图衡导入时校验。"
+}

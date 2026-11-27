@@ -1,0 +1,300 @@
+{
+  "schemaVersion": "tuheng.construction-animation/1.0.0",
+  "editorType": "THREE_VIEW",
+  "title": "长方体贯通孔的三视图",
+  "description": "从确定孔轴线开始，按长对正、高平齐、宽相等补齐三个投影，再整理线型。",
+  "phases": [
+    {
+      "id": "datum",
+      "order": 0,
+      "title": "中心线与定位线"
+    },
+    {
+      "id": "outline",
+      "order": 1,
+      "title": "主要形体轮廓"
+    },
+    {
+      "id": "opening",
+      "order": 2,
+      "title": "贯通孔与不可见轮廓"
+    },
+    {
+      "id": "finish",
+      "order": 3,
+      "title": "检查擦除与加深"
+    }
+  ],
+  "steps": [
+    {
+      "id": "centers",
+      "order": 0,
+      "phaseId": "datum",
+      "title": "确定孔中心和基准",
+      "narration": "1. 在俯视图确定孔中心 O，过 O 作垂直相交的中心线。\n2. 将中心投影传到主视图和左视图，标明孔轴线。",
+      "kind": "CENTERLINE",
+      "entityIds": [
+        "v-center-1",
+        "h-center-x-1",
+        "h-center-y-1",
+        "w-center-1"
+      ],
+      "focusPoints": [
+        {
+          "id": "O",
+          "position": {
+            "x": -44,
+            "y": -34
+          },
+          "kind": "SPECIAL",
+          "label": "O"
+        }
+      ],
+      "durationMs": 1600
+    },
+    {
+      "id": "front",
+      "order": 1,
+      "phaseId": "outline",
+      "title": "定位并描画主视图",
+      "narration": "1. 先投出左右两个端面的定位线，确定总长 56 mm。\n2. 自下边起，沿四个角点依次描画主视轮廓，高度为 40 mm。",
+      "kind": "DRAW",
+      "entityIds": [
+        "v-outline-1",
+        "v-outline-2",
+        "v-outline-3",
+        "v-outline-4"
+      ],
+      "constructionEntityIds": [
+        "v-overrun-1"
+      ],
+      "temporaryGuides": [
+        {
+          "id": "left-edge",
+          "viewId": "view-0",
+          "kind": "PROJECTION",
+          "from": {
+            "x": -16,
+            "y": -54
+          },
+          "to": {
+            "x": -16,
+            "y": 55
+          },
+          "label": "长对正"
+        },
+        {
+          "id": "right-edge",
+          "viewId": "view-0",
+          "kind": "PROJECTION",
+          "from": {
+            "x": -72,
+            "y": -54
+          },
+          "to": {
+            "x": -72,
+            "y": 55
+          }
+        }
+      ],
+      "focusPoints": [
+        {
+          "id": "A",
+          "position": {
+            "x": -16,
+            "y": 15
+          },
+          "kind": "SPECIAL",
+          "label": "A"
+        },
+        {
+          "id": "B",
+          "position": {
+            "x": -72,
+            "y": 15
+          },
+          "kind": "GENERAL",
+          "label": "B"
+        }
+      ],
+      "durationMs": 2400
+    },
+    {
+      "id": "transfer",
+      "order": 2,
+      "phaseId": "outline",
+      "title": "传递长、高和宽",
+      "narration": "1. 从主视图向下投出俯视轮廓，保持长对正。\n2. 向右投出高度，通过 45° 线传递俯视图深度，完成左视轮廓。",
+      "kind": "DRAW",
+      "entityIds": [
+        "h-outline-1",
+        "h-outline-2",
+        "h-outline-3",
+        "h-outline-4",
+        "w-outline-1",
+        "w-outline-2",
+        "w-outline-3",
+        "w-outline-4"
+      ],
+      "temporaryGuides": [
+        {
+          "id": "height",
+          "kind": "ALIGNMENT",
+          "from": {
+            "x": -16,
+            "y": 55
+          },
+          "to": {
+            "x": 56,
+            "y": 55
+          },
+          "label": "高平齐"
+        },
+        {
+          "id": "depth",
+          "kind": "MITER",
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to": {
+            "x": 55,
+            "y": -55
+          },
+          "label": "45° 传宽"
+        },
+        {
+          "id": "depth-edge",
+          "kind": "PROJECTION",
+          "from": {
+            "x": -16,
+            "y": -53
+          },
+          "to": {
+            "x": 53,
+            "y": -53
+          }
+        },
+        {
+          "id": "side-edge",
+          "viewId": "view-2",
+          "kind": "PROJECTION",
+          "from": {
+            "x": 53,
+            "y": -53
+          },
+          "to": {
+            "x": 53,
+            "y": 55
+          }
+        }
+      ],
+      "focusPoints": [
+        {
+          "id": "C",
+          "position": {
+            "x": 53,
+            "y": -53
+          },
+          "kind": "GENERAL",
+          "label": "C"
+        },
+        {
+          "id": "D",
+          "position": {
+            "x": 53,
+            "y": 55
+          },
+          "kind": "SPECIAL",
+          "label": "D"
+        }
+      ],
+      "durationMs": 2400
+    },
+    {
+      "id": "hole",
+      "order": 3,
+      "phaseId": "opening",
+      "title": "画孔口及孔壁虚线",
+      "narration": "1. 以 O 为圆心画直径 18 mm 的俯视孔口。\n2. 从孔口极限点投出主视图和左视图中的两条孔壁，孔壁被遮挡，因此使用细虚线。",
+      "kind": "DRAW",
+      "entityIds": [
+        "h-opening",
+        "v-hole-35-1",
+        "v-hole-53-1",
+        "w-hole-25-1",
+        "w-hole-43-1"
+      ],
+      "temporaryGuides": [
+        {
+          "id": "hole-project",
+          "kind": "PROJECTION",
+          "from": {
+            "x": -35,
+            "y": -34
+          },
+          "to": {
+            "x": -35,
+            "y": 57
+          }
+        },
+        {
+          "id": "hole-project2",
+          "kind": "PROJECTION",
+          "from": {
+            "x": -53,
+            "y": -34
+          },
+          "to": {
+            "x": -53,
+            "y": 57
+          }
+        }
+      ],
+      "focusPoints": [
+        {
+          "id": "E",
+          "position": {
+            "x": -35,
+            "y": -34
+          },
+          "kind": "SPECIAL",
+          "label": "E"
+        },
+        {
+          "id": "F",
+          "position": {
+            "x": -53,
+            "y": -34
+          },
+          "kind": "GENERAL",
+          "label": "F"
+        }
+      ],
+      "durationMs": 2200
+    },
+    {
+      "id": "trim",
+      "order": 4,
+      "phaseId": "finish",
+      "title": "标记并擦除越界延长线",
+      "narration": "检查主视图顶部。右侧定位线伸出 12 mm，先用虚点线标明应擦去的区段，再进入下一步。",
+      "kind": "ERASE",
+      "entityIds": [],
+      "eraseEntityIds": [
+        "v-overrun-1"
+      ],
+      "durationMs": 1250
+    },
+    {
+      "id": "ink",
+      "order": 5,
+      "phaseId": "finish",
+      "title": "检查并分线型加深",
+      "narration": "外轮廓和俯视孔口用粗实线。不可见孔壁用细虚线。保留点画中心线，去除投影辅助线。",
+      "kind": "DEEPEN",
+      "entityIds": [],
+      "durationMs": 1250
+    }
+  ]
+}

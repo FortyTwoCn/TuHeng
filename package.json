@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "geometry:schema": "tsx scripts/generate-geometry-schemas.ts",
     "test": "vitest run tests/unit",
     "test:integration": "dotenv -e .env -- vitest run tests/integration",
     "test:e2e": "dotenv -e .env -- playwright test",

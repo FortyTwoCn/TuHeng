@@ -1,0 +1,2237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "tuheng.geometry/3.0.0"
+    },
+    "editorType": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "units": {
+      "type": "string",
+      "const": "mm"
+    },
+    "coordinateSystem": {
+      "type": "string",
+      "const": "VIEW_LOCAL_WITH_SHEET_TRANSFORM"
+    },
+    "sheet": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "allowAuxiliaryViews": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "origin",
+        "allowAuxiliaryViews"
+      ],
+      "additionalProperties": false
+    },
+    "auxiliarySystems": {
+      "maxItems": 24,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema3"
+      }
+    },
+    "projectionConfig": {
+      "type": "object",
+      "properties": {
+        "convention": {
+          "type": "string",
+          "enum": [
+            "FIRST_ANGLE_LEFT",
+            "THIRD_ANGLE_RIGHT"
+          ]
+        },
+        "axes": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "$ref": "#/$defs/__schema5"
+            },
+            "y": {
+              "$ref": "#/$defs/__schema5"
+            },
+            "z": {
+              "$ref": "#/$defs/__schema5"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
+          "additionalProperties": false
+        },
+        "depthAngle": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "depthScale": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "convention",
+        "axes",
+        "depthAngle",
+        "depthScale"
+      ],
+      "additionalProperties": false
+    },
+    "views": {
+      "minItems": 1,
+      "maxItems": 27,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema6"
+      },
+      "description": "每个视图需要 transform，将视图局部坐标映射到统一图纸。"
+    },
+    "layers": {
+      "minItems": 3,
+      "maxItems": 3,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema7"
+      }
+    },
+    "entities": {
+      "maxItems": 2000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema8"
+      },
+      "description": "每个实体使用唯一 id。端点、圆心和边界等通过已存在的 ID 引用。"
+    },
+    "constraints": {
+      "maxItems": 1000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema27"
+      }
+    },
+    "referenceRelations": {
+      "maxItems": 1000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema28"
+      }
+    },
+    "projectionGroups": {
+      "maxItems": 500,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema29"
+      }
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "grid": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "tolerance": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "labels": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "grid",
+        "tolerance",
+        "labels"
+      ],
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "constructionAnimation": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/$defs/__schema30"
+        },
+        "editorType": {
+          "$ref": "#/$defs/__schema31"
+        },
+        "title": {
+          "$ref": "#/$defs/__schema32"
+        },
+        "description": {
+          "$ref": "#/$defs/__schema33"
+        },
+        "phases": {
+          "$ref": "#/$defs/__schema34"
+        },
+        "steps": {
+          "$ref": "#/$defs/__schema37"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "title",
+        "description",
+        "phases",
+        "steps"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "editorType",
+    "units",
+    "coordinateSystem",
+    "sheet",
+    "auxiliarySystems",
+    "projectionConfig",
+    "views",
+    "layers",
+    "entities",
+    "constraints",
+    "projectionGroups",
+    "settings",
+    "metadata"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "enum": [
+        "VHW_PROJECTION",
+        "VH_PROJECTION",
+        "THREE_VIEW",
+        "ISOMETRIC",
+        "OBLIQUE_DIMETRIC"
+      ]
+    },
+    "__schema1": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "y": {
+          "$ref": "#/$defs/__schema2"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "__schema2": {
+      "type": "number",
+      "minimum": -10000,
+      "maximum": 10000
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "owner": {
+          "type": "string",
+          "enum": [
+            "SYSTEM",
+            "TEACHER",
+            "STUDENT"
+          ]
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "referenceStatus": {
+          "type": "string",
+          "enum": [
+            "SATISFIED",
+            "INVALID",
+            "UNVERIFIED"
+          ]
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/__schema4"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retainedViewId": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "replacedViewId": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "newViewId": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "anchor": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "tangent": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "type": "number",
+              "const": 1
+            },
+            {
+              "type": "number",
+              "const": -1
+            }
+          ]
+        },
+        "positiveNormal": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "oldAxis": {
+          "type": "object",
+          "properties": {
+            "anchor": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "tangent": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "positiveNormal": {
+              "$ref": "#/$defs/__schema1"
+            }
+          },
+          "required": [
+            "anchor",
+            "tangent",
+            "positiveNormal"
+          ],
+          "additionalProperties": false
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "FREE",
+            "PARALLEL",
+            "PERPENDICULAR"
+          ]
+        },
+        "referenceEntityId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/__schema4"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "referenceAxis": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "baseAxis"
+                },
+                "axisId": {
+                  "type": "string",
+                  "enum": [
+                    "X",
+                    "Z",
+                    "Y_H",
+                    "Y_W",
+                    "MITER_45"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "axisId"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "projectionAxis"
+                },
+                "systemId": {
+                  "$ref": "#/$defs/__schema4"
+                }
+              },
+              "required": [
+                "kind",
+                "systemId"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version",
+        "owner",
+        "locked",
+        "parentId",
+        "retainedViewId",
+        "replacedViewId",
+        "newViewId",
+        "anchor",
+        "tangent",
+        "side",
+        "positiveNormal",
+        "oldAxis",
+        "method",
+        "referenceEntityId"
+      ],
+      "additionalProperties": false
+    },
+    "__schema4": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[\\w.-]+$"
+    },
+    "__schema5": {
+      "type": "object",
+      "properties": {
+        "angle": {
+          "type": "number",
+          "minimum": -360,
+          "maximum": 360
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "angle",
+        "scale"
+      ],
+      "additionalProperties": false
+    },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "transform": {
+          "type": "object",
+          "properties": {
+            "origin": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "xAxis": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "yAxis": {
+              "$ref": "#/$defs/__schema1"
+            }
+          },
+          "required": [
+            "origin",
+            "xAxis",
+            "yAxis"
+          ],
+          "additionalProperties": false
+        },
+        "mapping": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "enum": [
+                "x",
+                "y",
+                "z"
+              ]
+            },
+            {
+              "type": "string",
+              "enum": [
+                "x",
+                "y",
+                "z"
+              ]
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "signs": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "const": 1
+                },
+                {
+                  "type": "number",
+                  "const": -1
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "const": 1
+                },
+                {
+                  "type": "number",
+                  "const": -1
+                }
+              ]
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "mapping",
+        "signs",
+        "transform"
+      ],
+      "additionalProperties": false
+    },
+    "__schema7": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "PROBLEM_STEM",
+            "STUDENT_ANSWER",
+            "CONSTRUCTION"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "__schema8": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "point"
+            },
+            "position": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "spatial": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/__schema13"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "labelVisible": {
+              "type": "boolean"
+            },
+            "aliases": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema14"
+              }
+            },
+            "mergedFrom": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema4"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "position",
+            "name",
+            "spatial",
+            "labelVisible"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "segment"
+            },
+            "startPoint": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "endPoint": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "samples": {
+              "$ref": "#/$defs/__schema15"
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "startPoint",
+            "endPoint"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "line"
+            },
+            "anchor": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "direction": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "referenceEntityId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/__schema4"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "samples": {
+              "$ref": "#/$defs/__schema15"
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "anchor",
+            "direction",
+            "referenceEntityId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "circle"
+            },
+            "center": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "radius": {
+              "exclusiveMinimum": 0,
+              "$ref": "#/$defs/__schema2"
+            },
+            "samples": {
+              "$ref": "#/$defs/__schema15"
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "center",
+            "radius"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "arc"
+            },
+            "center": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "radius": {
+              "exclusiveMinimum": 0,
+              "$ref": "#/$defs/__schema2"
+            },
+            "startAngle": {
+              "type": "number",
+              "minimum": -360,
+              "maximum": 360
+            },
+            "sweep": {
+              "type": "number",
+              "minimum": -360,
+              "maximum": 360
+            },
+            "samples": {
+              "$ref": "#/$defs/__schema15"
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "center",
+            "radius",
+            "startAngle",
+            "sweep"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "curve"
+            },
+            "pointIds": {
+              "minItems": 3,
+              "maxItems": 128,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema4"
+              }
+            },
+            "interpolation": {
+              "type": "string",
+              "enum": [
+                "CUBIC_HERMITE",
+                "QUADRATIC_BSPLINE"
+              ]
+            },
+            "parameterRange": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/__schema17"
+                },
+                {
+                  "$ref": "#/$defs/__schema18"
+                }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "samples": {
+              "$ref": "#/$defs/__schema15"
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "pointIds",
+            "interpolation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "polyline"
+            },
+            "points": {
+              "minItems": 2,
+              "maxItems": 4096,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema1"
+              }
+            },
+            "samples": {
+              "$ref": "#/$defs/__schema15"
+            },
+            "fitStatus": {
+              "type": "string",
+              "const": "UNFITTED"
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "points",
+            "fitStatus"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "ellipse"
+            },
+            "center": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "majorRadius": {
+              "exclusiveMinimum": 0,
+              "$ref": "#/$defs/__schema2"
+            },
+            "minorRadius": {
+              "exclusiveMinimum": 0,
+              "$ref": "#/$defs/__schema2"
+            },
+            "angle": {
+              "$ref": "#/$defs/__schema19"
+            },
+            "startAngle": {
+              "$ref": "#/$defs/__schema19"
+            },
+            "sweep": {
+              "$ref": "#/$defs/__schema19"
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "center",
+            "majorRadius",
+            "minorRadius",
+            "angle",
+            "startAngle",
+            "sweep"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "text"
+            },
+            "position": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "angle": {
+              "$ref": "#/$defs/__schema19"
+            },
+            "size": {
+              "$ref": "#/$defs/__schema20"
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "position",
+            "angle",
+            "size",
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "symbol"
+            },
+            "position": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "angle": {
+              "$ref": "#/$defs/__schema19"
+            },
+            "size": {
+              "$ref": "#/$defs/__schema20"
+            },
+            "symbolType": {
+              "type": "string",
+              "enum": [
+                "DIRECTION",
+                "LEFT_ROTATION",
+                "RIGHT_ROTATION"
+              ]
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "labelPosition": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "arrowLength": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 30000
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "position",
+            "angle",
+            "size",
+            "symbolType"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "dimension"
+            },
+            "dimensionType": {
+              "type": "string",
+              "enum": [
+                "LINEAR",
+                "ALIGNED",
+                "ANGULAR",
+                "RADIUS",
+                "DIAMETER"
+              ]
+            },
+            "linearAxis": {
+              "type": "string",
+              "enum": [
+                "X",
+                "Y"
+              ]
+            },
+            "linearAngle": {
+              "$ref": "#/$defs/__schema19"
+            },
+            "referenceIds": {
+              "minItems": 1,
+              "maxItems": 3,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema4"
+              }
+            },
+            "position": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "precision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            },
+            "textOverride": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "textSize": {
+              "$ref": "#/$defs/__schema20"
+            },
+            "arrowStyle": {
+              "type": "string",
+              "enum": [
+                "CLOSED",
+                "OPEN"
+              ]
+            },
+            "tolerance": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                "upper": {
+                  "type": "string",
+                  "maxLength": 24
+                },
+                "lower": {
+                  "type": "string",
+                  "maxLength": 24
+                },
+                "showCode": {
+                  "type": "boolean"
+                },
+                "showDeviation": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "code",
+                "upper",
+                "lower",
+                "showCode",
+                "showDeviation"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "dimensionType",
+            "referenceIds",
+            "position",
+            "precision",
+            "textOverride",
+            "textSize",
+            "arrowStyle"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "engineeringAnnotation"
+            },
+            "position": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "angle": {
+              "$ref": "#/$defs/__schema19"
+            },
+            "size": {
+              "$ref": "#/$defs/__schema20"
+            },
+            "annotationType": {
+              "type": "string",
+              "enum": [
+                "DATUM",
+                "ROUGHNESS",
+                "GEOMETRIC_TOLERANCE",
+                "TOLERANCE_TEXT"
+              ]
+            },
+            "roughnessMode": {
+              "type": "string",
+              "enum": [
+                "BASIC",
+                "REMOVAL_REQUIRED",
+                "REMOVAL_PROHIBITED"
+              ]
+            },
+            "leader": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "roughnessDetails": {
+              "type": "object",
+              "properties": {
+                "accessory": {
+                  "type": "string",
+                  "enum": [
+                    "NONE",
+                    "BAR",
+                    "ALL_AROUND",
+                    "AFTER_WELD"
+                  ]
+                },
+                "texture": {
+                  "type": "string",
+                  "enum": [
+                    "NONE",
+                    "PARALLEL",
+                    "PERPENDICULAR",
+                    "CROSSED",
+                    "MULTIDIRECTIONAL",
+                    "CIRCULAR",
+                    "RADIAL",
+                    "NON_DIRECTIONAL"
+                  ]
+                },
+                "method": {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                "extent": {
+                  "type": "string",
+                  "enum": [
+                    "NONE",
+                    "ALL",
+                    "REMAINDER"
+                  ]
+                }
+              },
+              "required": [
+                "accessory",
+                "texture",
+                "method",
+                "extent"
+              ],
+              "additionalProperties": false
+            },
+            "toleranceRows": {
+              "minItems": 1,
+              "maxItems": 3,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema21"
+              }
+            },
+            "fields": {
+              "minItems": 1,
+              "maxItems": 6,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema23"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "position",
+            "angle",
+            "size",
+            "annotationType",
+            "fields"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "hatch"
+            },
+            "loops": {
+              "minItems": 1,
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema24"
+              }
+            },
+            "spans": {
+              "minItems": 1,
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema25"
+              }
+            },
+            "origin": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "angle": {
+              "$ref": "#/$defs/__schema19"
+            },
+            "spacing": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 500
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "loops",
+            "origin",
+            "angle",
+            "spacing"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "viewId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "layerId": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "lineStyle": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "appearance": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "scope": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "sampling": {
+              "$ref": "#/$defs/__schema12"
+            },
+            "kind": {
+              "type": "string",
+              "const": "plane"
+            },
+            "legacyReadOnly": {
+              "type": "boolean"
+            },
+            "origin": {
+              "$ref": "#/$defs/__schema13"
+            },
+            "normal": {
+              "$ref": "#/$defs/__schema13"
+            },
+            "orientation": {
+              "$ref": "#/$defs/__schema13"
+            },
+            "referencePlaneId": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/__schema4"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "relation": {
+              "type": "string",
+              "enum": [
+                "ARBITRARY",
+                "PARALLEL",
+                "PERPENDICULAR"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "viewId",
+            "layerId",
+            "lineStyle",
+            "kind",
+            "origin",
+            "normal",
+            "orientation",
+            "referencePlaneId",
+            "relation"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema9": {
+      "type": "string",
+      "enum": [
+        "CONSTRUCTION",
+        "ANSWER_VISIBLE",
+        "ANSWER_HIDDEN",
+        "PROBLEM_VISIBLE",
+        "PROBLEM_HIDDEN"
+      ]
+    },
+    "__schema10": {
+      "type": "object",
+      "properties": {
+        "widthMm": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 5
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "pattern": {
+          "type": "string",
+          "enum": [
+            "SOLID",
+            "DASHED",
+            "CENTER",
+            "PHANTOM",
+            "GUIDE"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "__schema11": {
+      "type": "string",
+      "enum": [
+        "VIEW",
+        "SHEET"
+      ]
+    },
+    "__schema12": {
+      "type": "object",
+      "properties": {
+        "cssPixelsPerMm": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10000
+        },
+        "origin": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "xAxis": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "yAxis": {
+          "$ref": "#/$defs/__schema1"
+        }
+      },
+      "required": [
+        "cssPixelsPerMm",
+        "origin",
+        "xAxis",
+        "yAxis"
+      ],
+      "additionalProperties": false
+    },
+    "__schema13": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "y": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "z": {
+          "$ref": "#/$defs/__schema2"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false
+    },
+    "__schema14": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "__schema15": {
+      "minItems": 2,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema16"
+      }
+    },
+    "__schema16": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "y": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "pressure": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "pressure"
+      ],
+      "additionalProperties": false
+    },
+    "__schema17": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "__schema18": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "__schema19": {
+      "type": "number",
+      "minimum": -360,
+      "maximum": 360
+    },
+    "__schema20": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema21": {
+      "minItems": 6,
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema22"
+      }
+    },
+    "__schema22": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "__schema23": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "__schema24": {
+      "minItems": 1,
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema4"
+      }
+    },
+    "__schema25": {
+      "minItems": 1,
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema26"
+      }
+    },
+    "__schema26": {
+      "type": "object",
+      "properties": {
+        "entityId": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "from": {
+          "type": "number",
+          "minimum": -10000000,
+          "maximum": 10000000
+        },
+        "to": {
+          "type": "number",
+          "minimum": -10000000,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "entityId",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "__schema27": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "COINCIDENT",
+            "PARALLEL",
+            "PERPENDICULAR",
+            "POINT_ON_LINE",
+            "INTERSECTION",
+            "COLLINEAR",
+            "MIDPOINT",
+            "TANGENT",
+            "SAME_SPATIAL_POINT",
+            "PROJECTION_ALIGNMENT"
+          ]
+        },
+        "entityIds": {
+          "minItems": 2,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema4"
+          }
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "USER",
+            "SNAP_CONFIRMED"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "POSITION",
+            "BINDING",
+            "ANALYSIS"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "SATISFIED",
+            "INVALID",
+            "UNVERIFIED"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "entityIds",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "__schema28": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "targetId": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "reference": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "entity"
+                },
+                "entityId": {
+                  "$ref": "#/$defs/__schema4"
+                }
+              },
+              "required": [
+                "kind",
+                "entityId"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "baseAxis"
+                },
+                "axisId": {
+                  "type": "string",
+                  "enum": [
+                    "X",
+                    "Z",
+                    "Y_H",
+                    "Y_W",
+                    "MITER_45",
+                    "x",
+                    "y",
+                    "z"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "axisId"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "projectionAxis"
+                },
+                "systemId": {
+                  "$ref": "#/$defs/__schema4"
+                }
+              },
+              "required": [
+                "kind",
+                "systemId"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "origin"
+                },
+                "frameId": {
+                  "$ref": "#/$defs/__schema4"
+                }
+              },
+              "required": [
+                "kind",
+                "frameId"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "POINT_ON_REFERENCE",
+            "THROUGH_POINT",
+            "PARALLEL",
+            "PERPENDICULAR"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "POSITION",
+            "BINDING"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "USER",
+            "SNAP_CONFIRMED"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "SATISFIED",
+            "INVALID",
+            "UNVERIFIED"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "targetId",
+        "reference",
+        "kind",
+        "mode",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "__schema29": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "POINT",
+            "SEGMENT"
+          ]
+        },
+        "entityIds": {
+          "minItems": 2,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema4"
+          }
+        },
+        "source": {
+          "type": "string",
+          "const": "USER"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "entityIds",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "__schema30": {
+      "type": "string",
+      "const": "tuheng.construction-animation/1.0.0"
+    },
+    "__schema31": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "__schema32": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "__schema33": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "__schema34": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema35"
+      }
+    },
+    "__schema35": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "order": {
+          "$ref": "#/$defs/__schema36"
+        },
+        "title": {
+          "$ref": "#/$defs/__schema32"
+        }
+      },
+      "required": [
+        "id",
+        "order",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "__schema36": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 199
+    },
+    "__schema37": {
+      "minItems": 1,
+      "maxItems": 200,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema38"
+      }
+    },
+    "__schema38": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "order": {
+          "$ref": "#/$defs/__schema36"
+        },
+        "phaseId": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "title": {
+          "$ref": "#/$defs/__schema32"
+        },
+        "narration": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "CENTERLINE",
+            "CONSTRUCT",
+            "DRAW",
+            "ERASE",
+            "DEEPEN"
+          ]
+        },
+        "entityIds": {
+          "description": "按笔顺排列的正式图元 ID，最先作图的实体排在最前。",
+          "$ref": "#/$defs/__schema39"
+        },
+        "constructionEntityIds": {
+          "$ref": "#/$defs/__schema39"
+        },
+        "temporaryGuides": {
+          "description": "统一图纸毫米坐标。viewId 用于标记所属视图。",
+          "$ref": "#/$defs/__schema40"
+        },
+        "focusPoints": {
+          "maxItems": 120,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema43"
+          }
+        },
+        "eraseEntityIds": {
+          "$ref": "#/$defs/__schema39"
+        },
+        "highlightRole": {
+          "type": "string",
+          "const": "INTERSECTION_CURVE"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 250,
+          "maximum": 30000
+        }
+      },
+      "required": [
+        "id",
+        "order",
+        "title",
+        "narration",
+        "kind",
+        "entityIds"
+      ],
+      "additionalProperties": false
+    },
+    "__schema39": {
+      "maxItems": 2000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema4"
+      }
+    },
+    "__schema40": {
+      "maxItems": 120,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema41"
+      }
+    },
+    "__schema41": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "viewId": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "PROJECTION",
+            "MITER",
+            "EXTENSION",
+            "ALIGNMENT"
+          ]
+        },
+        "from": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "to": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "label": {
+          "$ref": "#/$defs/__schema42"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "__schema42": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "__schema43": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "position": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "SPECIAL",
+            "GENERAL"
+          ]
+        },
+        "label": {
+          "$ref": "#/$defs/__schema42"
+        }
+      },
+      "required": [
+        "id",
+        "position",
+        "kind"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "title": "图衡 CAD 图纸 3.0",
+  "description": "单位为毫米，角度为度。保留已有图纸的视图、图层及对象 ID。跨对象引用、教学权限和几何有效性由图衡导入时验证。"
+}

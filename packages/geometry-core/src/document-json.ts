@@ -1,4 +1,5 @@
 import { GEOMETRY_DOCUMENT_MAX_BYTES, GeometryDocument } from '@tuheng/contracts';
+import { formatJsonIssue } from './json-issues';
 
 const utf8 = new TextEncoder();
 
@@ -20,7 +21,9 @@ export function parseGeometryDocument(input: unknown): GeometryDocument {
   if (result.success) return result.data;
 
   // 字段路径便于从导入错误直接定位 AI 生成内容。数组下标从 0 开始。
-  const details = result.error.issues.slice(0, 3).map(({ path, message }) => {
+  const details = result.error.issues.slice(0, 3).map((issue) => {
+    const { path, message } = issue;
+    if (path[0] === 'constructionAnimation') return formatJsonIssue(issue);
     const location = path.reduce<string>(
       (key, part) => (typeof part === 'number' ? `${key}[${part}]` : `${key}.${String(part)}`),
       '$',

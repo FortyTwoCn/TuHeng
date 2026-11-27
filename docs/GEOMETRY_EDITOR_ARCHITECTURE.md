@@ -2,11 +2,13 @@
 
 [返回文档目录](README.md)
 
-四种编辑器继续共用 contracts → geometry-core → geometry-editor。domain 在现有题目、草稿、正式提交事务中校验几何文档，grading-core 复用原队列、Provider 和教师复核。没有照片识别服务、第二套评分流程或独立编辑器项目。
+五种编辑器继续共用 contracts → geometry-core → geometry-editor。domain 在现有题目、草稿、正式提交事务中校验几何文档，评分链路复用现有队列、Provider 和教师复核。
 
 ## 统一展开图
 
 VHW 和三视图使用一个 SVG 逻辑图纸、一个毫米比例和一个镜头。图纸 U 向右、T 向上；第一角法左视图在右。`sheet.ts` 集中负责局部坐标与图纸坐标双向变换；`Viewport` 通过实际 SVG CTM 将图纸坐标转换为 CSS 像素。
+
+VH 两面投影复用正投影拓扑、同一比例和镜头。基础轴集合仅含 X，V/H 通过 X-O 展开线分区。DXF 读写走 `dxf-import.ts`、`dxf-export.ts`。向图纸写入已转换图元时使用既有文档契约和编辑权限。
 
 A=(30,20,40) 的纸面位置为 V=(-30,40)、H=(-30,-20)、W=(20,40)。学生实际输入独立保存，不要求满足这些等式，也不自动补全投影。新作图按落笔位置自动识别归属，多步操作锁定第一步框架；“完整展开图”适应整张纸。跨轴拖动不改变对象 viewId。无限辅助线可使用 SHEET scope，不被投影区域裁剪。
 
@@ -50,6 +52,15 @@ CAD 命令目录位于 `cad-registry.ts`。每个命令声明工具组、别名�
 新建文档和编辑事务使用 v3。普通读取和序列化保留历史快照。契约包含投影变换、几何引用、派生轴及工程标注，详见 [Schema](GEOMETRY_EDITOR_SCHEMA.md)。
 
 `combineAnswer` 逐项保护数据库冻结题干、基准视图、已有轴、图层、原点和投影配置，同时依据 `sheet.allowAuxiliaryViews` 允许新增学生轴和其派生视图。不能通过新增轴、伪造所有权或修改基准变换绕过校验。新增字段位于已有 JSONB 文档及字符串版本列，不需要数据库 DDL；历史正式作答不回填或重算。
+
+## 分步作图与三维预览
+
+- `contracts/src/construction-animation.ts` 提供动画 Zod 校验、跨实体引用校验和独立 Schema。几何 3.0 契约复用这套动画定义。保存动画走现有文档历史，删除正式几何时同步整理失效引用。
+- `geometry-core/src/construction-animation.ts` 负责验证 AI 数据、文件解析、默认教学过程和当前步的角色求值。播放图元、临时线、定位点的状态按步号确定，跳步与重播可复用同一份动画。
+- `ConstructionDrawing.tsx` 复用现有 SVG 实体路径，按实际路径渐进描边。讲解、速度、暂停、文件和编排控件独立于画布手势。评分用例提取只含几何的题干及答案快照。
+- `drawing-audit.ts` 将视图局部数据按映射轴及正负号转成规范投影坐标，检查包围盒、对应特征和线型。轮廓分析复用 `cad-faces.ts` 的曲线误差自适应采样，经交点分面提取闭环及嵌套孔。
+- `solid-reconstruction.ts` 复用审核得到的闭环。`solid-panels.ts` 沿每条轮廓边的展开面扫描其他投影视图，裁剪出柱体正交交集的表面。`solid-mesh.ts` 对齐接缝、三角化、计算法线和体积，并从相邻面夹角提取特征棱。顶点上限 30,000，面数上限 50,000。裁剪超限、空交集和开放网格返回明确的失败原因。
+- `solid-worker.ts` 在浏览器 Worker 里执行重建。Canvas 投影渲染、正交视角、旋转、二维图元和三维面的联动由 `SolidPreview.tsx` 与 `solid-canvas.ts` 承担。三维结果与当前几何版本关联。
 
 ## 入口和公共组件
 

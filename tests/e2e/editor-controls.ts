@@ -21,6 +21,9 @@ const groups: Record<string, string> = {
   '导出 DXF': '文件',
   '导出 JSON': '文件',
   '下载图纸 JSON Schema': '文件',
+  '导入动画 JSON': '文件',
+  '导出动画 JSON': '文件',
+  '下载动画 JSON Schema': '文件',
   '导出展开图 SVG': '文件',
   导出关系描述: '文件',
 };

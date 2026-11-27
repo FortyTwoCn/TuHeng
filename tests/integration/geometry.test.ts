@@ -17,7 +17,9 @@ import {
   moveEntities,
   addProjectionAxis,
   constructLine,
+  deriveDefaultConstructionAnimation,
   transact,
+  withConstructionAnimation,
 } from '@tuheng/geometry-core';
 import { executeGradingRun } from '../../packages/infrastructure/src/grading-runner';
 import { MockVisionProvider } from '@tuheng/ai-providers';
@@ -60,7 +62,7 @@ it.each([
         schoolId: 'school-demo',
       };
     const fixture = requestFixture();
-    const stem = addDrawing(
+    const originalStem = addDrawing(
       createDocument(editorType),
       'segment',
       'view-0',
@@ -69,6 +71,10 @@ it.each([
         { x: 10, y: 0 },
       ],
       'teacher',
+    );
+    const stem = withConstructionAnimation(
+      originalStem,
+      deriveDefaultConstructionAnimation(originalStem),
     );
     const questionInput = {
       title: `[自动化测试]几何 ${Date.now()}`,
@@ -224,6 +230,10 @@ it.each([
       );
       expect(answer.schemaVersion).toBe('tuheng.geometry/3.0.0');
     }
+    answer = withConstructionAnimation(answer, {
+      ...deriveDefaultConstructionAnimation(answer),
+      description: '作答讲解与正式图纸一同保留',
+    });
     const badReference = structuredClone(answer);
     badReference.referenceRelations![0].reference = {
       kind: 'projectionAxis',
@@ -309,7 +319,11 @@ it.each([
     expect(request.geometryEvidence?.narrative).toContain('线');
     if (editorType === 'VH_PROJECTION')
       expect(request.geometryEvidence?.narrative).toContain('对应点在纸面垂直对齐');
-    expect(request.geometryEvidence?.problemDocument).toEqual(stem);
+    const { constructionAnimation: stemAnimation, ...gradingStem } = stem;
+    expect(stemAnimation?.steps.length).toBeGreaterThan(1);
+    expect(request.geometryEvidence?.problemDocument).toEqual(gradingStem);
+    expect(request.geometryEvidence?.answerDocument.constructionAnimation).toBeUndefined();
+    expect(request.geometryEvidence?.narrative).not.toContain('作答讲解与正式图纸一同保留');
     const evaluation = evaluationFixture();
     const cited = request.geometryEvidence!.derivedRelations[0];
     expect(cited?.entityIds.length).toBeGreaterThan(1);
