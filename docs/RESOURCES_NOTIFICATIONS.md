@@ -49,6 +49,12 @@ private/
 
 资源状态为 `WRITING`、`STAGED`、`ARCHIVING`、`ARCHIVED` 或 `DELETING`。暂存会话默认 24 小时；用户移除未保存文件时可取消该次上传。清理前检查会话、归档任务、版本、草稿、提交、评分、批注、头像和父子关系。S3 读写位于业务事务外，重启 Worker 后从数据库恢复任务。
 
+### 浏览器读取
+
+默认 `S3_PUBLIC_ACCESS=false`。资源和头像请求通过原有身份及资源权限检查后，应用从私有端点读取并流式返回。开启后，应用可将授权的已归档编辑图、当前头像的 128 和 512 像素变体以 `307` 转向公开读取地址。原图、PDF、评分证据和暂存或归档中的文件仍走鉴权代理。在资源或头像 URL 上附加 `&proxy=1` 可针对该请求使用代理。
+
+OSS + ESA 部署示例以 `S3_ENDPOINT=https://s3.oss-cn-hangzhou-internal.aliyuncs.com` 为内部端点，设置 `S3_FORCE_PATH_STYLE=false` 和 `S3_PUBLIC_READ_BASE_URL=https://assets.example.com`。Worker 归档、评分和内部读取仍使用带凭据的 OSS 连接。公开链接拿到后可转发，ESA 回源和路径规则应把访问限制在允许公开的文件。配置和验收步骤见[运行指南](OPERATIONS.md#阿里云-oss-与-esa-读写分离)。
+
 ## 站内通知和邮件
 
 | 通知事件 | 接收范围 |

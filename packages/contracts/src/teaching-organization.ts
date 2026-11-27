@@ -1,7 +1,37 @@
 import { z } from 'zod';
+import { isValidTermRange } from './term-lifecycle';
+
 const text = z.string().trim().min(1).max(100),
   id = z.string().min(1).max(100);
-export const OrganizationCommand = z.discriminatedUnion('operation', [
+const instant = z.iso
+  .datetime({ offset: true, error: 'INVALID_TERM_RANGE' })
+  .transform((value) => new Date(value));
+const termDates = { startsAt: instant, endsAt: instant };
+const offeringUpdate = z
+  .object({
+    operation: z.literal('update-offering'),
+    schoolId: id,
+    offeringId: id,
+    term: text.optional(),
+    archived: z.boolean().optional(),
+    startsAt: instant.optional(),
+    endsAt: instant.optional(),
+  })
+  .transform((input, ctx) => {
+    const { startsAt, endsAt, term, archived } = input;
+    if (startsAt && endsAt) return { ...input, startsAt, endsAt };
+    if (
+      archived !== undefined &&
+      startsAt === undefined &&
+      endsAt === undefined &&
+      term === undefined
+    )
+      return { ...input, startsAt, endsAt, term, archived };
+    ctx.addIssue({ code: 'custom', message: 'INVALID_TERM_RANGE', path: ['endsAt'] });
+    return z.NEVER;
+  });
+
+const organizationCommand = z.discriminatedUnion('operation', [
   z.object({
     operation: z.literal('create-school'),
     name: text,
@@ -15,7 +45,13 @@ export const OrganizationCommand = z.discriminatedUnion('operation', [
     name: text,
     proof: z.string(),
   }),
-  z.object({ operation: z.literal('create-offering'), schoolId: id, courseId: id, term: text }),
+  z.object({
+    operation: z.literal('create-offering'),
+    schoolId: id,
+    courseId: id,
+    term: text,
+    ...termDates,
+  }),
   z.object({
     operation: z.literal('update-course'),
     schoolId: id,
@@ -24,13 +60,7 @@ export const OrganizationCommand = z.discriminatedUnion('operation', [
     code: text.optional(),
     archived: z.boolean().optional(),
   }),
-  z.object({
-    operation: z.literal('update-offering'),
-    schoolId: id,
-    offeringId: id,
-    term: text.optional(),
-    archived: z.boolean().optional(),
-  }),
+  offeringUpdate,
   z.object({ operation: z.literal('create-teacher'), schoolId: id, name: text }),
   z.object({
     operation: z.literal('create-course'),
@@ -91,3 +121,14 @@ export const OrganizationCommand = z.discriminatedUnion('operation', [
     proof: z.string(),
   }),
 ]);
+
+export const OrganizationCommand = organizationCommand.refine(
+  (input) => {
+    if (!('startsAt' in input)) return true;
+    const { startsAt, endsAt } = input;
+    return (
+      !(startsAt instanceof Date && endsAt instanceof Date) || isValidTermRange(startsAt, endsAt)
+    );
+  },
+  { error: 'INVALID_TERM_RANGE', path: ['endsAt'] },
+);

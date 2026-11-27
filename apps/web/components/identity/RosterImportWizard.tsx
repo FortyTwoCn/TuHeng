@@ -1,5 +1,5 @@
 'use client';
-import { OrganizationSelect } from './OrganizationSelect';
+import { OrganizationSelect, type OrganizationOption } from './OrganizationSelect';
 import { useEffect, useRef, useState } from 'react';
 import { identityRequest } from './client';
 import { CredentialDelivery } from './CredentialDelivery';
@@ -54,7 +54,7 @@ export function RosterImportWizard({
 }: {
   schoolId: string;
   teacher?: boolean;
-  initialOffering?: { id: string; name: string };
+  initialOffering?: OrganizationOption;
 }) {
   const columnNames = teacher
     ? ['班级', '学号', '学生姓名']

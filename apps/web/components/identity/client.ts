@@ -38,6 +38,7 @@ const messages: Record<string, string> = {
   SCHOOL_ADMIN_REQUIRED: '请先为该校创建或启用至少一个学校管理员，再启用学校。',
   SCHOOL_NOT_FOUND: '该学校不存在或已被移除，请刷新列表。',
   CATALOG_ARCHIVED: '课程或开课已归档，请先恢复上级记录。',
+  INVALID_TERM_RANGE: '请选择开启时间与截止时间，截止时间必须晚于开启时间。',
   CLASS_ARCHIVED: '该班级已归档。',
   GRANT_CHANGED: '授课关系已变化，请刷新后重新选择。',
   HANDOFF_SAME_TEACHER: '请选择不同的接任教师。',

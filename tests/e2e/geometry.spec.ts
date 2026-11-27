@@ -1,7 +1,7 @@
 import { prepareLogin } from './identity-login';
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, mkdirSync } from 'node:fs';
-import { choose, settings, closePanels, properties } from './editor-controls';
+import { choose, draw, settings, closePanels, properties } from './editor-controls';
 import { performanceDocument } from '../geometry-fixtures';
 import { loadGeometryDocument } from '@tuheng/geometry-core';
 async function login(page: Page, who = 'teacher') {
@@ -10,22 +10,6 @@ async function login(page: Page, who = 'teacher') {
   await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/${who}/dashboard`));
-}
-async function draw(page: Page, tool: string, x = 150, y = 130) {
-  await choose(page, tool);
-  const svg = page.locator('.geo-active svg');
-  const segmentsBefore = await svg.locator('[data-kind=segment]').count();
-  await svg.click({ position: { x, y } });
-  if (tool === '实线' || tool === '虚线') {
-    // A pre-existing problem stem can already contain segments in an answer document.
-    await expect(svg.locator('[data-kind=segment]')).toHaveCount(segmentsBefore);
-    await svg.click({ position: { x: x + 47, y: y + 19 } });
-    await page
-      .getByRole('region', { name: 'CAD 命令' })
-      .getByRole('button', { name: '完成', exact: true })
-      .click();
-  }
-  if (tool === '辅助线') await svg.click({ position: { x: x + 40, y: y + 18 } });
 }
 async function selectSegment(page: Page, style: string) {
   const shape = page

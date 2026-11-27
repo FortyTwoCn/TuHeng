@@ -10,7 +10,9 @@ import {
   Users,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import type { TermLifecycleStatus } from '@tuheng/contracts';
 import type { School } from '../identity/organization-types';
+import { TermStatusBadge } from './TermPresentation';
 
 /** Presentation only: callers supply authorized records, links and commands. */
 export function OrganizationPanel({
@@ -89,6 +91,7 @@ export function OrganizationRecord({
   subtitle,
   context,
   archived,
+  lifecycleStatus,
   action,
   kind,
 }: {
@@ -97,6 +100,7 @@ export function OrganizationRecord({
   subtitle?: ReactNode;
   context: ReactNode;
   archived: boolean;
+  lifecycleStatus?: TermLifecycleStatus;
   action: string;
   kind: 'course' | 'offering' | 'class';
 }) {
@@ -113,8 +117,13 @@ export function OrganizationRecord({
         </span>
       </span>
       <span className="org-record-context">{context}</span>
-      <span className={'org-status' + (archived ? ' is-archived' : '')}>
-        {archived ? '已归档' : '可用'}
+      <span className="org-record-status">
+        {lifecycleStatus && <TermStatusBadge status={lifecycleStatus} />}
+        {(archived || !lifecycleStatus) && (
+          <span className={'org-status' + (archived ? ' is-archived' : '')}>
+            {archived ? '已归档' : '可用'}
+          </span>
+        )}
       </span>
       <span className="org-record-action">
         {action}

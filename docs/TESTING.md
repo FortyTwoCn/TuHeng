@@ -47,7 +47,9 @@ npx dotenv -e .env.test.local -- npm run test:e2e
 
 Playwright 非 CI 配置会复用指定地址的已运行服务；没有服务时默认启动开发 Web。`CI` 下不复用现有服务，应按测试环境调整启动方式，避免双占端口。名单导入及完整身份/教学 E2E 需要真实测试 Worker；纯编辑器或只读页面测试不依赖模型调用。
 
-`identity-ai.spec.ts` 启动本地 SMTP 协议替身，监听 `127.0.0.1:1026`。测试服务需将该精确地址加入出口白名单。对生产模式 Web 验收，配置 `TEST_SMTP_CERT`、`TEST_SMTP_KEY` 提供测试 STARTTLS 证书，并通过 `NODE_EXTRA_CA_CERTS` 让测试进程、Web 和 Worker 信任测试 CA；不要关闭生产证书校验。连接被替身接受不代表外部邮箱送达。
+`identity-ai.spec.ts` 启动本地 SMTP 协议替身，默认监听 `127.0.0.1:1026`。端口可由 `TEST_SMTP_PORT` 指定。测试服务需将该精确地址加入出口白名单。对生产模式 Web 验收，配置 `TEST_SMTP_CERT`、`TEST_SMTP_KEY` 提供测试 STARTTLS 证书，并通过 `NODE_EXTRA_CA_CERTS` 让测试进程、Web 和 Worker 信任测试 CA；不要关闭生产证书校验。连接被替身接受不代表外部邮箱送达。
+
+AI 配置界面用例可通过 `TEST_AI_BASE_URL` 使用受控的本地测试地址。将其精确的主机和端口加入同一隔离环境的出口白名单。
 
 ## 关键覆盖
 

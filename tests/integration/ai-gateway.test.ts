@@ -13,7 +13,7 @@ import {
   type Actor,
 } from '@tuheng/domain';
 import { aiFixture } from '../ai-fixture';
-import { requestFixture } from '../fixtures';
+import { activeTermRange, requestFixture } from '../fixtures';
 import { invocationProvider } from '../../packages/infrastructure/src/ai-gateway';
 import { reserveAIBudget } from '../../packages/infrastructure/src/ai-budget';
 import { saveAIConfiguration, aiCenter } from '../../packages/infrastructure/src/ai-admin';
@@ -89,7 +89,9 @@ beforeAll(async () => {
   const course = await prisma.course.create({
       data: { code: tag, title: '测试', schoolId: school.id },
     }),
-    offering = await prisma.courseOffering.create({ data: { courseId: course.id, term: tag } });
+    offering = await prisma.courseOffering.create({
+      data: { courseId: course.id, term: tag, ...activeTermRange() },
+    });
   const cls = await prisma.teachingClass.create({
     data: {
       schoolId: school.id,

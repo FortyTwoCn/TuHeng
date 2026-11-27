@@ -7,11 +7,12 @@ import {
   courseDetail,
   offeringList,
   offeringDetail,
-  classList,
   classDetail,
   people,
 } from '../../../../packages/infrastructure/src/organization-queries';
 import { CommandForm } from '../../components/organization/OrganizationCommands';
+import { TermFields } from '../../components/organization/TermFields';
+import { TermPeriod, TermSummary } from '../../components/organization/TermPresentation';
 import { OrganizationSelect } from '../../components/identity/OrganizationSelect';
 import { href, Pagination, SearchForm, type Params } from './navigation';
 import {
@@ -23,6 +24,7 @@ import {
   RecordHeading,
 } from '../../components/organization/OrganizationPresentation';
 import { Users, GraduationCap, ChevronRight } from 'lucide-react';
+import { ClassRows } from './class-list';
 type Props = { a: Actor; schoolId: string; area: string; search: Params; segments: string[] };
 function Field({ label, name, value }: { label: string; name: string; value?: string }) {
   return (
@@ -166,6 +168,7 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
                     data={{ courseId }}
                   >
                     <Field label="学期" name="term" />
+                    <TermFields />
                   </CommandForm>
                   <CommandForm label="编辑课程" operation="update-course" data={{ courseId }}>
                     <Field name="title" label="课程名称" value={course.title} />
@@ -184,7 +187,7 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
         />
         <OrganizationStages stage="offerings" coursesHref={href(base, scope)} />
         <OrganizationPanel title="开课学期" count={list.total}>
-          <SearchForm path={coursePath} search={search} label="搜索学期" />
+          <SearchForm path={coursePath} search={search} label="搜索学期" lifecycle />
           <RecordHeading title="学期" context="所属课程" />
           {list.items.map((o) => (
             <OrganizationRecord
@@ -192,8 +195,10 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
               href={href(coursePath + '/offerings/' + o.id, scope)}
               kind="offering"
               title={o.term}
+              subtitle={<TermPeriod {...o} />}
               context={course.title}
               archived={o.archived || course.archived}
+              lifecycleStatus={o.lifecycleStatus}
               action="查看教学班"
             />
           ))}
@@ -224,6 +229,10 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
                     <NewClass a={a} schoolId={schoolId} offeringId={offeringId} />
                     <CommandForm label="编辑开课" operation="update-offering" data={{ offeringId }}>
                       <Field name="term" label="学期" value={offering.term} />
+                      <TermFields
+                        startsAt={offering.startsAt.toISOString()}
+                        endsAt={offering.endsAt.toISOString()}
+                      />
                     </CommandForm>
                     <Link
                       className="button secondary"
@@ -244,6 +253,7 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
           </div>
         }
       />
+      <TermSummary {...offering} />
       <OrganizationStages
         stage="classes"
         coursesHref={href(base, scope)}
@@ -258,48 +268,6 @@ export async function Catalog({ a, schoolId, area, search, segments }: Props) {
         offeringId,
       })}
     </>
-  );
-}
-async function ClassRows({
-  a,
-  schoolId,
-  area,
-  search,
-  path,
-  offeringId,
-}: {
-  a: Actor;
-  schoolId: string;
-  area: string;
-  search: Params;
-  path: string;
-  offeringId?: string;
-}) {
-  const list = await classList(a, schoolId, { ...search, offeringId });
-  return (
-    <OrganizationPanel title="教学班列表" count={list.total}>
-      <SearchForm path={path} search={search} label="搜索班级、课程或学期" />
-      <RecordHeading title="教学班 / 课程" context="授课教师 / 成员" />
-      {list.items.map((c) => (
-        <OrganizationRecord
-          href={href('/' + area + '/classes/' + c.id, { schoolId })}
-          key={c.id}
-          kind="class"
-          title={c.name}
-          subtitle={c.offering.course.title + ' · ' + c.offering.term}
-          context={
-            <>
-              <span>{c.grants.map((g) => g.user.name).join('、') || '暂无授课教师'}</span>
-              <small>{c._count.enrollments} 位学生</small>
-            </>
-          }
-          archived={c.archived || c.offering.archived || c.offering.course.archived}
-          action="查看班级"
-        />
-      ))}
-      {!list.total && <OrganizationEmpty>暂无匹配教学班。</OrganizationEmpty>}
-      <Pagination path={path} search={search} {...list} />
-    </OrganizationPanel>
   );
 }
 export async function Classes({ a, schoolId, area, search, segments }: Props) {
@@ -344,6 +312,7 @@ export async function Classes({ a, schoolId, area, search, segments }: Props) {
         title={c.name}
         description={c.offering.course.title + ' · ' + c.offering.term + (open ? '' : ' · 已归档')}
       />
+      <TermSummary {...c} />
       <section className="org-class-management" aria-label="班级管理">
         <div className="org-teachers">
           <GraduationCap size={21} aria-hidden="true" />

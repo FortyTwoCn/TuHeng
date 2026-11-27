@@ -2,12 +2,13 @@ import { z } from 'zod';
 import { AuthRealm, AVATAR_MAX_BYTES } from '@tuheng/contracts';
 import { ensure } from '@tuheng/domain';
 import {
-  avatarImage,
+  readAvatar,
   removeAvatar,
   replaceAvatar,
 } from '../../../../../../packages/infrastructure/src/avatars';
 import { actor, realmFromRequest } from '../../../../lib/auth';
 import { checkOrigin, errorResponse, limitedBody } from '../../../../lib/http';
+import { resourceRedirect } from '../../../../lib/resource-response';
 
 export async function GET(request: Request) {
   try {
@@ -15,8 +16,14 @@ export async function GET(request: Request) {
     const realm = AuthRealm.parse(params.get('realm'));
     const version = z.uuid().parse(params.get('version'));
     const size = z.enum(['small', 'large']).parse(params.get('size'));
-    const bytes = await avatarImage(await actor(realm), version, size);
-    return new Response(new Uint8Array(bytes), {
+    const { location, stream } = await readAvatar(
+      await actor(realm),
+      version,
+      size,
+      params.get('proxy') === '1',
+    );
+    if (location) return resourceRedirect(location);
+    return new Response(stream, {
       headers: {
         'Content-Type': 'image/webp',
         'Cache-Control': 'private, no-store',

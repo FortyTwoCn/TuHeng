@@ -16,7 +16,7 @@ import {
   type DataPort,
   type Entities,
 } from '@tuheng/domain';
-import { putObject, getObject } from './storage';
+import { putObject, getObject, readAuthorizedObject } from './storage';
 
 export const assetChecksum = (buffer: Buffer) => createHash('sha256').update(buffer).digest('hex');
 const day = 24 * 3600_000;
@@ -171,6 +171,19 @@ export async function cancelStagedAsset(actor: Actor, id: string) {
 export async function downloadAsset(actor: Actor, id: string) {
   const asset = await canReadAsset(database, actor, id);
   return { asset, buffer: await getObject(asset.objectKey) };
+}
+
+export async function readAsset(actor: Actor, id: string, proxy: boolean) {
+  const asset = await canReadAsset(database, actor, id);
+  // Only archived image edits can use an unsigned link. Originals and grading
+  // evidence are stored and served privately.
+  const allowPublicRead =
+    !proxy &&
+    asset.state === 'ARCHIVED' &&
+    !!asset.parentId &&
+    asset.purpose !== 'GRADING_PROCESSED' &&
+    ['image/jpeg', 'image/png', 'image/webp'].includes(asset.mime);
+  return { asset, ...(await readAuthorizedObject(asset.objectKey, allowPublicRead)) };
 }
 
 export async function transformAsset(

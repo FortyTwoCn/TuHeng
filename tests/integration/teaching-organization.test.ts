@@ -1,4 +1,4 @@
-import { beforeAll, describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { addDrawing, createDocument } from '@tuheng/geometry-core';
 import { prisma, database } from '@tuheng/database';
@@ -22,7 +22,9 @@ import {
   classDetail,
   classList,
   courseList,
+  offeringDetail,
   offeringList,
+  studentClassDetail,
 } from '../../packages/infrastructure/src/organization-queries';
 import {
   ImportMapping,
@@ -32,7 +34,7 @@ import {
   rosterImportStatus,
 } from '../../packages/infrastructure/src/roster-import';
 import { rosterTemplate } from '../../packages/infrastructure/src/roster-xlsx';
-import { requestFixture } from '../fixtures';
+import { activeTermRange, requestFixture } from '../fixtures';
 import {
   createQuestion,
   saveDraft,
@@ -103,17 +105,19 @@ beforeAll(async () => {
 });
 describe.sequential('scoped teaching organization and historical assignments', () => {
   it('creates independent courses, multiple terms, and self-granted classes; conflicts are scoped', async () => {
+    const dates = activeTermRange();
     courseId = (await createCourse(admin, { schoolId, title: '工程制图', code: 'G01' })).id;
     const another = await createCourse(admin, { schoolId, title: '机械设计', code: 'M01' });
     [o1, o2] = await Promise.all(
       ['2026秋', '2027春'].map(
-        async (term) => (await createOffering(admin, { schoolId, courseId, term })).id,
+        async (term) => (await createOffering(admin, { schoolId, courseId, term, ...dates })).id,
       ),
     );
     const sameTerm = await createOffering(admin, {
       schoolId,
       courseId: another.id,
       term: '2026秋',
+      ...dates,
     });
     otherCourseClass = (
       await createClass(peer, {
@@ -124,13 +128,15 @@ describe.sequential('scoped teaching organization and historical assignments', (
       })
     ).id;
     await expect(
-      createOffering(admin, { schoolId, courseId, term: '2026秋' }),
+      createOffering(admin, { schoolId, courseId, term: '2026秋', ...dates }),
     ).rejects.toMatchObject({ status: 409 });
-    await expect(createOffering(t, { schoolId, courseId, term: '无权' })).rejects.toMatchObject({
+    await expect(
+      createOffering(t, { schoolId, courseId, term: '无权', ...dates }),
+    ).rejects.toMatchObject({
       status: 403,
     });
     await expect(
-      createOffering(foreign, { schoolId: foreign.schoolId!, courseId, term: '外校' }),
+      createOffering(foreign, { schoolId: foreign.schoolId!, courseId, term: '外校', ...dates }),
     ).rejects.toMatchObject({ status: 404 });
     c1 = (await createClass(t, { schoolId, offeringId: o1, teacherId: t.id, name: '一班' })).id;
     c2 = (await createClass(admin, { schoolId, offeringId: o2, teacherId: peer.id, name: '一班' }))
@@ -148,6 +154,7 @@ describe.sequential('scoped teaching organization and historical assignments', (
       data: Array.from({ length: 205 }, (_, i) => ({
         courseId: another.id,
         term: '分页' + String(i).padStart(3, '0'),
+        ...dates,
       })),
     });
     expect(
@@ -172,6 +179,78 @@ describe.sequential('scoped teaching organization and historical assignments', (
     ).rejects.toMatchObject({ status: 403 });
     expect(await prisma.user.findUnique({ where: { id: studentId } })).toEqual(before);
     expect(await prisma.enrollment.count({ where: { userId: studentId } })).toBe(3);
+  });
+  it('validates changes and derives the same status for the term and its scoped classes', async () => {
+    const dates = activeTermRange();
+    const term = { schoolId, courseId, term: '时间状态验证', ...dates };
+    await expect(createOffering(admin, { ...term, endsAt: dates.startsAt })).rejects.toMatchObject({
+      code: 'INVALID_TERM_RANGE',
+      status: 400,
+    });
+    const offering = await createOffering(admin, term);
+    const cls = await createClass(t, {
+      schoolId,
+      offeringId: offering.id,
+      teacherId: t.id,
+      name: term.term,
+    });
+    expect(cls).toMatchObject({ ...dates, lifecycleStatus: 'ACTIVE' });
+    const update = { schoolId, offeringId: offering.id };
+    await expect(
+      updateOffering(admin, { ...update, startsAt: dates.endsAt, endsAt: dates.startsAt }),
+    ).rejects.toMatchObject({ code: 'INVALID_TERM_RANGE', status: 400 });
+    expect(await offeringDetail(admin, schoolId, offering.id)).toMatchObject(dates);
+
+    const startsAt = new Date('2032-09-01T00:00:00Z');
+    const endsAt = new Date('2032-12-31T12:00:00Z');
+    const window = { startsAt, endsAt };
+    const student: Actor = {
+      id: studentId,
+      name: '林同学',
+      roles: ['STUDENT'],
+      kind: 'STUDENT',
+      schoolId,
+    };
+    await expect(studentClassDetail(student, schoolId, cls.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    await changeClassMembership(admin, cls.id, student.id, true);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(startsAt.getTime() - 1);
+      expect(await updateOffering(admin, { ...update, ...window })).toMatchObject({
+        ...window,
+        lifecycleStatus: 'UPCOMING',
+      });
+      for (const [instant, lifecycleStatus] of [
+        [startsAt.getTime() - 1, 'UPCOMING'],
+        [startsAt.getTime(), 'ACTIVE'],
+        [endsAt.getTime(), 'ACTIVE'],
+        [endsAt.getTime() + 1, 'ENDED'],
+      ] as const) {
+        vi.setSystemTime(instant);
+        const expected = { ...window, lifecycleStatus };
+        const [terms, classes, detail, studentClass] = await Promise.all([
+          offeringList(admin, schoolId, { q: term.term, lifecycleStatus }),
+          classList(t, schoolId, { offeringId: offering.id, lifecycleStatus }),
+          classDetail(t, schoolId, cls.id),
+          studentClassDetail(student, schoolId, cls.id),
+        ]);
+        expect(terms).toMatchObject({ total: 1, items: [{ id: offering.id, ...expected }] });
+        expect(classes).toMatchObject({
+          total: 1,
+          items: [{ id: cls.id, ...expected, offering: expected }],
+        });
+        expect(detail).toMatchObject(expected);
+        expect(studentClass).toMatchObject(expected);
+      }
+      expect(
+        await classList(student, schoolId, { offeringId: offering.id, lifecycleStatus: 'ACTIVE' }),
+      ).toMatchObject({ total: 0, items: [] });
+    } finally {
+      vi.useRealTimers();
+      await changeClassMembership(admin, cls.id, student.id, false);
+    }
   });
   it('preserves snapshot recipients and co-teachers across removal, handover and ancestor archive; legacy grants stay live', async () => {
     const f = requestFixture();

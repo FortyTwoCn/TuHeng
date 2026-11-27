@@ -6,6 +6,7 @@ import { SMTPServer } from 'smtp-server';
 import { prisma } from '@tuheng/database';
 import { prepareLogin, verifyIdentity } from './identity-login';
 import { verifyOnboardedTeaching } from './onboarded-teaching';
+import { activeTermRange } from '../fixtures';
 
 const origin = process.env.TEST_APP_ORIGIN ?? 'http://localhost:3000';
 const password = 'Browser-Identity-2026!new';
@@ -13,6 +14,7 @@ const mail: string[] = [];
 let smtp: SMTPServer;
 const cert = process.env.TEST_SMTP_CERT,
   key = process.env.TEST_SMTP_KEY;
+const smtpPort = Number(process.env.TEST_SMTP_PORT ?? '1026');
 const smtpMode = cert && key ? 'STARTTLS' : 'LOCAL_TEST';
 test.beforeAll(async () => {
   smtp = new SMTPServer({
@@ -27,7 +29,7 @@ test.beforeAll(async () => {
       });
     },
   });
-  await new Promise<void>((resolve) => smtp.listen(1026, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => smtp.listen(smtpPort, '127.0.0.1', resolve));
 });
 test.afterAll(async () => {
   await new Promise<void>((resolve) => smtp.close(resolve));
@@ -171,7 +173,7 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
   const mailBeforeSave = mail.length;
   await root.getByLabel('配置名称').fill('Browser local SMTP ' + Date.now());
   await root.getByLabel('SMTP 主机').fill('127.0.0.1');
-  await root.getByLabel('端口', { exact: true }).fill('1026');
+  await root.getByLabel('端口', { exact: true }).fill(String(smtpPort));
   await root.getByLabel('传输安全').selectOption(smtpMode);
   await root.getByLabel('发件邮箱').fill('browser@tuheng.invalid');
   await root.getByRole('button', { name: '保存为新版本', exact: true }).click();
@@ -295,10 +297,13 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
     ).status(),
   ).toBe(403);
   const course = await api(staff, '/api/organization/create-course', courseInput);
+  const dates = activeTermRange();
   const offering = await api(staff, '/api/organization/create-offering', {
     schoolId: school.school.id,
     courseId: course.id,
     term: '2026',
+    startsAt: dates.startsAt.toISOString(),
+    endsAt: dates.endsAt.toISOString(),
   });
   const cls = await api(teacherPage, '/api/organization/create-class', {
     schoolId: school.school.id,
@@ -345,7 +350,9 @@ test('identity: real SMTP setup, school and teacher onboarding, one-use delivery
   expect((await studentPage.request.get('/api/identity/status?realm=STUDENT')).status()).toBe(200);
   await studentPage.goto('/geometry?realm=STUDENT');
   await studentPage.reload();
-  await expect(studentPage.getByRole('heading', { name: '几何作图', exact: true })).toBeVisible();
+  await expect(
+    studentPage.getByRole('main', { name: '独立几何作图' }).getByLabel('统一展开图绘图区'),
+  ).toBeVisible();
   await studentPage.goto('/student/dashboard');
   await studentPage.getByRole('button', { name: '退出登录', exact: true }).click();
   await expect(studentPage).toHaveURL('/login');
@@ -469,6 +476,8 @@ test('AI: browser provider versions mask keys, model and module forms; responsiv
   const name = 'Browser provider ' + Date.now();
   await page.getByRole('button', { name: '新增供应商', exact: true }).click();
   await page.getByLabel('显示名称', { exact: true }).fill(name);
+  if (process.env.TEST_AI_BASE_URL)
+    await page.getByLabel('Base URL（包含 API 前缀，如 /v1）').fill(process.env.TEST_AI_BASE_URL);
   await page
     .getByLabel('API Key（留空保持原值）', { exact: true })
     .fill('test-protocol-placeholder-no-network-secret');
@@ -627,7 +636,7 @@ test('first admin: password change opens the dashboard without SMTP or email bin
     await verifyIdentity(mailPanel, password);
     await mailPanel.getByLabel('配置名称').fill('Optional backend SMTP');
     await mailPanel.getByLabel('SMTP 主机').fill('127.0.0.1');
-    await mailPanel.getByLabel('端口', { exact: true }).fill('1026');
+    await mailPanel.getByLabel('端口', { exact: true }).fill(String(smtpPort));
     await mailPanel.getByLabel('传输安全').selectOption(smtpMode);
     await mailPanel.getByLabel('发件邮箱').fill('install@tuheng.invalid');
     await mailPanel.getByRole('button', { name: '保存为新版本', exact: true }).click();
@@ -696,7 +705,7 @@ test('email methods: same verified address stays isolated across domains, codes 
     config: {
       name: 'Email methods local SMTP',
       host: '127.0.0.1',
-      port: 1026,
+      port: smtpPort,
       tls: smtpMode,
       username: '',
       fromName: '测试',

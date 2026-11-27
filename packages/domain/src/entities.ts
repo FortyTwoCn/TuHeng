@@ -11,6 +11,7 @@ import type {
   NotificationResource,
   NotificationPreferences,
   AnnouncementAudience,
+  TermRange,
 } from '@tuheng/contracts';
 export interface Actor {
   id: string;
@@ -104,7 +105,7 @@ export interface Entities {
     activeSince: Date;
   };
   course: Row & { title: string; code: string; schoolId?: string | null; archived?: boolean };
-  courseOffering: Row & { courseId: string; term: string; archived?: boolean };
+  courseOffering: Row & TermRange & { courseId: string; term: string; archived?: boolean };
   teachingClass: Row & {
     offeringId: string;
     name: string;

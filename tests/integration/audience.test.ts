@@ -14,7 +14,7 @@ import {
   type Actor,
 } from '@tuheng/domain';
 import type { AudienceSelection } from '@tuheng/contracts';
-import { requestFixture } from '../fixtures';
+import { activeTermRange, requestFixture } from '../fixtures';
 const tag = randomUUID();
 let teacher: Actor,
   other: Actor,
@@ -53,7 +53,9 @@ beforeAll(async () => {
   excluded = await make('002', 'STUDENT');
   late = await make('003', 'STUDENT');
   const course = await prisma.course.create({ data: { title: '几何', code: tag, schoolId } }),
-    offering = await prisma.courseOffering.create({ data: { courseId: course.id, term: '2026' } });
+    offering = await prisma.courseOffering.create({
+      data: { courseId: course.id, term: '2026', ...activeTermRange() },
+    });
   const create = async (name: string) =>
     (
       await prisma.teachingClass.create({

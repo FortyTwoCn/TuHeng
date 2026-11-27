@@ -3,6 +3,7 @@ import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { randomBytes, randomUUID } from 'node:crypto';
 import ExcelJS from 'exceljs';
 import { prisma } from '@tuheng/database';
+import { activeTermRange } from '../fixtures';
 import { securityDigest } from '../../packages/infrastructure/src/security-throttle';
 import type { Actor } from '@tuheng/domain';
 import { loadIdentity, changeOwnPassword } from '../../packages/infrastructure/src/identity-auth';
@@ -54,6 +55,7 @@ beforeAll(async () => {
       schoolId,
       courseId: (await createCourse(root, { schoolId, title: '几何', code: tag })).id,
       term: '2026 秋季',
+      ...activeTermRange(),
     })
   ).id;
 });

@@ -82,6 +82,8 @@ model CourseOffering {
   id       String          @id @default(uuid())
   courseId String
   term     String
+  startsAt DateTime
+  endsAt   DateTime
   archived Boolean         @default(false)
   course   Course          @relation(fields: [courseId], references: [id])
   classes  TeachingClass[]

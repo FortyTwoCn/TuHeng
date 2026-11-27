@@ -1,6 +1,18 @@
 'use client';
 import { useEffect, useState } from 'react';
+import type { TermLifecycleStatus } from '@tuheng/contracts';
 import { identityRequest } from './client';
+import { TermPeriod, TermStatusBadge, termStatusLabels } from '../organization/TermPresentation';
+
+export type OrganizationOption = {
+  id: string;
+  name: string;
+  loginId?: string;
+  archived?: boolean;
+  startsAt?: string;
+  endsAt?: string;
+  lifecycleStatus?: TermLifecycleStatus;
+};
 
 /** Scoped choices keep the selected ID even when a different search page is visible. */
 export function OrganizationSelect({
@@ -16,7 +28,7 @@ export function OrganizationSelect({
 }: {
   schoolId: string;
   kind: 'classes' | 'teachers' | 'offerings';
-  initial?: { id: string; name: string };
+  initial?: OrganizationOption;
   onSelect?: (id: string) => void;
   disabled?: boolean;
   label: string;
@@ -27,10 +39,8 @@ export function OrganizationSelect({
   const [query, setQuery] = useState(''),
     [page, setPage] = useState(0),
     [total, setTotal] = useState(0);
-  const [items, setItems] = useState<
-    { id: string; name: string; loginId?: string; archived?: boolean }[]
-  >([]);
-  const [selected, setSelected] = useState<{ id: string; name: string } | undefined>(initial),
+  const [items, setItems] = useState<OrganizationOption[]>([]);
+  const [selected, setSelected] = useState(initial),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -52,13 +62,9 @@ export function OrganizationSelect({
           abort.signal,
         );
         if (!abort.signal.aborted) {
-          const choices: {
-            id: string;
-            name: string;
-            loginId?: string;
-            archived?: boolean;
+          const choices: (OrganizationOption & {
             offering?: { term: string; course: { title: string } };
-          }[] = data.items;
+          })[] = data.items;
           setItems(
             choices.map((item) =>
               item.offering
@@ -118,11 +124,18 @@ export function OrganizationSelect({
             <option key={item.id} value={item.id} disabled={item.archived}>
               {item.name}
               {item.loginId ? ' · ' + item.loginId : ''}
+              {item.lifecycleStatus ? ' · ' + termStatusLabels[item.lifecycleStatus] : ''}
               {item.archived ? '（已归档）' : ''}
             </option>
           ))}
         </select>
       </label>
+      {selected?.startsAt && selected.endsAt && selected.lifecycleStatus && (
+        <div className="org-term-summary">
+          <TermStatusBadge status={selected.lifecycleStatus} />
+          <TermPeriod startsAt={selected.startsAt} endsAt={selected.endsAt} />
+        </div>
+      )}
       <div className="choice-pagination">
         {(page > 0 || total > 20) && (
           <button

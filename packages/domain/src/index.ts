@@ -19,3 +19,4 @@ export * from './notification-events';
 export * from './announcements';
 export * from './deadline-notifications';
 export * from './notification-access';
+export * from './term-lifecycle';

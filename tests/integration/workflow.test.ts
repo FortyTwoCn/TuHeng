@@ -19,7 +19,7 @@ import {
 } from '../../packages/infrastructure/src/grading-runner';
 import { MockVisionProvider } from '@tuheng/ai-providers';
 import { aiFixture } from '../ai-fixture';
-import { requestFixture, evaluationFixture } from '../fixtures';
+import { activeTermRange, requestFixture, evaluationFixture } from '../fixtures';
 const tag = `IT-${Date.now()}`;
 process.env.QUEUE_NAMESPACE = tag;
 let schoolId: string;
@@ -81,7 +81,11 @@ beforeAll(async () => {
   outsider = await makeActor('outsider', ['TEACHER']);
   admin = await makeActor('admin', ['ADMIN']);
   const course = await db.create('course', { title: `[自动化测试]${tag}`, code: tag, schoolId });
-  const offering = await db.create('courseOffering', { courseId: course.id, term: tag });
+  const offering = await db.create('courseOffering', {
+    courseId: course.id,
+    term: tag,
+    ...activeTermRange(),
+  });
   const cls = await db.create('teachingClass', {
     offeringId: offering.id,
     schoolId,

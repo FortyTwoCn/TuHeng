@@ -9,6 +9,7 @@ import {
   requireIdentityManager,
   requireSchoolScope,
   schoolAdministratorPolicy,
+  termLifecycle,
   type Actor,
 } from '@tuheng/domain';
 import { encryptSecret } from './secret-store';
@@ -244,7 +245,7 @@ export async function createClass(
         details: { schoolId: input.schoolId },
       },
     });
-    return cls;
+    return { ...cls, ...termLifecycle(offering) };
   });
 }
 export async function upsertStudentMembership(

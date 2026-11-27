@@ -57,7 +57,13 @@ await prisma.course.upsert({
 });
 await prisma.courseOffering.upsert({
   where: { id: 'offering-demo' },
-  create: { id: 'offering-demo', courseId: 'course-demo', term: '2026 秋季' },
+  create: {
+    id: 'offering-demo',
+    courseId: 'course-demo',
+    term: '2026 秋季',
+    startsAt: new Date('2026-09-01T00:00:00+08:00'),
+    endsAt: new Date('2027-01-31T23:59:59+08:00'),
+  },
   update: {},
 });
 await prisma.teachingClass.upsert({

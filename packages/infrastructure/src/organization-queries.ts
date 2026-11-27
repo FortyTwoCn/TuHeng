@@ -1,5 +1,12 @@
+import { TermLifecycleStatus, type TermRange } from '@tuheng/contracts';
 import { prisma } from '@tuheng/database';
-import { ensure, requireSchoolScope, schoolAdministratorPolicy, type Actor } from '@tuheng/domain';
+import {
+  ensure,
+  requireSchoolScope,
+  schoolAdministratorPolicy,
+  termLifecycle,
+  type Actor,
+} from '@tuheng/domain';
 import { requireActiveSchool, requireManagedClass } from './organization';
 import { courseNumber } from './teaching-catalog';
 
@@ -12,7 +19,24 @@ export type Search = {
   classId?: string;
   kind?: string;
   open?: string;
+  lifecycleStatus?: string;
 };
+function offeringTimeFilter(status: string | undefined, now: Date) {
+  switch (TermLifecycleStatus.safeParse(status).data) {
+    case 'UPCOMING':
+      return { startsAt: { gt: now } };
+    case 'ACTIVE':
+      return { startsAt: { lte: now }, endsAt: { gte: now } };
+    case 'ENDED':
+      return { endsAt: { lt: now } };
+    default:
+      return {};
+  }
+}
+function classWithTerm<T extends { offering: TermRange }>(row: T, now = new Date()) {
+  const lifecycle = termLifecycle(row.offering, now);
+  return { ...row, ...lifecycle, offering: { ...row.offering, ...lifecycle } };
+}
 function paging(search: Search) {
   const page = Math.min(100000, Math.max(0, Math.trunc(Number(search.page) || 0)));
   return {
@@ -208,9 +232,11 @@ export async function courseDetail(actor: Actor, schoolId: string, id: string) {
 }
 export async function offeringList(actor: Actor, schoolId: string, search: Search) {
   await organizationSchool(actor, schoolId);
+  const now = new Date();
   const { page, args, contains } = paging(search),
     open = search.open === '1' || actor.kind === 'TEACHER';
   const where = {
+    ...offeringTimeFilter(search.lifecycleStatus, now),
     course: { schoolId, ...(open ? { archived: false } : {}) },
     courseId: search.courseId,
     ...(open ? { archived: false } : {}),
@@ -226,7 +252,7 @@ export async function offeringList(actor: Actor, schoolId: string, search: Searc
     prisma.courseOffering.count({ where }),
   ]);
   return {
-    items: items.map((o) => ({ ...o, name: o.course.title + ' · ' + o.term })),
+    items: items.map((o) => ({ ...o, ...termLifecycle(o, now), name: o.course.title + ' · ' + o.term })),
     total,
     page,
   };
@@ -243,22 +269,31 @@ export async function offeringDetail(
     include: { course: true },
   });
   ensure(v, 'OFFERING_NOT_FOUND', 404);
-  return v;
+  return { ...v, ...termLifecycle(v) };
+}
+function classScope(actor: Actor, schoolId: string) {
+  return {
+    schoolId,
+    ...(actor.kind === 'TEACHER' ? { grants: { some: { userId: actor.id } } } : {}),
+    ...(actor.kind === 'STUDENT' ? { enrollments: { some: { userId: actor.id } } } : {}),
+  };
 }
 export async function classList(actor: Actor, schoolId: string, search: Search) {
-  await organizationSchool(actor, schoolId);
+  if (actor.kind === 'STUDENT') await requireActiveSchool(actor, schoolId);
+  else await organizationSchool(actor, schoolId);
+  const now = new Date();
   const { page, args, contains } = paging(search),
     open = search.open === '1';
   const where = {
-    schoolId,
+    ...classScope(actor, schoolId),
     offeringId: search.offeringId,
     offering: {
+      ...offeringTimeFilter(search.lifecycleStatus, now),
       courseId: search.courseId,
       course: { schoolId, ...(open ? { archived: false } : {}) },
       ...(open ? { archived: false } : {}),
     },
     ...(open ? { archived: false } : {}),
-    ...(actor.kind === 'TEACHER' ? { grants: { some: { userId: actor.id } } } : {}),
     OR: [
       { name: contains },
       { offering: { term: contains } },
@@ -278,7 +313,7 @@ export async function classList(actor: Actor, schoolId: string, search: Search) 
     }),
     prisma.teachingClass.count({ where }),
   ]);
-  return { items, total, page };
+  return { items: items.map((row) => classWithTerm(row, now)), total, page };
 }
 export async function classDetail(actor: Actor, schoolId: string, id: string) {
   const row = await requireManagedClass(actor, id, prisma, true);
@@ -295,5 +330,16 @@ export async function classDetail(actor: Actor, schoolId: string, id: string) {
       distinct: ['assignmentId'],
     }),
   ]);
-  return { ...row, grants, legacy, snapshots: snapshots.length };
+  return { ...classWithTerm(row), grants, legacy, snapshots: snapshots.length };
+}
+
+export async function studentClassDetail(actor: Actor, schoolId: string, id: string) {
+  ensure(actor.kind === 'STUDENT', 'FORBIDDEN', 403);
+  await requireActiveSchool(actor, schoolId);
+  const row = await prisma.teachingClass.findFirst({
+    where: { id, ...classScope(actor, schoolId), offering: { course: { schoolId } } },
+    include: { offering: { include: { course: { select: { title: true, archived: true } } } } },
+  });
+  ensure(row, 'CLASS_NOT_FOUND', 404);
+  return classWithTerm(row);
 }

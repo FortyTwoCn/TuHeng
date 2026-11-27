@@ -2,6 +2,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { prisma } from '@tuheng/database';
+import { computeTermStatus } from '@tuheng/domain';
+import { termStatusLabels } from '../../apps/web/components/organization/TermPresentation';
 import { prepareLogin, verifyIdentity } from './identity-login';
 test('school catalog, teacher class deep link, school question versions and reviewer publication', async ({
   browser,
@@ -54,14 +56,30 @@ test('school catalog, teacher class deep link, school question versions and revi
     const courseLink = schoolPage.getByRole('link', { name: /工程制图.*EG01/ });
     const courseHref = await courseLink.getAttribute('href');
     await courseLink.click();
-    for (const term of ['2026秋', '2027春']) {
+    const year = new Date().getUTCFullYear();
+    for (const [term, start, end, status] of [
+      ['2026秋', `${year - 1}-09-01T08:00`, `${year + 1}-01-31T18:00`, '进行中'],
+      ['2027春', `${year + 1}-03-01T08:00`, `${year + 1}-06-30T18:00`, '未开始'],
+    ]) {
       await schoolPage.getByRole('button', { name: '新增开课学期' }).click();
       await drawer.getByLabel('学期', { exact: true }).fill(term);
+      await drawer.getByLabel('开启时间', { exact: true }).fill(start);
+      await drawer.getByLabel('截止时间', { exact: true }).fill(start);
+      await expect(drawer.getByText('截止时间必须晚于开启时间。', { exact: true })).toBeVisible();
+      await drawer.getByLabel('截止时间', { exact: true }).fill(end);
       await drawer.getByRole('button', { name: '保存', exact: true }).click();
       await expect(
-        schoolPage.getByRole('link', { name: new RegExp('^' + term + ' .*查看教学班') }),
+        schoolPage
+          .getByRole('link', { name: new RegExp('^' + term + ' .*查看教学班') })
+          .getByText(status, { exact: true }),
       ).toBeVisible();
     }
+    await schoolPage.getByLabel('按学期状态筛选').selectOption('ACTIVE');
+    await schoolPage.getByRole('button', { name: '查询', exact: true }).click();
+    await expect(schoolPage.getByRole('link', { name: /^2027春 .*查看教学班/ })).toHaveCount(0);
+    await schoolPage.getByRole('link', { name: '清除筛选', exact: true }).click();
+    await expect(schoolPage.getByRole('link', { name: /^2027春 .*查看教学班/ })).toBeVisible();
+    await expect(schoolPage.getByLabel('按学期状态筛选')).toHaveValue('');
     await schoolPage.screenshot({ path: evidence + '/school-catalog.png' });
     await schoolPage.getByRole('link', { name: /^2026秋 .*查看教学班/ }).click();
     await expect(schoolPage).toHaveURL((url) => /\/offerings\/[\w-]+$/.test(url.pathname));
@@ -77,6 +95,7 @@ test('school catalog, teacher class deep link, school question versions and revi
     const classPath = new URL(teacherPage.url()).pathname;
     await teacherPage.reload();
     await expect(teacherPage.getByRole('heading', { name: '制图一班', exact: true })).toBeVisible();
+    await expect(teacherPage.getByText('进行中', { exact: true })).toBeVisible();
     await teacherPage.getByRole('button', { name: '加入学生' }).click();
     await td.getByLabel('学号', { exact: true }).fill('000715');
     await td.getByLabel('学生姓名').fill('李同学');
@@ -162,10 +181,29 @@ test('school catalog, teacher class deep link, school question versions and revi
       schoolPage.getByRole('heading', { name: '工程制图基础', exact: true }),
     ).toBeVisible();
     await schoolPage.getByRole('link', { name: /^2027春 .*查看教学班/ }).click();
+    const change = await schoolPage.request.post('/api/organization/update-offering', {
+      headers: { origin: new URL(schoolPage.url()).origin },
+      data: {
+        schoolId: school.id,
+        offeringId: new URL(schoolPage.url()).pathname.split('/').at(-1),
+        startsAt: '2027-03-01T00:00:00Z',
+        endsAt: '2027-03-01T00:00:00Z',
+      },
+    });
+    expect(change.status()).toBe(400);
+    expect(await change.json()).toMatchObject({ error: 'INVALID_TERM_RANGE' });
     await schoolPage.getByRole('button', { name: '编辑开课' }).click();
     await drawer.getByLabel('学期', { exact: true }).fill('2027春季');
+    await expect(drawer.getByLabel('开启时间', { exact: true })).toHaveValue(
+      `${year + 1}-03-01T08:00`,
+    );
+    await drawer.getByLabel('开启时间', { exact: true }).fill(`${year - 1}-03-01T08:00`);
+    await drawer.getByLabel('截止时间', { exact: true }).fill(`${year - 1}-06-30T18:00`);
     await drawer.getByRole('button', { name: '保存' }).click();
     await expect(schoolPage.getByRole('heading', { name: /2027春季/ })).toBeVisible();
+    await expect(
+      schoolPage.getByText('已结束', { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
     for (const [type, path] of [
       ['开课', schoolPage.url()],
       ['课程', courseHref!],
@@ -186,6 +224,42 @@ test('school catalog, teacher class deep link, school question versions and revi
   } finally {
     await Promise.all([schoolPage.close(), teacherPage.close()]);
   }
+});
+
+test('mobile students can view their class term and only enrolled class details', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const fixture = await prisma.teachingClass.findUniqueOrThrow({
+    where: { id: 'class-demo' },
+    include: { offering: true },
+  });
+  const ownStatus = computeTermStatus(fixture.offering.startsAt, fixture.offering.endsAt);
+  const input = await prepareLogin(page, 'student');
+  await input.fill('student@tuheng.local');
+  await page.getByLabel('密码', { exact: true }).fill(process.env.SEED_PASSWORD!);
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await expect(page).toHaveURL('/student/dashboard');
+  await page.goto('/student/classes');
+  await page.getByLabel('按学期状态筛选').selectOption(ownStatus);
+  await page.getByRole('button', { name: '查询', exact: true }).click();
+  const cls = page.getByRole('link', { name: /机械工程 2601.*查看班级/ });
+  await expect(cls.getByText(termStatusLabels[ownStatus], { exact: true })).toBeVisible();
+  await cls.click();
+  await expect(page.getByRole('heading', { name: fixture.name })).toBeVisible();
+  await expect(page.locator('time').first()).toHaveAttribute(
+    'datetime',
+    fixture.offering.startsAt.toISOString(),
+  );
+  await expect(page.getByRole('link', { name: '查看班级作业' })).toBeVisible();
+  expect(await page.getByRole('heading', { name: '班级成员' }).count()).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+    true,
+  );
+  const unrelated = await prisma.teachingClass.create({
+    data: { name: '未加入的班级', schoolId: fixture.schoolId, offeringId: fixture.offeringId },
+  });
+  expect((await page.request.get('/student/classes/' + unrelated.id)).status()).toBe(404);
 });
 
 test.describe('school details on touch-capable screens', () => {

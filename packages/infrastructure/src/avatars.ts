@@ -16,7 +16,7 @@ import {
   type Actor,
 } from '@tuheng/domain';
 import { assetChecksum, currentResourceActor } from './assets';
-import { getObject, putObject } from './storage';
+import { getObject, putObject, readAuthorizedObject } from './storage';
 
 const discardLater = () => new Date(Date.now() + 24 * 3600_000);
 
@@ -163,7 +163,7 @@ export async function removeAvatar(actor: Actor, expectedRevision: number) {
   });
 }
 
-export async function avatarImage(actor: Actor, version: string, size: 'small' | 'large') {
+async function avatarVariant(actor: Actor, version: string, size: 'small' | 'large') {
   const user = await prisma.user.findUnique({
     where: { id: actor.id },
     select: { avatar: true },
@@ -194,5 +194,19 @@ export async function avatarImage(actor: Actor, version: string, size: 'small' |
     'AVATAR_NOT_FOUND',
     404,
   );
-  return getObject(asset.objectKey);
+  return asset;
+}
+
+export async function avatarImage(actor: Actor, version: string, size: 'small' | 'large') {
+  return getObject((await avatarVariant(actor, version, size)).objectKey);
+}
+
+export async function readAvatar(
+  actor: Actor,
+  version: string,
+  size: 'small' | 'large',
+  proxy: boolean,
+) {
+  const asset = await avatarVariant(actor, version, size);
+  return readAuthorizedObject(asset.objectKey, !proxy);
 }

@@ -45,6 +45,22 @@ export async function choose(page: Page, name: string) {
   }
   await button.click();
 }
+export async function draw(page: Page, tool: string, x = 150, y = 130) {
+  await choose(page, tool);
+  const svg = page.locator('.geo-active svg');
+  const segmentsBefore = await svg.locator('[data-kind=segment]').count();
+  await svg.click({ position: { x, y } });
+  if (tool === '实线' || tool === '虚线') {
+    // A pre-existing problem stem can already contain segments in an answer document.
+    await expect(svg.locator('[data-kind=segment]')).toHaveCount(segmentsBefore);
+    await svg.click({ position: { x: x + 47, y: y + 19 } });
+    await page
+      .getByRole('region', { name: 'CAD 命令' })
+      .getByRole('button', { name: '完成', exact: true })
+      .click();
+  }
+  if (tool === '辅助线') await svg.click({ position: { x: x + 40, y: y + 18 } });
+}
 export async function settings(page: Page) {
   if (!(await page.getByRole('dialog', { name: '视图与设置' }).isVisible()))
     await page.getByRole('button', { name: '视图/设置', exact: true }).click();

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Actor } from '@tuheng/domain';
+import { TermLifecycleStatus } from '@tuheng/contracts';
 import { PageTitle } from '@tuheng/ui';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
@@ -11,6 +12,7 @@ import {
   OrganizationEmpty,
   SchoolChoice,
 } from '../../components/organization/OrganizationPresentation';
+import { termStatusLabels } from '../../components/organization/TermPresentation';
 
 export type Params = Record<string, string | undefined>;
 export function href(path: string, search: Params = {}) {
@@ -23,22 +25,27 @@ export function SearchForm({
   search,
   label = '搜索',
   placeholder,
+  lifecycle = false,
 }: {
   path: string;
   search: Params;
   label?: string;
   placeholder?: string;
+  lifecycle?: boolean;
 }) {
   return (
     <form className="org-search" action={path} role="search">
       {Object.entries(search)
-        .filter(([k, v]) => v && !['q', 'page'].includes(k))
+        .filter(
+          ([k, v]) => v && !['q', 'page'].includes(k) && !(lifecycle && k === 'lifecycleStatus'),
+        )
         .map(([k, v]) => (
           <input key={k} type="hidden" name={k} value={v} />
         ))}
       <label className="org-search-field">
         <Search size={18} aria-hidden="true" />
         <input
+          key={search.q}
           aria-label={label}
           type="search"
           name="q"
@@ -46,11 +53,31 @@ export function SearchForm({
           placeholder={placeholder ?? label}
         />
       </label>
+      {lifecycle && (
+        <select
+          key={search.lifecycleStatus}
+          name="lifecycleStatus"
+          aria-label="按学期状态筛选"
+          defaultValue={search.lifecycleStatus ?? ''}
+        >
+          <option value="">全部学期状态</option>
+          {TermLifecycleStatus.options.map((status) => (
+            <option key={status} value={status}>
+              {termStatusLabels[status]}
+            </option>
+          ))}
+        </select>
+      )}
       <button className="button secondary">查询</button>
-      {search.q && (
+      {(search.q || (lifecycle && search.lifecycleStatus)) && (
         <Link
           className="org-clear-filter"
-          href={href(path, { ...search, q: undefined, page: undefined })}
+          href={href(path, {
+            ...search,
+            q: undefined,
+            page: undefined,
+            ...(lifecycle ? { lifecycleStatus: undefined } : {}),
+          })}
         >
           清除筛选
         </Link>

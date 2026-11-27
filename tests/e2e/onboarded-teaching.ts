@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { prisma } from '@tuheng/database';
 import { GeometryDocument } from '@tuheng/contracts';
-import { choose } from './editor-controls';
+import { draw } from './editor-controls';
 
 /** Continue with the actual accounts and downloaded credentials created by the identity flow. */
 export async function verifyOnboardedTeaching(teacher: Page, student: Page, studentNumber: string) {
@@ -13,8 +13,7 @@ export async function verifyOnboardedTeaching(teacher: Page, student: Page, stud
   await teacher.getByLabel('题目要求').fill('根据题干投影补充虚线，保留原有蓝色题干。');
   await teacher.getByLabel('点的投影规律', { exact: true }).check();
   await teacher.getByLabel('作答方式').selectOption('VHW_PROJECTION');
-  await choose(teacher, '实线');
-  await teacher.locator('.geo-active svg').click({ position: { x: 150, y: 130 } });
+  await draw(teacher, '实线');
   await expect(teacher.locator('[data-kind=segment][data-style=PROBLEM_VISIBLE]')).toHaveCount(1);
   await teacher.getByLabel('参考作图与关键步骤').fill('检查对应点的长对正、高平齐和宽相等关系。');
   await teacher.getByLabel('我已检查参考答案与等价正确解法，确认可作为判分依据').check();
@@ -44,8 +43,7 @@ export async function verifyOnboardedTeaching(teacher: Page, student: Page, stud
   await expect(teacher.getByText('已发布', { exact: true })).toBeVisible();
   await student.goto(assignment);
   await expect(student.locator('.geometry-editor')).toBeVisible();
-  await choose(student, '虚线');
-  await student.locator('.geo-active svg').click({ position: { x: 100, y: 100 } });
+  await draw(student, '虚线', 100, 100);
   await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
   const saved = student.waitForResponse(
     (r) => r.url().endsWith('/api/actions/draft') && r.request().method() === 'POST',

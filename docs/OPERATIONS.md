@@ -15,7 +15,10 @@
 | `NEXTAUTH_URL`                                                            | 应用主地址，生产填写实际 HTTPS 地址。                                                 |
 | `APP_ALLOWED_ORIGINS`                                                     | 额外允许访问应用的完整源，逗号分隔，含协议和端口。                                    |
 | `AUTH_SECRET`                                                             | 独立随机会话密钥，至少 32 字符；不能使用模板占位值。                                  |
-| `S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`、`S3_ACCESS_KEY`、`S3_SECRET_KEY` | 私有对象存储。当前适配器使用 path-style 访问。                                        |
+| `S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`、`S3_ACCESS_KEY`、`S3_SECRET_KEY` | Web 和 Worker 使用的带凭据的存储连接，处理上传、归档和内部读取。 |
+| `S3_FORCE_PATH_STYLE` | 默认 `true`，适用于本地 RustFS / MinIO。阿里云 OSS 使用虚拟主机风格，设为 `false`。 |
+| `S3_PUBLIC_ACCESS` | 默认 `false`，浏览器通过应用鉴权并读取。设为 `true` 可为允许公开的资源返回外部读取地址。 |
+| `S3_PUBLIC_READ_BASE_URL` | 外部读取的 HTTP(S) 基础地址，支持路径前缀。显式配置时，基础地址后直接追加编码后的对象键。 |
 | `TUHENG_SECRET_KEYS`、`TUHENG_SECRET_ACTIVE_KEY`                          | SecretStore 的主密钥集合与当前 keyId；独立于数据库保管。                              |
 | `TUHENG_OUTBOUND_ALLOWLIST`                                               | 受控内部 SMTP / 模型服务的精确 `host:port` 白名单；不需要为正常公网服务放宽整个内网。 |
 | `TUHENG_TRUST_PROXY_IP`                                                   | 仅在代理覆盖 `X-Real-IP` 且禁止绕过代理直连时设为 `1`。                               |
@@ -23,6 +26,23 @@
 | `UPLOAD_MAX_BYTES`、`SELFTEST_DAILY_QUOTA`                                | 单文件上传上限与自测日配额，示例分别为 15 MiB、20 次。                                |
 
 [compose.yaml](../compose.yaml) 仅启动本地依赖，端口绑定 `127.0.0.1`，数据保存在命名卷。名为 `minio` 的服务使用固定镜像的 RustFS。已有外部 S3 时无需运行该服务；先创建私有桶，核对桶名和读写权限。不要将本地 Compose 凭据、数据库和存储控制台直接公开到互联网。
+
+### 阿里云 OSS 与 ESA 读写分离
+
+例如，Web 和 Worker 在杭州地域 VPC 内时，可使用下列配置。桶名和地域需与实际 OSS 桶一致。外网写入需使用账号允许的 S3 兼容端点。新开通 OSS 的中国内地用户需按阿里云要求配置数据访问域名。[OSS 的 AWS SDK 配置](https://www.alibabacloud.com/help/zh/oss/developer-reference/use-aws-sdks-to-access-oss)
+
+```dotenv
+S3_ENDPOINT=https://s3.oss-cn-hangzhou-internal.aliyuncs.com
+S3_REGION=cn-hangzhou
+S3_BUCKET=tuheng-teaching
+S3_FORCE_PATH_STYLE=false
+S3_PUBLIC_ACCESS=true
+S3_PUBLIC_READ_BASE_URL=https://assets.example.com
+```
+
+在服务器环境注入 `S3_ACCESS_KEY`、`S3_SECRET_KEY`。保持 OSS 桶私有，给 ESA 配置读取授权和路径访问规则，仅放行允许公开的已归档编辑图和头像 WebP 变体。若使用带前缀的读取地址，例如 `https://assets.example.com/tuheng`，将该前缀映射到桶根目录。验收时从域名直连验证原图、PDF、暂存和评分证据路径返回拒绝，并确认允许公开的对象可读取。[ESA 私有 OSS 回源配置](https://www.alibabacloud.com/help/en/edge-security-acceleration/esa/user-guide/use-s3-compatible-mode-to-fetch-content-from-a-private-oss-bucket)
+
+留空读取地址时，应用尝试按 `S3_FORCE_PATH_STYLE` 和桶名从 `S3_ENDPOINT` 构造直读地址。地址无法构造或显式地址无效时，应用继续代理。浏览器拿到重定向后，由外部存储或 ESA 控制访问和缓存，链接可被转发。仍需按会话逐次校验的部署保持 `S3_PUBLIC_ACCESS=false`。排查时可在应用图片 URL 上附加 `&proxy=1`。
 
 ## 新安装与账号恢复
 
@@ -49,6 +69,8 @@ npm run identity:bootstrap -- --reset-root --output .runtime/admin-recovery.txt
 5. 检查登录、课程详情、班级成员、上传、提交和任务处理。管理员可在系统状态页或带管理员会话的 `/api/actions/health` 查看依赖状态。
 
 **重新生成 Prisma 客户端、迁移数据库、重启进程是三个独立步骤。** 浏览器刷新与开发热更新不能替代进程重启。迁移用仓库的 runner，记录在 `_tuheng_migrations`，不与 Prisma 自身迁移记录混用；详见[数据迁移](DATABASE.md#迁移与回退)。
+
+迁移 `2026112701_course_offering_dates` 为开课增加必填时间。历史开课以最早教学班的创建时间回填开启时间，无班级时使用迁移执行时间，截止时间为开启时间后六个月。升级后校管可按教学安排修正这些日期。
 
 ## 开发资源切换
 

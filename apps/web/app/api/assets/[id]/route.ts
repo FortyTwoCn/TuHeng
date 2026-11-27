@@ -1,17 +1,24 @@
 import { AuthRealm } from '@tuheng/contracts';
 import { actor, realmFromRequest } from '../../../../lib/auth';
 import { checkOrigin, errorResponse } from '../../../../lib/http';
-import { cancelStagedAsset, downloadAsset } from '@tuheng/infrastructure';
+import { resourceRedirect } from '../../../../lib/resource-response';
+import { cancelStagedAsset, readAsset } from '@tuheng/infrastructure';
 export const runtime = 'nodejs';
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const realm = AuthRealm.parse(new URL(request.url).searchParams.get('realm'));
-    const { asset, buffer } = await downloadAsset(await actor(realm), id);
-    return new Response(new Uint8Array(buffer), {
+    const query = new URL(request.url).searchParams;
+    const realm = AuthRealm.parse(query.get('realm'));
+    const { asset, location, stream, length } = await readAsset(
+      await actor(realm),
+      id,
+      query.get('proxy') === '1',
+    );
+    if (location) return resourceRedirect(location);
+    return new Response(stream, {
       headers: {
         'Content-Type': asset.mime,
-        'Content-Length': String(buffer.length),
+        ...(length !== undefined ? { 'Content-Length': String(length) } : {}),
         'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff',
         'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(asset.name)}`,

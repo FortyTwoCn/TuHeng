@@ -1,4 +1,10 @@
 import { GradingRequest, ModelEvaluation } from '@tuheng/contracts';
+
+export function activeTermRange(now = new Date()) {
+  const weeks = 12 * 7 * 24 * 60 * 60 * 1000;
+  return { startsAt: new Date(now.getTime() - weeks), endsAt: new Date(now.getTime() + weeks) };
+}
+
 export function requestFixture() {
   return GradingRequest.parse({
     contractVersion: '1',

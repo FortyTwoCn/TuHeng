@@ -1,6 +1,13 @@
 import type { Prisma } from '@prisma/client';
+import type { TermRange } from '@tuheng/contracts';
 import { prisma } from '@tuheng/database';
-import { ensure, requireSchoolScope, type Actor } from '@tuheng/domain';
+import {
+  ensure,
+  requireSchoolScope,
+  requireTermRange,
+  termLifecycle,
+  type Actor,
+} from '@tuheng/domain';
 
 type Tx = Prisma.TransactionClient;
 export async function lockOrganization(
@@ -134,31 +141,50 @@ async function checkTerm(tx: Tx, courseId: string, term: string, except?: string
 }
 export function createOffering(
   actor: Actor,
-  input: { schoolId: string; courseId: string; term: string },
+  input: { schoolId: string; courseId: string; term: string } & TermRange,
 ) {
   return catalogWrite(actor, input.schoolId, 'OFFERING_CREATED', async (tx) => {
     const course = await getCourse(tx, input.schoolId, input.courseId);
     ensure(!course.archived, 'CATALOG_ARCHIVED', 409);
+    requireTermRange(input);
     await checkTerm(tx, course.id, input.term);
-    return tx.courseOffering.create({ data: { courseId: course.id, term: input.term } });
+    const offering = await tx.courseOffering.create({
+      data: {
+        courseId: course.id,
+        term: input.term,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+      },
+    });
+    return { ...offering, ...termLifecycle(offering) };
   });
 }
 export function updateOffering(
   actor: Actor,
-  input: { schoolId: string; offeringId: string; term?: string; archived?: boolean },
+  input: { schoolId: string; offeringId: string } & (
+    | (TermRange & { term?: string; archived?: boolean })
+    | { archived: boolean; term?: never; startsAt?: never; endsAt?: never }
+  ),
 ) {
   return catalogWrite(actor, input.schoolId, 'OFFERING_UPDATED', async (tx) => {
     const offering = await getOffering(tx, input.schoolId, input.offeringId);
+    const { archived, term, startsAt, endsAt } = input;
+    const archiveOnly =
+      archived !== undefined &&
+      term === undefined &&
+      startsAt === undefined &&
+      endsAt === undefined;
     ensure(
-      !offering.course.archived &&
-        (!offering.archived || (input.archived === false && input.term === undefined)),
+      !offering.course.archived && (!offering.archived || (archived === false && archiveOnly)),
       'CATALOG_ARCHIVED',
       409,
     );
-    if (input.term !== undefined) await checkTerm(tx, offering.courseId, input.term, offering.id);
-    return tx.courseOffering.update({
+    if (!archiveOnly) requireTermRange({ startsAt, endsAt });
+    if (term !== undefined) await checkTerm(tx, offering.courseId, term, offering.id);
+    const updated = await tx.courseOffering.update({
       where: { id: offering.id },
-      data: { term: input.term, archived: input.archived },
+      data: { term, archived, startsAt, endsAt },
     });
+    return { ...updated, ...termLifecycle(updated) };
   });
 }

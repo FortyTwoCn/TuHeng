@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import { database, prisma } from '@tuheng/database';
 import {
@@ -15,6 +15,7 @@ import {
   uploadAsset,
   ensureBucket,
   downloadAsset,
+  readAsset,
   transformAsset,
   cancelStagedAsset,
   getObject,
@@ -28,7 +29,7 @@ import {
   removeAvatar,
   avatarImage,
 } from '../../packages/infrastructure/src/avatars';
-import { requestFixture } from '../fixtures';
+import { activeTermRange, requestFixture } from '../fixtures';
 
 const tag = crypto.randomUUID();
 let schoolId: string, classId: string, teacher: Actor, student: Actor, root: Actor;
@@ -78,7 +79,7 @@ beforeAll(async () => {
     data: { title: '制图', code: 'RES-' + tag, schoolId },
   });
   const offering = await prisma.courseOffering.create({
-    data: { courseId: course.id, term: '秋季' },
+    data: { courseId: course.id, term: '秋季', ...activeTermRange() },
   });
   classId = (
     await prisma.teachingClass.create({
@@ -246,8 +247,26 @@ describe.sequential('private object lifecycle with PostgreSQL and S3', () => {
     expect(a.id).not.toBe(b.id);
     expect(await prisma.submissionAsset.count({ where: { assetId: transformed.id } })).toBe(2);
     expect(await prisma.assetArchiveTask.count({ where: { assetId: transformed.id } })).toBe(1);
-    expect((await downloadAsset(teacher, transformed.id)).buffer.length).toBeGreaterThan(0);
-    expect((await downloadAsset(student, original.id)).buffer).toEqual(bytes);
+    vi.stubEnv('S3_PUBLIC_ACCESS', 'true');
+    vi.stubEnv('S3_PUBLIC_READ_BASE_URL', 'https://assets.example.test/tuheng/');
+    try {
+      await expect(readAsset(teacher, transformed.id, false)).resolves.toMatchObject({
+        location:
+          'https://assets.example.test/tuheng/' +
+          base +
+          `edits/${original.id}/${transformed.id}.png`,
+      });
+      const proxy = await readAsset(teacher, transformed.id, true);
+      expect(proxy.location).toBeUndefined();
+      const editBytes = Buffer.from(await new Response(proxy.stream).arrayBuffer());
+      expect(editBytes.length).toBeGreaterThan(0);
+      expect(editBytes).toEqual((await downloadAsset(teacher, transformed.id)).buffer);
+      const privateOriginal = await readAsset(student, original.id, false);
+      expect(privateOriginal.location).toBeUndefined();
+      expect(Buffer.from(await new Response(privateOriginal.stream).arrayBuffer())).toEqual(bytes);
+    } finally {
+      vi.unstubAllEnvs();
+    }
     expect((await collectError(database, student, a.id)).questionVersionId).toBe(q.id);
   });
   it('archives private self-test and review work and does not reap active or bound uploads', async () => {

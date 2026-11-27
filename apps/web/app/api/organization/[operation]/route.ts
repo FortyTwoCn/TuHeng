@@ -1,6 +1,6 @@
 import * as queries from '../../../../../../packages/infrastructure/src/organization-queries';
 import { prisma } from '@tuheng/database';
-import { ensure } from '@tuheng/domain';
+import { DomainError, ensure } from '@tuheng/domain';
 import { actor } from '../../../../lib/auth';
 import { checkOrigin, errorResponse, limitedBody } from '../../../../lib/http';
 import { listCredentialDeliveries } from '../../../../../../packages/infrastructure/src/credential-delivery';
@@ -12,10 +12,16 @@ export async function POST(request: Request, context: { params: Promise<{ operat
     checkOrigin(request);
     const a = await actor('STAFF'),
       { operation } = await context.params;
-    const input = OrganizationCommand.parse({
+    const parsed = OrganizationCommand.safeParse({
       ...JSON.parse((await limitedBody(request, 20000)).toString()),
       operation,
     });
+    if (!parsed.success) {
+      if (parsed.error.issues.some(({ message }) => message === 'INVALID_TERM_RANGE'))
+        throw new DomainError('INVALID_TERM_RANGE');
+      throw parsed.error;
+    }
+    const input = parsed.data;
     if (
       ['update-account', 'reset-password', 'membership', 'update-class'].includes(
         input.operation,

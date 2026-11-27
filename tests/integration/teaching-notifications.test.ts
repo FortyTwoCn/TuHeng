@@ -27,7 +27,7 @@ import {
   markNotificationsRead,
 } from '../../packages/infrastructure/src/notification-inbox';
 import { dispatchNotificationMail } from '../../packages/infrastructure/src/notification-delivery';
-import { requestFixture } from '../fixtures';
+import { activeTermRange, requestFixture } from '../fixtures';
 
 const tag = crypto.randomUUID();
 const prefs = { ...defaultNotificationPreferences, emailEnabled: true };
@@ -135,7 +135,9 @@ beforeAll(async () => {
   const course = await prisma.course.create({
     data: { code: 'NOTE-' + tag, title: '工程制图', schoolId },
   });
-  const term = await prisma.courseOffering.create({ data: { term: '秋季', courseId: course.id } });
+  const term = await prisma.courseOffering.create({
+    data: { term: '秋季', courseId: course.id, ...activeTermRange() },
+  });
   cls = (
     await prisma.teachingClass.create({
       data: {

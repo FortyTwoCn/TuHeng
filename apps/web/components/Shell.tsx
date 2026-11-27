@@ -27,6 +27,7 @@ const menus = {
     ['assignments', '作业管理', ClipboardList],
     ['selftests', '自测本', BookOpen],
     ['errors', '错题本', BookMarked],
+    ['classes', '我的教学班', Users],
   ],
   teacher: [
     ['dashboard', '教学工作台', LayoutDashboard],

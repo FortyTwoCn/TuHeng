@@ -94,7 +94,17 @@ async function workspaceContent(a: Actor, area: string, segments: string[], sear
           key={schoolId + ':' + (o?.id ?? '')}
           schoolId={schoolId}
           teacher={area === 'teacher'}
-          initialOffering={o ? { id: o.id, name: o.course.title + ' · ' + o.term } : undefined}
+          initialOffering={
+            o
+              ? {
+                  id: o.id,
+                  name: o.course.title + ' · ' + o.term,
+                  startsAt: o.startsAt.toISOString(),
+                  endsAt: o.endsAt.toISOString(),
+                  lifecycleStatus: o.lifecycleStatus,
+                }
+              : undefined
+          }
         />
       </>
     );

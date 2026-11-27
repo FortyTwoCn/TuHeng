@@ -62,7 +62,12 @@ const course = await prisma.course.create({
   data: { code: tag, title: '容量课程', schoolId: school.id },
 });
 const offering = await prisma.courseOffering.create({
-  data: { courseId: course.id, term: '2026-test' },
+  data: {
+    courseId: course.id,
+    term: '2026-test',
+    startsAt: new Date('2026-09-01T00:00:00+08:00'),
+    endsAt: new Date('2027-01-31T23:59:59+08:00'),
+  },
 });
 const classes: { id: string; name: string }[] = [];
 for (let i = 0; i < 5; i++)

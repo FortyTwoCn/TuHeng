@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { actor } from '../../../lib/auth';
 import { organizationWorkspace } from '../../../views/organization/workspace';
 import { ChooseSchool } from '../../../views/organization/navigation';
+import { StudentClasses } from '../../../views/organization/class-list';
 import { loginEntryUrl } from '../../../components/identity/auth-navigation';
 import { SystemSettings } from '../../../components/identity/SystemSettings';
 import { Shell } from '../../../components/Shell';
@@ -202,6 +203,7 @@ async function workspaceView(
   } else if (area === 'student') {
     requireRole(a, 'STUDENT');
     if (section === 'dashboard') view = await StudentDashboard({ a });
+    else if (section === 'classes') view = await StudentClasses({ a, id: segments[1], search });
     else if (section === 'assignments')
       view = segments[1]
         ? await AssignmentDetails({ a, id: segments[1] })

@@ -306,5 +306,6 @@ export const formatPoints = (p: number | null | undefined) =>
 export * from './ai';
 
 export { OrganizationCommand } from './teaching-organization';
+export * from './term-lifecycle';
 export * from './assets';
 export * from './notifications';
