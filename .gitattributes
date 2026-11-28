@@ -1,2 +1,5 @@
 # SQL migrations are checksummed; keep new checkouts byte-stable across platforms.
 packages/database/prisma/migrations/**/migration.sql text eol=lf
+
+# Animation examples are compared byte-for-byte with serialized output.
+docs/geometry-examples/**/*.animation.json text eol=lf
