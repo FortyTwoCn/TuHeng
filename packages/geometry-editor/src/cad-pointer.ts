@@ -3,9 +3,10 @@ import {
   cadDraftingOptions,
   cadDefinition,
   distance,
+  isPointFeature,
   segmentSatisfiesGuide,
   sheetToLocal,
-  snapCandidates,
+  snapCandidateSet,
   solveDraftingSnap,
   type CadSession,
   type SnapCandidate,
@@ -25,6 +26,8 @@ export type CadPick = {
   viewId: string;
   snap?: SnapCandidate;
 };
+
+export type CadTrackingHover = { viewId: string; snap: SnapCandidate };
 
 /** 显式长度可以沿同一方向移动终点。保留相切预览时，有限线段必须仍覆盖切点。 */
 export function lineSnapAt(pick: CadPick, anchor: Vec2, end: Vec2): SnapCandidate | undefined {
@@ -78,25 +81,58 @@ export function locateCadPoint(
   paused: boolean,
   previous?: SnapCandidate,
   tracked: readonly TrackingBase[] = [],
+  acquire = false,
 ) {
   const doc = controls.document;
   const frame = session.points.length || session.ids.length ? session.viewId : frameId;
   const raw = sheetToLocal(doc, frame, sheet);
   const options = { ...draftingSnapControls(controls, threshold, paused), previous };
   const drafting = cadDraftingOptions(session, controls.ortho);
-  const { candidate, position } =
+  const sameFrame = frameId === frame;
+  const origin = sameFrame ? drafting.origins?.[0] : undefined;
+  const acceptsHoverPoint =
+    acquire && options.enabled && controls.objectSnap
+      ? (p: Vec2) => !origin || distance(p, origin) >= 1e-7
+      : undefined;
+  const localHover = controls.tracking && sameFrame ? acceptsHoverPoint : undefined;
+  const selection =
+    session.phase !== 'points' && options.enabled
+      ? snapCandidateSet(doc, frame, raw, scale, undefined, options, undefined, localHover)
+      : undefined;
+  const { candidate, position, hoverFeature } =
     session.phase === 'points'
       ? solveDraftingSnap(doc, frame, raw, scale, {
           ...options,
           ...drafting,
           trackingBases: controls.tracking ? tracked : undefined,
+          acceptsHoverPoint: localHover,
         })
-      : {
-          position: raw,
-          candidate: options.enabled
-            ? snapCandidates(doc, frame, raw, scale, undefined, options)[0]
-            : undefined,
-        };
+      : { position: raw, candidate: selection?.ordinary[0], hoverFeature: selection?.hoverFeature };
+  let feature = hoverFeature;
+  if (acceptsHoverPoint && controls.tracking && !sameFrame) {
+    feature = snapCandidateSet(
+      doc,
+      frameId,
+      sheetToLocal(doc, frameId, sheet),
+      scale,
+      undefined,
+      { ...options, previous: undefined },
+      undefined,
+      acceptsHoverPoint,
+    ).hoverFeature;
+  } else if (
+    acceptsHoverPoint &&
+    !controls.tracking &&
+    sameFrame &&
+    candidate &&
+    isPointFeature(candidate) &&
+    distance(raw, candidate.position) <= threshold / scale &&
+    acceptsHoverPoint(candidate.position)
+  ) {
+    // Keep the point already picked at the cursor ready for F11 to show its guides.
+    feature = candidate;
+  }
+  const hover: CadTrackingHover | undefined = feature && { viewId: frameId, snap: feature };
   const angularBody =
     session.commandId === 'angularDimension' &&
     !session.points.length &&
@@ -138,5 +174,5 @@ export function locateCadPoint(
       : {}),
     entityId: needsBody ? hit?.id : (nodeId ?? (hit?.viewId === frame ? hit.id : undefined)),
   };
-  return { candidate, pick };
+  return { candidate, pick, hover };
 }

@@ -144,6 +144,7 @@ export function snapCandidateSet(
   origin: Vec2 | undefined,
   options: SnapOptions,
   accepts: (q: Vec2) => boolean = () => true,
+  acceptsHoverPoint?: (q: Vec2) => boolean,
 ) {
   const threshold = (options.threshold ?? 10) / cssPixelsPerMm,
     candidates: SnapCandidate[] = [];
@@ -443,7 +444,12 @@ export function snapCandidateSet(
   const precise = sorted.find(
     (c) => accepts(c.position) && c.distance <= featureRadius && isPointFeature(c),
   );
-  return { ordinary: result, precise, directions, alignments };
+  const hoverFeature =
+    acceptsHoverPoint &&
+    sorted.find(
+      (c) => c.distance <= threshold && isPointFeature(c) && acceptsHoverPoint(c.position),
+    );
+  return { ordinary: result, precise, directions, alignments, hoverFeature };
 }
 export function confirmSnap(
   before: GeometryDocument,

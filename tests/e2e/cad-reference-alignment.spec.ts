@@ -4,6 +4,7 @@ import {
   addDrawing,
   createDocument,
   dimensionValue,
+  distance,
   hatchStrokes,
   point,
   localToSheet,
@@ -130,6 +131,90 @@ test('tracks from a V endpoint onto X and into H after committing the axis point
     position: { x: endpoint.x, y: expect.closeTo(-28, 0) },
   });
 });
+
+for (const acquireLeft of [true, false]) {
+  test(
+    acquireLeft
+      ? 'tracks P1 in V after picking Q2 in H and draws the aligned 50 mm segment'
+      : 'copies the 50 mm length in H with only P2 retained in V',
+    async ({ page }) => {
+      const { e, svg, pick, hover, read } = await fixture(page, createDocument('VH_PROJECTION'));
+      const p1 = v(-60, 30),
+        p2 = v(-10, 30),
+        q2 = v(-10, -25);
+      const segments = async () => (await read()).entities.filter((s) => s.kind === 'segment');
+      const grid = e.getByRole('button', { name: '网格捕捉', exact: true });
+      if ((await grid.getAttribute('aria-pressed')) === 'false') await grid.click();
+      await activateCommand(e, 'segment');
+      await pick(p1.x, p1.y);
+      await pick(p2.x, p2.y);
+      await expect.poll(segments).toHaveLength(1);
+      const [source] = await segments();
+      const front = await read();
+      expect(source.viewId).toBe('view-0');
+      expect(localToSheet(front, source.viewId, point(front, source.startPoint))).toEqual(p1);
+      expect(localToSheet(front, source.viewId, point(front, source.endPoint))).toEqual(p2);
+
+      await page.keyboard.press('Space');
+      if (!acquireLeft) await grid.click();
+      await activateCommand(e, 'segment');
+      await page.keyboard.press('F11');
+      await expect(e.getByRole('button', { name: '对象捕捉追踪' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      const bases = svg.locator('[data-transient="tracking-base"]');
+      const feedback = e.locator('[data-snap-feedback=true]');
+      await hover(p2.x, p2.y);
+      await expect(bases).toHaveCount(1);
+      await expect(bases).toHaveAttribute('cx', String(p2.x));
+      await expect(bases).toHaveAttribute('cy', String(-p2.y));
+      const start = await hover(q2.x + 0.3, q2.y);
+      await expect(feedback).toContainText('垂直追踪');
+      await page.mouse.click(start.x, start.y);
+      await expect(bases).toHaveCount(1);
+      await expect.poll(segments).toHaveLength(1);
+
+      if (acquireLeft) {
+        await hover(p1.x, p1.y);
+        await expect(feedback).toContainText('端点');
+        await expect(svg.locator('[data-transient="snap-target"]')).toHaveAttribute(
+          'cx',
+          String(p1.x),
+        );
+        await page.waitForTimeout(450);
+        await expect(bases).toHaveCount(2);
+        await expect(bases.nth(1)).toHaveAttribute('cx', String(p1.x));
+        await expect(bases.nth(1)).toHaveAttribute('cy', String(-p1.y));
+      }
+
+      const q1 = await at(svg, p1.x, q2.y);
+      const end = v(q1.x + 2.4, q1.y + 1);
+      await page.mouse.move(end.x, end.y, { steps: 8 });
+      const equal = svg.locator('[data-equal-length-source-id]');
+      await expect(equal).toHaveAttribute('data-equal-length-source-id', source.id);
+      await expect(equal.locator('text')).toHaveText('等长');
+      await expect(bases).toHaveCount(acquireLeft ? 2 : 1);
+      if (acquireLeft) {
+        const guide = svg.locator('line[data-transient="tracking"][x1="-60"][y1="-30"]');
+        await expect(guide).toHaveAttribute('x2', String(p1.x));
+        await expect(guide).toHaveAttribute('stroke-dasharray', /\S/);
+        expect(Number(await guide.getAttribute('y2'))).toBeCloseTo(-q2.y, 1);
+      }
+      await page.mouse.click(end.x, end.y);
+      await expect.poll(segments).toHaveLength(2);
+      const [, drawn] = await segments(),
+        h = await read();
+      expect(drawn.viewId).toBe('view-1');
+      const a = localToSheet(h, drawn.viewId, point(h, drawn.startPoint));
+      const b = localToSheet(h, drawn.viewId, point(h, drawn.endPoint));
+      expect(a.x).toBe(p2.x);
+      expect(b.x).toBe(p1.x);
+      expect(a.y).toBe(b.y);
+      expect(Math.abs(distance(a, b) - 50)).toBeLessThan(1e-6);
+    },
+  );
+}
 
 test('Escape breaks a V chain and lets the active line tool start an independent H segment', async ({
   page,

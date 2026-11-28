@@ -9,7 +9,7 @@ import {
   type CadSession,
   type SnapCandidate,
 } from '@tuheng/geometry-core';
-import { locateCadPoint, type CadPick } from '../cad-pointer';
+import { locateCadPoint, type CadPick, type CadTrackingHover } from '../cad-pointer';
 import { hitTargets, type SessionInteraction } from '../interaction-controller';
 import type { Gesture } from '../selection-gesture';
 import { useCadPrecision } from '../useCadPrecision';
@@ -42,6 +42,7 @@ export function useViewportCommandPointer(
       : (cad?.prefix ?? (props.tool === 'select' && !props.readOnly ? 'selection' : undefined));
   const tracking = useDraftingTracking(doc, trackingScope, props.snapping && props.objectSnap);
   const [cadCursor, setCadCursor] = useState<{ op: CadSession; pick: CadPick } | null>(null);
+  const [hoverSnap, setHoverSnap] = useState<{ op: CadSession; target: CadTrackingHover }>();
   const lastCadPointer = useRef<{
     prefix: string;
     sheet: Vec2;
@@ -58,6 +59,7 @@ export function useViewportCommandPointer(
     setCadCursor(null);
     setSkippedPick(null);
     setCandidate(null);
+    setHoverSnap(undefined);
   }, []);
   const precision = useCadPrecision({
     cad: props.cad,
@@ -104,9 +106,13 @@ export function useViewportCommandPointer(
       paused || skippedPick === session.prefix,
       candidate ?? undefined,
       tracking.active,
+      acquire,
     );
-    if (acquire)
-      tracking.visit(result.pick.viewId, paused ? undefined : result.candidate, props.hiddenLayers);
+    if (acquire) tracking.visit(frameId, result.hover?.snap, props.hiddenLayers);
+    else tracking.leave();
+    setHoverSnap(
+      props.tracking && result.hover ? { op: session, target: result.hover } : undefined,
+    );
     setCandidate(result.candidate ?? null);
     setCandidateView(result.pick.viewId);
     return result.pick;
@@ -154,6 +160,7 @@ export function useViewportCommandPointer(
   return {
     cad,
     tracking,
+    hoverSnap: hoverSnap?.op === cad ? hoverSnap.target : undefined,
     activeCursor,
     precision,
     candidate,
@@ -168,5 +175,9 @@ export function useViewportCommandPointer(
     finishCad,
     resetPointer,
     refreshHover,
+    leaveTrackingHover() {
+      tracking.leave();
+      setHoverSnap(undefined);
+    },
   };
 }

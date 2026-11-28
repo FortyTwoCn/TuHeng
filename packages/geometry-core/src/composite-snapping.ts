@@ -35,6 +35,7 @@ export interface DraftingSnapOptions extends SnapOptions {
   commonTangent?: boolean;
   pairedTangent?: SnapCandidate['pairedTangent'];
   acceptsPoint?: (p: Vec2) => boolean;
+  acceptsHoverPoint?: (p: Vec2) => boolean;
 }
 
 type Constraint = {
@@ -260,7 +261,7 @@ function constrain(
         : [];
     })
     .sort((a, b) => a.distance - b.distance)[0];
-  return { candidates, tracking, anchors };
+  return { candidates, tracking };
 }
 
 function bestIntersection(candidates: SnapCandidate[], radius: number, previous?: SnapCandidate) {
@@ -284,8 +285,8 @@ export function solveDraftingSnap(
   pointer: Vec2,
   pixels: number,
   options: DraftingSnapOptions = {},
-): { position: Vec2; candidate?: SnapCandidate } {
-  const { origins = [], ortho, previous } = options;
+): { position: Vec2; candidate?: SnapCandidate; hoverFeature?: SnapCandidate } {
+  const { origins = [], ortho, previous, acceptsHoverPoint } = options;
   const origin = origins[0];
   const horizontal = !origin || Math.abs(pointer.x - origin.x) >= Math.abs(pointer.y - origin.y);
   const position =
@@ -300,10 +301,34 @@ export function solveDraftingSnap(
     (!ortho || !origin || Math.abs(horizontal ? p.y - origin.y : p.x - origin.x) < 1e-8);
   const radius = (options.threshold ?? 10) / pixels;
   const settings = { ...options, lineRelations: true };
-  const sets = (origins.length ? origins : [undefined]).map((anchor) =>
-    snapCandidateSet(doc, viewId, position, pixels, anchor, settings, accepts),
+  // Reuse the same point features whenever the draft query is at the actual pointer.
+  const atPointer = position.x === pointer.x && position.y === pointer.y;
+  const sets = (origins.length ? origins : [undefined]).map((anchor, i) =>
+    snapCandidateSet(
+      doc,
+      viewId,
+      position,
+      pixels,
+      anchor,
+      settings,
+      accepts,
+      atPointer && i === 0 ? acceptsHoverPoint : undefined,
+    ),
   );
   const { ordinary, precise } = sets[0];
+  const hoverFeature =
+    acceptsHoverPoint && !atPointer
+      ? snapCandidateSet(
+          doc,
+          viewId,
+          pointer,
+          pixels,
+          undefined,
+          { ...options, previous: undefined },
+          undefined,
+          acceptsHoverPoint,
+        ).hoverFeature
+      : sets[0].hoverFeature;
   const paired = origin ? pairedTangent(doc, origin, position, radius, settings) : undefined;
   const rays = origins.flatMap((anchor, i) =>
     sets[i].directions.flatMap((c) => {
@@ -344,7 +369,7 @@ export function solveDraftingSnap(
     options.trackingBases && (options.direction !== false || ortho)
       ? [...options.trackingBases, ...origins.map((p) => ({ position: p }))]
       : (options.trackingBases ?? []);
-  const { candidates, tracking, anchors } = constrain(
+  const { candidates, tracking } = constrain(
     doc,
     viewId,
     position,
@@ -373,7 +398,7 @@ export function solveDraftingSnap(
         radius,
         settings,
         active.map((r) => ({ track: r.track, snap: r.ray })),
-        anchors,
+        options.trackingBases ?? [],
         accepts,
       ),
     );
@@ -418,7 +443,7 @@ export function solveDraftingSnap(
       candidate = { ...candidate, anchor };
     }
   }
-  return { position: candidate?.position ?? position, candidate };
+  return { position: candidate?.position ?? position, candidate, hoverFeature };
 }
 
 export function trackingCandidate(

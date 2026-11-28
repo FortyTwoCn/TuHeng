@@ -9,7 +9,9 @@ import type {
 } from 'react';
 import type { Vec2, GeometryDocument } from '@tuheng/contracts';
 import {
+  distance,
   editable,
+  isPointFeature,
   sub,
   snapCandidates,
   sheetToLocal,
@@ -80,6 +82,7 @@ export function useViewportInteractions(props: ViewportProps) {
   const {
     cad,
     tracking,
+    hoverSnap,
     activeCursor,
     precision,
     candidate,
@@ -378,8 +381,9 @@ export function useViewportInteractions(props: ViewportProps) {
   function move(e: ReactPointerEvent<Element>) {
     if (gesture.current?.penOwnsInput && e.pointerType === 'touch') return;
     if (!pointer.hasPointer(e.pointerId)) {
-      const frameId = drawingFrame(local(e));
-      showCursor(inputPoint(e), frameId);
+      const sheet = inputPoint(e);
+      const frameId = cad ? drawingViewAt(doc, sheet, hoverView ?? viewId) : drawingFrame(sheet);
+      showCursor(sheet, frameId);
       setHoverView(frameId);
       const threshold = interactionThresholds[e.pointerType === 'pen' ? 'pen' : 'mouse'].snap;
       if (placingGrip && !readOnly) {
@@ -396,15 +400,7 @@ export function useViewportInteractions(props: ViewportProps) {
           hitTargets(doc, local(e), cssScale(), box, props.hiddenLayers, [], false, 9)[0]?.id,
         );
       if (cad) {
-        const pick = locate(
-          cad,
-          inputPoint(e),
-          frameId,
-          cssScale(),
-          threshold,
-          e.altKey,
-          true,
-        );
+        const pick = locate(cad, sheet, frameId, cssScale(), threshold, e.altKey, true);
         setCadCursor({ op: cad, pick });
         return;
       }
@@ -504,7 +500,14 @@ export function useViewportInteractions(props: ViewportProps) {
     return true;
   }
   const scale = size.width / box.width;
-  const shownCandidate = precision.drawingLine ? precision.linePreview?.snap : candidate;
+  const draftCandidate = precision.drawingLine ? precision.linePreview?.snap : candidate;
+  const showHover =
+    hoverSnap &&
+    (hoverSnap.viewId !== candidateView ||
+      !draftCandidate ||
+      !isPointFeature(draftCandidate) ||
+      distance(hoverSnap.snap.position, draftCandidate.position) >= 1e-7);
+  const shownCandidate = showHover ? hoverSnap.snap : draftCandidate;
   const shownDrag = exactPreview?.document ?? previewDoc;
   const activeConstruction =
     constructionPreview?.revision === props.revision ? constructionPreview.next : undefined;
@@ -562,7 +565,7 @@ export function useViewportInteractions(props: ViewportProps) {
     overlap: overlaps,
     activeCursor,
     shownCandidate,
-    candidateView,
+    candidateView: showHover ? hoverSnap.viewId : candidateView,
     sceneDocument,
     shownDrag,
     tracking,
@@ -616,7 +619,7 @@ export function useViewportInteractions(props: ViewportProps) {
     },
     clearHover() {
       props.hoverEntity?.();
-      tracking.leave();
+      command.leaveTrackingHover();
       if (readOnly) setInspectId(undefined);
       if (!gesture.current && crosshair.current) crosshair.current.style.visibility = 'hidden';
     },

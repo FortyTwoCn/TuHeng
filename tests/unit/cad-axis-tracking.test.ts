@@ -13,6 +13,7 @@ import {
   sheetToLocal,
   startCadSession,
   sub,
+  trackingBase,
   type CadSession,
   type TrackingBase,
 } from '@tuheng/geometry-core';
@@ -31,9 +32,13 @@ function locate(
   session: CadSession,
   sheet: Vec2,
   tracked: TrackingBase[],
-  overrides: Partial<Parameters<typeof locateCadPoint>[1]> = {},
+  overrides: Partial<Parameters<typeof locateCadPoint>[1]> & {
+    acquire?: boolean;
+    paused?: boolean;
+  } = {},
 ) {
   const { baseDocument: document } = session;
+  const { acquire, paused = false, ...controls } = overrides;
   return locateCadPoint(
     session,
     {
@@ -51,18 +56,158 @@ function locate(
       gridSnap: false,
       projectionSnap: false,
       hiddenLayers: [],
-      ...overrides,
+      ...controls,
     },
     sheet,
     drawingViewAt(document, sheet, session.viewId),
     [],
     5,
     10,
-    false,
+    paused,
     undefined,
     tracked,
+    acquire,
   );
 }
+
+const p1 = v(-60, 30),
+  p2 = v(-10, 30),
+  q1 = v(-60, -25),
+  q2 = v(-10, -25);
+
+function addOnSheet(doc: GeometryDocument, viewId: string, ...points: Vec2[]) {
+  return addDrawing(
+    doc,
+    'segment',
+    viewId,
+    points.map((p) => sheetToLocal(doc, viewId, p)),
+    'student',
+  );
+}
+
+function beginSegment(doc: GeometryDocument, viewId: string, start: Vec2) {
+  return cadStep(startCadSession('segment', doc, viewId, 'student'), doc, {
+    type: 'point',
+    position: sheetToLocal(doc, viewId, start),
+  }).session!;
+}
+
+describe('point feature acquisition during a CAD command', () => {
+  const reference = () => addOnSheet(createDocument('VH_PROJECTION'), front, p1, p2);
+
+  it('acquires P1 in V after picking Q2 in H and solves the exact tracked crossing', () => {
+    const doc = reference();
+    const session = startCadSession('segment', doc, front, 'student');
+    const right = locate(session, p2, [], { acquire: true }).hover!;
+    expect(right).toMatchObject({ viewId: front, snap: { kind: 'COINCIDENT' } });
+    const bases = [trackingBase(doc, right.viewId, right.snap)];
+    const first = locate(session, v(q2.x + 0.4, q2.y), bases);
+    const drawing = cadStep(session, doc, first.pick).session!;
+    expect(drawing.viewId).toBe(top);
+    expect(localToSheet(doc, top, drawing.points[0])).toEqual(q2);
+
+    const { hover, pick } = locate(drawing, p1, bases, { acquire: true, gridSnap: true });
+    expect(pick.viewId).toBe(top);
+    expect(hover).toMatchObject({
+      viewId: front,
+      snap: { kind: 'COINCIDENT', position: sheetToLocal(doc, front, p1) },
+    });
+    bases.push(trackingBase(doc, hover!.viewId, hover!.snap));
+    const end = locate(drawing, v(q1.x + 0.4, q1.y - 0.3), bases);
+    expect(localToSheet(doc, end.pick.viewId, end.pick.position)).toEqual(q1);
+    expect(end.candidate).toMatchObject({
+      equalLength: { sourceId: doc.entities.at(-1)!.id, length: 50 },
+      tracks: expect.arrayContaining([
+        expect.objectContaining({
+          point: sheetToLocal(doc, top, p1),
+          direction: v(0, 1),
+        }),
+      ]),
+    });
+  });
+
+  it.each([
+    [front, v(-10, 13)],
+    [top, q2],
+  ] as const)(
+    'acquires an endpoint off the orthogonal axis while drawing in %s',
+    (viewId, origin) => {
+      const doc = reference();
+      const drawing = beginSegment(doc, viewId, origin);
+      const { hover, pick } = locate(drawing, p1, [], { ortho: true, acquire: true });
+      expect(hover).toMatchObject({
+        viewId: front,
+        snap: { kind: 'COINCIDENT', position: sheetToLocal(doc, front, p1) },
+      });
+      const projected = localToSheet(doc, viewId, pick.position);
+      expect(projected.x === origin.x || projected.y === origin.y).toBe(true);
+      expect(projected).not.toEqual(p1);
+      const base = trackingBase(doc, hover!.viewId, hover!.snap);
+      const end = locate(drawing, v(p1.x + 0.4, origin.y - 0.3), [base], { ortho: true });
+      expect(localToSheet(doc, viewId, end.pick.position)).toEqual(v(p1.x, origin.y));
+      expect(
+        end.candidate?.tracks?.some((t) => distance(localToSheet(doc, viewId, t.point), p1) < 1e-7),
+      ).toBe(true);
+    },
+  );
+
+  it('respects the object types, layer visibility, pause and acquisition switches', () => {
+    const doc = reference();
+    const drawing = beginSegment(doc, top, q2);
+    const unavailable: NonNullable<Parameters<typeof locate>[3]>[] = [
+      { acquire: false },
+      { paused: true },
+      { skipSnap: true },
+      { tracking: false },
+      { snapping: false },
+      { objectSnap: false },
+      { hiddenLayers: ['answer'] },
+      { objectTypes: ['midpoint'] },
+    ];
+    for (const controls of unavailable)
+      expect(locate(drawing, p1, [], { acquire: true, ...controls }).hover).toBeUndefined();
+    expect(locate(drawing, v(p1.x - 2.01, p1.y), [], { acquire: true }).hover).toBeUndefined();
+    const fromP1 = beginSegment(doc, front, p1);
+    expect(locate(fromP1, p1, [], { acquire: true }).hover).toBeUndefined();
+  });
+
+  it('copies a V segment length from P2 alone along H drafting directions', () => {
+    const source = reference();
+    const doc = addOnSheet(source, top, v(-80, -42), v(-77, -46));
+    const drawing = beginSegment(doc, top, q2);
+    const base = baseIn(doc, front, p2);
+    for (const [near, exact] of [
+      [v(-59.5, -25.4), q1],
+      [v(-9.6, -74.5), v(-10, -75)],
+      [v(19.7, -64.5), v(20, -65)],
+    ]) {
+      const end = locate(drawing, near, [base]);
+      expect(end.candidate?.equalLength).toEqual({
+        sourceId: source.entities.at(-1)!.id,
+        length: 50,
+      });
+      expect(distance(localToSheet(doc, top, end.pick.position), exact)).toBeLessThan(1e-7);
+    }
+  });
+
+  it('requires a visible segment attached to an endpoint in the base’s own view', () => {
+    const doc = reference();
+    const drawing = beginSegment(doc, top, q2);
+    const near = v(-59.5, -25.4);
+    for (const bases of [[], [baseIn(doc, front, v(-35, 30))], [baseIn(doc, top, p2)]])
+      expect(locate(drawing, near, bases).candidate?.equalLength).toBeUndefined();
+    expect(
+      locate(drawing, near, [baseIn(doc, front, p2)], { hiddenLayers: ['answer'] }).candidate
+        ?.equalLength,
+    ).toBeUndefined();
+
+    const unrelated = addOnSheet(createDocument('VH_PROJECTION'), top, p1, p2);
+    const sameSheetPosition = baseIn(unrelated, front, p2);
+    expect(
+      locate(beginSegment(unrelated, top, q2), near, [sameSheetPosition]).candidate?.equalLength,
+    ).toBeUndefined();
+  });
+});
 
 describe('tracking on the unfolded sheet', () => {
   it.each([

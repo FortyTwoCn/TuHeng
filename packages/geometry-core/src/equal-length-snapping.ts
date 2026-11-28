@@ -1,4 +1,5 @@
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
+import type { TrackingBase } from './drafting-guides';
 import { add, distance, length, scale } from './math';
 import { snapIndex } from './snap-geometry';
 import {
@@ -16,36 +17,53 @@ export function equalLengthSnaps(
   radius: number,
   options: SnapOptions,
   rays: readonly { track: SnapTrack; snap: SnapCandidate }[],
-  anchors: readonly Vec2[],
+  bases: readonly TrackingBase[],
   accepts: (p: Vec2) => boolean,
 ): SnapCandidate[] {
   if (!rays.length) return [];
   const close = (a: Vec2, b: Vec2) => distance(a, b) < 1e-7;
-  const segments = snapIndex(doc, viewId).entries.flatMap(({ entity, shape }) => {
-    if (
-      entity?.kind !== 'segment' ||
-      entity.viewId !== viewId ||
-      shape.kind !== 'line' ||
-      options.hiddenLayers?.includes(entity.layerId) ||
-      options.exclude?.includes(entity.id)
-    )
-      return [];
-    const { a, d } = shape.line;
-    return [{ id: entity.id, start: a, end: add(a, d), length: length(d) }];
-  });
+  const attached = (p: Vec2, segment: { start: Vec2; end: Vec2 }) =>
+    close(p, segment.start) || close(p, segment.end);
+  // Tracking guides use projected coordinates, while attachment uses each source view's endpoints.
+  const basesByView = new Map<string, Vec2[]>([[viewId, []]]);
+  for (const base of bases) {
+    const sourceView = base.viewId ?? viewId;
+    const positions = basesByView.get(sourceView);
+    if (positions) positions.push(base.position);
+    else basesByView.set(sourceView, [base.position]);
+  }
+  const segments = [...basesByView].flatMap(([sourceView, positions]) =>
+    snapIndex(doc, sourceView).entries.flatMap(({ entity, shape }) => {
+      if (
+        entity?.kind !== 'segment' ||
+        entity.viewId !== sourceView ||
+        shape.kind !== 'line' ||
+        options.hiddenLayers?.includes(entity.layerId) ||
+        options.exclude?.includes(entity.id)
+      )
+        return [];
+      const { a, d } = shape.line;
+      const span = { start: a, end: add(a, d) };
+      const local = sourceView === viewId;
+      const tracked = positions.some((p) => attached(p, span));
+      return local || tracked
+        ? [{ id: entity.id, ...span, length: length(d), local, tracked }]
+        : [];
+    }),
+  );
   return rays.flatMap(({ track, snap }): SnapCandidate[] => {
     const { point, direction } = track;
     const guide = snap.guide;
     const connected =
       guide?.kind === 'perpendicular' && close(guide.contact, point)
-        ? segments.find(({ id }) => id === guide.sourceId)
+        ? segments.find(({ id, local }) => local && id === guide.sourceId)
         : undefined;
-    const origins = [point, ...anchors, ...(connected ? [connected.start, connected.end] : [])];
+    const origins = [point, ...(connected ? [connected.start, connected.end] : [])];
     const span = distance(pointer, point);
     return segments.flatMap((source): SnapCandidate[] => {
       if (
         Math.abs(source.length - span) > radius ||
-        !origins.some((p) => close(p, source.start) || close(p, source.end))
+        !(source.tracked || (source.local && origins.some((p) => attached(p, source))))
       )
         return [];
       const position = add(point, scale(direction, source.length));
