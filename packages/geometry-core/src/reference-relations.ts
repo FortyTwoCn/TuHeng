@@ -8,19 +8,40 @@ import type {
 import { closestReference, resolveReference, referenceKey } from './references';
 import { localToSheet, sheetToLocal, sheetDeltaToLocal } from './sheet';
 import { add, scale, unit, lineGeometry, distance, dot, cross } from './math';
+import { boundaryShape, nearestOnShape } from './parametric-geometry';
+
+export function referenceRelationName(doc: GeometryDocument, reference: GeometryTargetRef) {
+  if (reference.kind === 'entity') {
+    const e = doc.entities.find((item) => item.id === reference.entityId);
+    if (e?.kind === 'circle' || e?.kind === 'arc' || e?.kind === 'ellipse' || e?.kind === 'curve')
+      return { circle: '圆', arc: '圆弧', ellipse: '椭圆', curve: '样条' }[e.kind];
+  }
+  return resolveReference(doc, reference).name;
+}
+
 export function referenceRelationGeometry(doc: GeometryDocument, r: ReferenceRelation) {
   const e = doc.entities.find((e) => e.id === r.targetId);
   if (!e) throw Error('关系目标不存在');
-  const ref = resolveReference(doc, r.reference);
   if (r.kind === 'POINT_ON_REFERENCE' && e.kind === 'point') {
-    const p = localToSheet(doc, e.viewId, e.position),
-      next = closestReference(p, ref);
+    const sourceId = r.reference.kind === 'entity' ? r.reference.entityId : undefined;
+    const source = sourceId && doc.entities.find((item) => item.id === sourceId);
+    const shape = source && boundaryShape(doc, source);
+    const p = localToSheet(doc, e.viewId, e.position);
+    const next =
+      r.mode === 'POSITION' && shape && shape.kind === 'parametric' && source
+        ? localToSheet(
+            doc,
+            source.viewId,
+            nearestOnShape(shape, sheetToLocal(doc, source.viewId, p)).position,
+          )
+        : closestReference(p, resolveReference(doc, r.reference));
     return {
       valid: distance(p, next) <= doc.settings.tolerance,
       pointId: e.id,
       position: sheetToLocal(doc, e.viewId, next),
     };
   }
+  const ref = resolveReference(doc, r.reference);
   if (r.kind === 'THROUGH_POINT' && e.kind === 'line')
     return {
       valid: distance(localToSheet(doc, e.viewId, e.anchor), ref.anchor) <= doc.settings.tolerance,

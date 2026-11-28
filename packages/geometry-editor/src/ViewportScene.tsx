@@ -81,9 +81,9 @@ export function ViewportScene({
   const cad = controls.cad.session;
   const { cursor, lineEnd, candidate, viewId, bases } = draft;
   const { document: displayDoc, gripDocument, measurementDocument, path, points } = preview;
-  const canGuide = !!cad && interaction !== 'pinching';
-  const start = cad?.points[0];
-  const relationEnd = lineEnd ?? cursor?.position;
+  const canGuide = interaction !== 'pinching';
+  const hasCad = canGuide && !!cad;
+  const start = candidate?.anchor ?? cad?.points[0];
   // SVG 的 Y 轴向下。这里统一由局部坐标转图纸坐标，再映射到 SVG。
   const cursorSheet = cursor && localToSheet(doc, cursor.viewId, cursor.position);
   const snapSheet = candidate ? localToSheet(doc, viewId, candidate.position) : null;
@@ -150,7 +150,7 @@ export function ViewportScene({
           </g>
         );
       })}
-      {canGuide && cad.commandId === 'trim' && !cad.pointIds[0] && points[0] && cursorSheet && (
+      {hasCad && cad.commandId === 'trim' && !cad.pointIds[0] && points[0] && cursorSheet && (
         <rect
           data-transient="trim-box"
           x={Math.min(points[0].x, cursorSheet.x)}
@@ -165,7 +165,7 @@ export function ViewportScene({
           pointerEvents="none"
         />
       )}
-      {canGuide && lineSheet && points[0] && (
+      {hasCad && lineSheet && points[0] && (
         <line
           data-transient="rubber-band"
           pointerEvents="none"
@@ -179,13 +179,13 @@ export function ViewportScene({
           strokeDasharray="6 3"
         />
       )}
-      {canGuide && start && relationEnd && (candidate?.guide || candidate?.equalLength) && (
+      {canGuide && start && (candidate?.guide || candidate?.equalLength) && (
         <RelationGuide
           doc={doc}
-          viewId={cad.viewId}
+          viewId={viewId}
           candidate={candidate}
           start={start}
-          end={relationEnd}
+          end={candidate.position}
           box={box}
           pixels={scale}
         />
@@ -223,11 +223,10 @@ export function ViewportScene({
         })}
       {canGuide &&
         snapSheet &&
-        candidate?.tracks?.map(({ point, direction }, _, tracks) => {
+        candidate?.tracks?.map(({ point, direction }) => {
           const from = localToSheet(doc, viewId, point);
           // 橡皮筋已覆盖起笔方向，交点处只需补画其他基点的追踪线。
           if (
-            tracks.length > 1 &&
             lineSheet &&
             points[0] &&
             distance(from, points[0]) < 1e-7 &&

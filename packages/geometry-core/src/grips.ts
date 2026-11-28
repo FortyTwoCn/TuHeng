@@ -8,6 +8,35 @@ export type CadGrip = {
   position: Vec2;
   label: string;
 };
+
+export function pointDraftingOrigins(
+  doc: GeometryDocument,
+  pointId: string,
+  hiddenLayers: readonly string[],
+): Vec2[] {
+  return doc.entities.flatMap((e) => {
+    if (e.kind !== 'segment' || hiddenLayers.includes(e.layerId)) return [];
+    const other = e.startPoint === pointId ? e.endPoint : e.endPoint === pointId ? e.startPoint : undefined;
+    return other ? [point(doc, other)] : [];
+  });
+}
+
+export function gripDraftingTarget(doc: GeometryDocument, grip: CadGrip, hiddenLayers: readonly string[]) {
+  const entity = doc.entities.find((e) => e.id === grip.entityId);
+  if (!entity) return;
+  if (entity.kind === 'dimension' && (grip.key === 'measureA' || grip.key === 'measureB')) {
+    const index = grip.key === 'measureA' ? 0 : 1;
+    const pointId = entity.referenceIds[index];
+    const origins = pointDraftingOrigins(doc, pointId, hiddenLayers);
+    return { entity, pointId, origins: origins.length ? origins : [point(doc, entity.referenceIds[1 - index])] };
+  }
+  const origin = entity.kind === 'circle' || entity.kind === 'arc' || entity.kind === 'ellipse'
+    ? point(doc, entity.center)
+    : 'position' in entity && (grip.key === 'rotate' || grip.key === 'arrow' || grip.key === 'label')
+      ? entity.position : grip.position;
+  return { entity, origins: [origin] };
+}
+
 function radial(center: Vec2, r: number, direction: number) {
   const a = (direction * Math.PI) / 180;
   return { x: center.x + r * Math.cos(a), y: center.y + r * Math.sin(a) };

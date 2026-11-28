@@ -30,9 +30,12 @@ export interface SnapGuide {
   contact: Vec2;
   direction: Vec2;
 }
+export type SnapTrack = { point: Vec2; direction: Vec2 };
 export interface SnapCandidate {
   positionOnly?: boolean;
-  tracks?: { point: Vec2; direction: Vec2 }[];
+  tracks?: SnapTrack[];
+  composite?: 'constraints' | 'extension';
+  anchor?: Vec2;
   id?: string;
   label?: string;
   reference?: GeometryTargetRef;
@@ -91,6 +94,11 @@ const pointFeatureOrder: Partial<Record<SnapCandidate['kind'], number>> = {
   GRID: 7,
 };
 
+export const isPointFeature = (candidate: SnapCandidate) =>
+  candidate.composite !== 'extension' &&
+  candidate.kind !== 'GRID' &&
+  pointFeatureOrder[candidate.kind] !== undefined;
+
 export function segmentSatisfiesGuide(start: Vec2, end: Vec2, g: SnapGuide): boolean {
   const v = sub(end, start),
     size = length(v);
@@ -109,8 +117,11 @@ export function segmentSatisfiesGuide(start: Vec2, end: Vec2, g: SnapGuide): boo
 }
 
 function acceptsGuide(start: Vec2, end: Vec2, candidate: SnapCandidate): boolean {
-  return !!candidate.guide && segmentSatisfiesGuide(start, end, candidate.guide) &&
-    (candidate.kind !== 'FOOT' || distance(end, candidate.guide.contact) <= samePosition);
+  return (
+    !!candidate.guide &&
+    segmentSatisfiesGuide(start, end, candidate.guide) &&
+    (candidate.kind !== 'FOOT' || distance(end, candidate.guide.contact) <= samePosition)
+  );
 }
 
 export function snapCandidates(
@@ -121,6 +132,19 @@ export function snapCandidates(
   origin?: Vec2,
   options: SnapOptions = {},
 ): SnapCandidate[] {
+  return snapCandidateSet(doc, viewId, p, cssPixelsPerMm, origin, options).ordinary;
+}
+
+/** Keep the one-dimensional constraints before coincident positions are deduplicated. */
+export function snapCandidateSet(
+  doc: GeometryDocument,
+  viewId: string,
+  p: Vec2,
+  cssPixelsPerMm: number,
+  origin: Vec2 | undefined,
+  options: SnapOptions,
+  accepts: (q: Vec2) => boolean = () => true,
+) {
   const threshold = (options.threshold ?? 10) / cssPixelsPerMm,
     candidates: SnapCandidate[] = [];
   const push = (
@@ -229,7 +253,8 @@ export function snapCandidates(
         p,
         guide.direction,
         cssPixelsPerMm,
-        options.previous?.guide?.sourceId === guide.sourceId && options.previous.kind === 'TANGENT',
+        options.previous?.guide?.sourceId === guide.sourceId &&
+          options.previous.guide.kind === 'tangent',
       );
       if (end)
         push(end, [guide.sourceId], 'TANGENT', undefined, '沿切线 · ' + entry.name, true, guide);
@@ -261,7 +286,9 @@ export function snapCandidates(
               p,
               direction,
               cssPixelsPerMm,
-              options.previous?.kind === kind && options.previous.guide?.sourceId === e.id,
+              options.previous?.guide?.sourceId === e.id &&
+                options.previous.guide.kind ===
+                  (kind === 'PARALLEL' ? 'parallel' : 'perpendicular'),
             )
           : add(origin, scale(direction, dot(sub(p, origin), direction)));
         if (!end) continue;
@@ -304,17 +331,24 @@ export function snapCandidates(
               j = other.mapping.indexOf(axis),
               value = (j === 0 ? e.position.x : e.position.y) * other.signs[j] * view.signs[i];
             const twoPlane = doc.editorType === 'VH_PROJECTION';
+            const aligned = i === 0 ? { x: value, y: p.y } : { x: p.x, y: value };
+            if (distance(aligned, p) > threshold * 1.5) continue;
+            const source = sheetToLocal(doc, viewId, localToSheet(doc, other.id, e.position));
+            const relation = axis === 'x' ? '长对正' : axis === 'z' ? '高平齐' : '宽相等';
             push(
-              i === 0 ? { x: value, y: p.y } : { x: p.x, y: value },
+              aligned,
               [e.id],
               'PROJECTION_ALIGNMENT',
               undefined,
-              twoPlane ? 'V-H 长对正' : undefined,
+              twoPlane ? 'V-H 长对正' : `${view.name}-${other.name} ${relation}`,
               false,
               undefined,
-              twoPlane
-                ? [{ point: sheetToLocal(doc, viewId, localToSheet(doc, other.id, e.position)), direction: { x: 0, y: 1 } }]
-                : undefined,
+              [
+                {
+                  point: i === 0 ? { x: value, y: source.y } : { x: source.x, y: value },
+                  direction: i === 0 ? { x: 0, y: 1 } : { x: 1, y: 0 },
+                },
+              ],
             );
           }
         }
@@ -375,14 +409,25 @@ export function snapCandidates(
         : 0),
   );
   const result: SnapCandidate[] = [];
+  const alignments = sorted.filter((c) => c.kind === 'PROJECTION_ALIGNMENT');
   const guides = origin && options.lineRelations ? sorted.filter((c) => c.guide) : [];
+  const directions = origin
+    ? sorted.filter(
+        (c) =>
+          c.kind === 'AXIS_DIRECTION' ||
+          (options.direction !== false && c.guide && c.kind !== 'FOOT'),
+      )
+    : [];
   const features = guides.length
     ? sorted
         .filter((c) => pointFeatureOrder[c.kind] !== undefined)
         .sort((a, b) => pointFeatureOrder[a.kind]! - pointFeatureOrder[b.kind]!)
     : [];
   for (const candidate of sorted) {
-    if (result.some((other) => distance(other.position, candidate.position) < samePosition))
+    if (
+      !accepts(candidate.position) ||
+      result.some((other) => distance(other.position, candidate.position) < samePosition)
+    )
       continue;
     // Keep the node/reference and its exact coordinates. A visual relation is
     // valid only if the segment to that unchanged feature actually satisfies it.
@@ -395,7 +440,10 @@ export function snapCandidates(
     result.push(guide ? { ...winner, guide } : winner);
     if (result.length === 8) break;
   }
-  return result;
+  const precise = sorted.find(
+    (c) => accepts(c.position) && c.distance <= featureRadius && isPointFeature(c),
+  );
+  return { ordinary: result, precise, directions, alignments };
 }
 export function confirmSnap(
   before: GeometryDocument,
@@ -464,7 +512,8 @@ export function confirmSnap(
   return transact(after, (d) =>
     d.constraints.push({
       id: createId(),
-      kind: candidate.kind as 'MIDPOINT' | 'INTERSECTION' | 'POINT_ON_LINE' | 'PROJECTION_ALIGNMENT',
+      kind: candidate.kind as
+        'MIDPOINT' | 'INTERSECTION' | 'POINT_ON_LINE' | 'PROJECTION_ALIGNMENT',
       entityIds: [created.id, ...candidate.entityIds],
       source: 'SNAP_CONFIRMED',
     }),

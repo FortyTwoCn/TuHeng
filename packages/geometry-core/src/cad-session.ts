@@ -11,8 +11,8 @@ import { add, angle, arcPoint, cross, distance, sub } from './math';
 import { localToSheet, sheetToLocal, viewTransform } from './sheet';
 import { transformSelection } from './cad-transforms';
 import { trimAt, trimInBox, extendAt, cornerAt } from './cad-cut';
-import {confirmSnap} from './snapping';
-import type {SnapCandidate} from './snapping';
+import { confirmSnap, type SnapCandidate } from './snapping';
+import type { DraftingSnapOptions } from './composite-snapping';
 
 export type CadEvent =
   | {
@@ -37,6 +37,29 @@ export interface CadStepResult {
 }
 const isChain = (id: string) => id === 'segment';
 const needsSetup = (id: string) => id === 'text' || id === 'polygon';
+
+export function cadDraftingOptions(session: CadSession, lockOrtho: boolean): DraftingSnapOptions {
+  if (session.phase !== 'points') return {};
+  const { commandId, points } = session;
+  const origin = commandId === 'arc' || commandId === 'ellipse' ? points[0] : points.at(-1);
+  const straight = commandId === 'segment' || commandId === 'line';
+  const needsSpan = straight ||
+    ['circle', 'arc', 'arc3', 'ellipse', 'polygon', 'spline', 'direction', 'compass'].includes(commandId) ||
+    (points.length === 1 && ['linearDimension', 'alignedDimension'].includes(commandId));
+  return {
+    origins: origin ? [origin] : [],
+    ortho: !!origin && (
+      (commandId === 'ellipse' && points.length === 1) ||
+      (lockOrtho && !['rectangle', 'trim', 'extend', 'fillet', 'chamfer'].includes(commandId))
+    ),
+    acceptsPoint: origin && commandId === 'rectangle'
+      ? (p) => Math.abs(p.x - origin.x) >= 1e-8 && Math.abs(p.y - origin.y) >= 1e-8
+      : origin && needsSpan ? (p) => distance(p, origin) >= 1e-8 : undefined,
+    equalLength: commandId === 'segment',
+    commonTangent: straight && !origin,
+    pairedTangent: straight && origin ? session.pointSnaps?.[0]?.pairedTangent : undefined,
+  };
+}
 function supportedSelection(
   e: GeometryEntity,
   mode: ReturnType<typeof cadDefinition>['selection'],
@@ -176,7 +199,7 @@ function requiredPoints(s: CadSession) {
   }
 }
 
-function build(s: CadSession, doc: GeometryDocument, preview: boolean) {
+function build(s: CadSession, doc: GeometryDocument, preview: boolean, pickedNodes?: Map<number, string>) {
   const cmd = s.commandId,
     p = s.parameters,
     ids = s.ids,
@@ -238,7 +261,7 @@ function build(s: CadSession, doc: GeometryDocument, preview: boolean) {
     case 'clear':
       return preview ? doc : clearEditable(doc, s.role);
     default: {
-      const entities = cadPrimitiveEntities(doc, s);
+      const entities = cadPrimitiveEntities(doc, s, pickedNodes);
       if (!entities.length) return doc;
       if (entities[0].kind === 'hatch' && !preview) hatchStrokes(doc,entities[0]);
       return preview
@@ -463,10 +486,13 @@ export function cadStep(
           event.hiddenLayers,
         );
       if (session.phase === 'selection') return progress(current);
-      if (['spline', 'segment', 'line'].includes(current.commandId))
+      if (current.points.length > session.points.length)
         current = {
           ...current,
-          pointSnaps: [...(session.pointSnaps ?? []), event.type === 'point' ? event.snap : undefined],
+          pointSnaps: [
+            ...(session.pointSnaps ?? session.points.map(() => undefined)),
+            event.type === 'point' ? event.snap : undefined,
+          ],
         };
       if (
         event.type === 'point' &&
@@ -493,6 +519,7 @@ export function cadStep(
           points: [],
           pointIds: [],
           rawPoints: undefined,
+          pointSnaps: undefined,
           parameters: { ...current.parameters, opening: String(opening) },
         });
       }
@@ -513,16 +540,13 @@ export function cadStep(
       return { session: null, message: cadDefinition(effective.commandId).name + '已完成' };
     const stamping = effective.commandId === 'compass' && effective.parameters.opening && effective.points.length === 2;
     if (!stamping && effective.points.length < requiredPoints(effective)) throw Error(cadPrompt(current));
-    let document = build(effective, doc, false);
-    if (effective.commandId === 'spline') {
-      const curve = document.entities.at(-1);
-      const nodes = curve?.kind === 'curve' ? curve.pointIds : curve?.kind === 'segment' ? [curve.startPoint, curve.endPoint] : [];
-      if (nodes.length) {
-        for (const [i,id] of nodes.entries()) {
-          const snap = effective.pointSnaps?.[i];
-          if (snap && !doc.entities.some(e=>e.id===id)) document=confirmSnap(doc,document,snap,id,effective.role);
-        }
-      }
+    const pickedNodes = new Map<number, string>();
+    let document = build(effective, doc, false, pickedNodes);
+    for (const [i, id] of pickedNodes) {
+      const snap = effective.pointSnaps?.[i];
+      if (!snap || distance(effective.points[i], snap.position) >= 1e-7) continue;
+      if (effective.commandId === 'spline' || (snap.composite && (snap.reference || snap.kind === 'PROJECTION_ALIGNMENT')))
+        document = confirmSnap(doc, document, snap, id, effective.role);
     }
     let unsnapped: GeometryDocument | undefined;
     if (current.rawPoints && def.group !== '修改') {
@@ -566,6 +590,7 @@ export function cadStep(
         points: [],
         pointIds: [],
         rawPoints: undefined,
+        pointSnaps: undefined,
       };
     return {
       document,

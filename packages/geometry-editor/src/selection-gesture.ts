@@ -1,22 +1,27 @@
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import {
   previewTransform,
-  snapCandidates,
+  solveDraftingSnap,
   localToSheet,
+  sheetToLocal,
+  pointDraftingOrigins,
   referenceGeometry,
   referenceKey,
   clipReference,
   selectionBounds,
   marqueeSelection,
   sub,
+  distance,
   type SnapCandidate,
   type CadGrip,
+  type TrackingBase,
 } from '@tuheng/geometry-core';
 import type { Hit, SessionInteraction as InteractionState } from './interaction-controller';
 import { movingIds } from './interaction-controller';
 import type { CadPick } from './cad-pointer';
 import type { Appearance } from './CadPreferences';
 import type { EditorControls, Tool } from './types';
+import { draftingSnapControls } from './drafting-snap-controls';
 export interface Gesture {
   cadId?: string;
   cadFirst?: CadPick;
@@ -44,6 +49,7 @@ export interface Gesture {
   selection: string[];
   dragPixels: number;
   snapSource?: string;
+  snapView?: string;
   pausedSnap?: boolean;
   raw?: GeometryDocument;
   next?: GeometryDocument;
@@ -72,49 +78,63 @@ export function selectionFromClick(gesture: Gesture, hit?: Hit) {
 export function dragSelection(
   g: Gesture,
   p: Vec2,
-  props: EditorControls,
+  props: Parameters<typeof draftingSnapControls>[0] &
+    Pick<EditorControls, 'role' | 'ortho' | 'tracking'>,
   previous: SnapCandidate | null,
+  tracked: readonly TrackingBase[] = [],
 ) {
   const role = props.role;
   const raw = previewTransform(g.base, g.ids, sub(p, g.start), role);
   let next = raw;
   g.candidate = undefined;
   g.snapSource = undefined;
+  g.snapView = undefined;
   const source = g.ids.length === 1 ? raw.entities.find((e) => e.id === g.ids[0]) : undefined;
-  const excluded = movingIds(g.base, g.ids);
-  if (source && props.snapping && !props.skipSnap && !g.pausedSnap) {
-    const ids =
-      source.kind === 'point'
-        ? [source.id]
-        : source.kind === 'segment'
-          ? [source.startPoint, source.endPoint]
-          : [];
-    const choices = ids.flatMap((id) => {
-      const entity = raw.entities.find((e) => e.id === id);
-      if (entity?.kind !== 'point') return [];
-      const c = snapCandidates(g.base, entity.viewId, entity.position, g.scale, undefined, {
-        objects: props.objectSnap,
-        objectTypes: props.objectTypes,
-        direction: props.direction,
-        gridSpacing: props.gridSpacing,
-        exclude: excluded,
-        threshold: g.snapPixels,
-        hiddenLayers: props.hiddenLayers,
-        grid: props.gridSnap,
-        projection: props.projectionSnap,
-        axes: props.axes && props.axesSnap,
-        previous: previous ?? undefined,
-      })[0];
-      return c && (source.kind === 'point' || c.kind === 'COINCIDENT') ? [{ id, entity, c }] : [];
+  const options = {
+    ...draftingSnapControls(props, g.snapPixels, g.pausedSnap),
+    ortho: props.ortho,
+    trackingBases: props.tracking ? tracked : undefined,
+    exclude: movingIds(g.base, g.ids),
+    previous: previous ?? undefined,
+  };
+  function locate(viewId: string, at: Vec2, origins: Vec2[], id?: string) {
+    const result = solveDraftingSnap(g.base, viewId, at, g.scale, { ...options, origins });
+    return { ...result, viewId, at, id };
+  }
+  const start = sheetToLocal(g.base, g.viewId, g.start);
+  let chosen;
+  if (source?.kind === 'point') {
+    const origins = pointDraftingOrigins(g.base, source.id, props.hiddenLayers);
+    chosen = locate(
+      source.viewId,
+      source.position,
+      !origins.length && props.ortho ? [start] : origins,
+      source.id,
+    );
+  } else {
+    const endpoints =
+      options.enabled && source?.kind === 'segment' ? [source.startPoint, source.endPoint] : [];
+    const choices = endpoints.flatMap((id) => {
+      const point = raw.entities.find((e) => e.id === id);
+      const original = g.base.entities.find((e) => e.id === id);
+      if (point?.kind !== 'point' || original?.kind !== 'point') return [];
+      const choice = locate(point.viewId, point.position, [original.position], id);
+      return choice.candidate?.kind === 'COINCIDENT' || choice.candidate?.composite ? [choice] : [];
     });
-    const chosen = choices.sort((a, b) => a.c.distance - b.c.distance)[0];
-    if (chosen) {
-      const a = localToSheet(raw, chosen.entity.viewId, chosen.entity.position),
-        b = localToSheet(raw, chosen.entity.viewId, chosen.c.position);
-      next = previewTransform(raw, g.ids, sub(b, a), role);
-      g.candidate = chosen.c;
-      g.snapSource = chosen.id;
-    }
+    const pivot = locate(g.viewId, sheetToLocal(g.base, g.viewId, p), [start]);
+    chosen = choices.sort((a, b) => a.candidate!.distance - b.candidate!.distance)[0] ?? pivot;
+  }
+  const { viewId, at, position, candidate, id } = chosen;
+  if (distance(at, position) > 1e-8) {
+    const a = localToSheet(raw, viewId, at),
+      b = localToSheet(raw, viewId, position);
+    next = previewTransform(raw, g.ids, sub(b, a), role);
+  }
+  const movedPoint = id ? next.entities.find((entity) => entity.id === id) : undefined;
+  if (movedPoint?.kind !== 'point' || distance(movedPoint.position, position) < 1e-7) {
+    g.candidate = candidate;
+    g.snapSource = id;
+    g.snapView = viewId;
   }
   g.raw = raw;
   g.next = next;

@@ -4,7 +4,7 @@ import {
   pointReferences,
   editable,
   transact,
-  resolveReference,
+  referenceRelationName,
 } from '@tuheng/geometry-core';
 export function ConnectionTools({
   doc,
@@ -73,7 +73,7 @@ export function ConnectionTools({
                 PERPENDICULAR: '垂直',
               }[r.kind]
             }{' '}
-            · {resolveReference(doc, r.reference).name} ·{' '}
+            · {referenceRelationName(doc, r.reference)} ·{' '}
             {r.mode === 'BINDING' ? '持续绑定' : '本次定位'} ·{' '}
             {r.status === 'SATISFIED' ? '已满足' : r.status === 'INVALID' ? '未满足' : '待校验'}
             <button

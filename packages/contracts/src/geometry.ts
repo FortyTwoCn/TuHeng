@@ -874,9 +874,10 @@ export const GeometryDocument = z
         fail('关系不能跨投影框架');
       if (
         r.kind === 'POINT_ON_REFERENCE' &&
-        (target.kind !== 'point' || (source && !['point', 'segment', 'line'].includes(source.kind)))
+        (target.kind !== 'point' || (source && !['point', 'segment', 'line'].includes(source.kind) &&
+          !(r.mode === 'POSITION' && ['circle', 'arc', 'ellipse', 'curve'].includes(source.kind))))
       )
-        fail('贴轴关系需要点和线/原点');
+        fail('点定位需要有效的参考几何，持续绑定仅支持点和直线参考');
       if (r.kind === 'THROUGH_POINT' && (target.kind !== 'line' || source?.kind !== 'point'))
         fail('过点关系需要辅助线和点');
       if (

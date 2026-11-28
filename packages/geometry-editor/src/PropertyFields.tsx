@@ -14,6 +14,7 @@ import {
   lineGeometry,
   unbindReferences,
   bindToReference,
+  targetCapabilities,
 } from '@tuheng/geometry-core';
 export const styleLabels = {
   ANSWER_VISIBLE: '答案实线',
@@ -261,7 +262,8 @@ export function PropertyFields({
           解除绑定
         </button>
       )}
-      {!locked && e.kind === 'point' && placement && !bindings.length && (
+      {!locked && e.kind === 'point' && placement && !bindings.length &&
+        (placement.reference.kind !== 'entity' || targetCapabilities(doc, placement.reference, role).referenceable) && (
         <button
           type="button"
           onClick={() => run(() => bindToReference(doc, e.id, placement.reference, role))}

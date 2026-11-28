@@ -38,6 +38,7 @@ export * from './cad-geometry';
 export * from './hatch';
 export * from './grips';
 export * from './drafting-guides';
+export { solveDraftingSnap, trackingCandidate, type DraftingSnapOptions } from './composite-snapping';
 export * from './engineering-parameters';
 export * from './dxf-export';
 export * from './dxf-import';

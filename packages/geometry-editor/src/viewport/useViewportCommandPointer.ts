@@ -37,7 +37,9 @@ export function useViewportCommandPointer(
   const cad = props.cad.session;
   // 连续落点和画线只新增几何，已有追踪基点可跨提交使用。
   const trackingScope =
-    cad?.commandId === 'point' || cad?.commandId === 'segment' ? cad.id : cad?.prefix;
+    cad?.commandId === 'point' || cad?.commandId === 'segment'
+      ? cad.id
+      : (cad?.prefix ?? (props.tool === 'select' && !props.readOnly ? 'selection' : undefined));
   const tracking = useDraftingTracking(doc, trackingScope, props.snapping && props.objectSnap);
   const [cadCursor, setCadCursor] = useState<{ op: CadSession; pick: CadPick } | null>(null);
   const lastCadPointer = useRef<{
@@ -103,37 +105,36 @@ export function useViewportCommandPointer(
       candidate ?? undefined,
       tracking.active,
     );
-    if (acquire) tracking.visit(result.pick.viewId, paused ? undefined : result.candidate);
+    if (acquire)
+      tracking.visit(result.pick.viewId, paused ? undefined : result.candidate, props.hiddenLayers);
     setCandidate(result.candidate ?? null);
     setCandidateView(result.pick.viewId);
     return result.pick;
   }
+  function dragStart(op: CadSession, p: Vec2, g: Gesture, paused: boolean) {
+    if (!g.cadFirst || distance(g.start, p) * g.scale < g.dragPixels) return;
+    return paused || props.skipSnap || skippedPick === op.prefix
+      ? { ...g.cadFirst, position: g.cadFirst.rawPosition, entityId: undefined, snap: undefined }
+      : g.cadFirst;
+  }
   function updateCadCursor(op: CadSession, p: Vec2, g: Gesture, paused: boolean) {
-    const pick = locate(op, p, g.viewId, g.scale, g.snapPixels, paused);
+    const start = dragStart(op, p, g, paused);
+    const first = start && cadStep(op, doc, start).session;
+    const pick = locate(first ?? op, p, g.viewId, g.scale, g.snapPixels, paused);
     setCadCursor({ op, pick });
-    if (g.cadFirst && distance(g.start, p) * g.scale >= g.dragPixels) {
-      const start =
-        paused || props.skipSnap || skippedPick === op.prefix
-          ? { ...g.cadFirst, position: g.cadFirst.rawPosition, entityId: undefined }
-          : g.cadFirst;
-      const first = cadStep(op, doc, start).session;
-      if (first) setPreviewDoc(cadPreview(first, doc, pick.position, pick.entityId));
+    if (start && first) {
+      setPreviewDoc(cadPreview(first, doc, pick.position, pick.entityId));
       setPreview([start, pick].map((v) => localToSheet(doc, v.viewId, v.position)));
       setState('drawingPrimitive');
     }
   }
   function finishCad(cad: CadSession, g: Gesture, p: Vec2) {
+    const start = dragStart(cad, p, g, !!g.pausedSnap);
+    const first = start && cadStep(cad, doc, start).session;
     const pick = precision.precisePick(
-      locate(cad, p, g.viewId, g.scale, g.snapPixels, !!g.pausedSnap),
+      locate(first ?? cad, p, g.viewId, g.scale, g.snapPixels, !!g.pausedSnap),
     );
-    const start =
-      g.cadFirst && (g.pausedSnap || props.skipSnap)
-        ? { ...g.cadFirst, position: g.cadFirst.rawPosition, entityId: undefined }
-        : g.cadFirst;
-    const fitted =
-      start && distance(g.start, p) * g.scale >= g.dragPixels
-        ? props.cad.send(start, pick)
-        : props.cad.send(pick);
+    const fitted = start ? props.cad.send(start, pick) : props.cad.send(pick);
     if (fitted) {
       precision.clearLineDraft();
       props.consumeSnap();

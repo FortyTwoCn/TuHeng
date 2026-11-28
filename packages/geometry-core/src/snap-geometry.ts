@@ -1,5 +1,4 @@
 import {
-  hasGeometryBaseAxis,
   type GeometryDocument,
   type GeometryEntity,
   type GeometryTargetRef,
@@ -16,17 +15,36 @@ import {
   curvedMidpoint,
   type BoundaryShape,
 } from './parametric-geometry';
-import { referenceGeometry, referenceKey, resolveReference } from './references';
+import { referenceGeometry, referenceKey } from './references';
 import { sheetDeltaToLocal, sheetToLocal, localToSheet } from './sheet';
-import { distance, foot, add, dot, sub, unit, scale, cross, length, lineGeometry } from './math';
+import {
+  distance,
+  foot,
+  add,
+  dot,
+  sub,
+  unit,
+  scale,
+  cross,
+  length,
+  lineGeometry,
+  type LineGeometry,
+} from './math';
 import { diffPoly, polynomialRoots, evalPoly } from './curve-roots';
 import type { SnapCandidate, SnapGuide, SnapOptions } from './snapping';
 
 export type ObjectSnapType =
-  'endpoint' | 'midpoint' | 'center' | 'intersection' | 'perpendicular' | 'tangent' | 'quadrant' | 'nearest';
+  | 'endpoint'
+  | 'midpoint'
+  | 'center'
+  | 'intersection'
+  | 'perpendicular'
+  | 'tangent'
+  | 'quadrant'
+  | 'nearest';
 export const objectSnapEnabled = (options: SnapOptions, type: ObjectSnapType) =>
   options.objects !== false && (!options.objectTypes || options.objectTypes.includes(type));
-interface IndexEntry {
+export interface IndexEntry {
   ref: GeometryTargetRef;
   entity?: GeometryEntity;
   name: string;
@@ -41,6 +59,18 @@ interface Index {
   endpoints: Set<string>;
 }
 const cache = new WeakMap<GeometryDocument, Map<string, Index>>();
+
+function lineInView(
+  doc: GeometryDocument,
+  line: LineGeometry,
+  from: string,
+  to: string,
+): LineGeometry {
+  const local = (p: Vec2) => sheetToLocal(doc, to, localToSheet(doc, from, p));
+  const a = local(line.a);
+  return { ...line, a, d: sub(local(add(line.a, line.d)), a) };
+}
+
 export function shapeBounds(s: BoundaryShape): number[] | undefined {
   if (s.kind === 'line') {
     if (!s.line.finite) return;
@@ -85,12 +115,8 @@ export function snapIndex(doc: GeometryDocument, viewId: string): Index {
     if (e.kind === 'curve') for (const id of e.pointIds) endpoints.add(id);
     let shape = boundaryShape(doc, e);
     if (!shape) continue;
-    if (e.viewId !== viewId && shape.kind === 'line') {
-      const local = (p: Vec2) => sheetToLocal(doc, viewId, localToSheet(doc, e.viewId, p));
-      const a = local(shape.line.a),
-        d = sub(local(add(shape.line.a, shape.line.d)), a);
-      shape = { kind: 'line', line: { ...shape.line, a, d } };
-    }
+    if (e.viewId !== viewId && shape.kind === 'line')
+      shape = { kind: 'line', line: lineInView(doc, shape.line, e.viewId, viewId) };
     entries.push({
       ref: { kind: 'entity', entityId: e.id },
       entity: e,
@@ -137,14 +163,7 @@ export function nearbyEntries(
   options: SnapOptions,
 ) {
   return snapIndex(doc, viewId).entries.filter((e) => {
-    if (
-      e.entity
-        ? options.objects === false ||
-          options.exclude?.includes(e.entity.id) ||
-          options.hiddenLayers?.includes(e.entity.layerId)
-        : options.axes === false
-    )
-      return false;
+    if (!visibleSnapEntry(e, options)) return false;
     const b = e.bounds;
     if (
       b &&
@@ -158,6 +177,93 @@ export function nearbyEntries(
     return true;
   });
 }
+
+function visibleSnapEntry({ entity }: IndexEntry, options: SnapOptions) {
+  return entity
+    ? options.objects !== false &&
+        !options.exclude?.includes(entity.id) &&
+        !options.hiddenLayers?.includes(entity.layerId)
+    : options.axes !== false;
+}
+
+/** A nearby hit on a carrier must also be within the snap radius of each carrier separately. */
+export function extensionIntersections(
+  doc: GeometryDocument,
+  viewId: string,
+  pointer: Vec2,
+  radius: number,
+  options: SnapOptions,
+): SnapCandidate[] {
+  if (!objectSnapEnabled(options, 'intersection')) return [];
+  const entries = snapIndex(doc, viewId).entries;
+  const transfer = miterNearPointer(entries, pointer, radius, options);
+  const foreign = transfer ? transferBoundaryEntries(doc, viewId, options) : [];
+  const aligned = [...entries, ...foreign].flatMap((entry) => {
+    if (entry.shape.kind !== 'line' || !visibleSnapEntry(entry, options)) return [];
+    const line = entry.shape.line;
+    const direction = unit(line.d);
+    const delta = sub(pointer, line.a);
+    if (
+      !length(direction) ||
+      Math.abs(cross(delta, direction)) > radius ||
+      (entry.ray && dot(delta, direction) < -radius)
+    )
+      return [];
+    const transferOnly =
+      entry.entity && entry.entity.viewId !== viewId && entry.entity.scope !== 'SHEET';
+    return [{ entry, line, direction, transferOnly }];
+  });
+  const limit = 64;
+  if (aligned.length > limit)
+    aligned.sort(
+      (a, b) => distance(pointer, foot(pointer, a.line)) - distance(pointer, foot(pointer, b.line)),
+    );
+  const result: SnapCandidate[] = [];
+  for (const [i, a] of aligned.slice(0, limit).entries())
+    for (const b of aligned.slice(i + 1, limit)) {
+      if ((a.transferOnly && b.entry !== transfer) || (b.transferOnly && a.entry !== transfer))
+        continue;
+      if ((!a.line.finite && !b.line.finite) || Math.abs(cross(a.direction, b.direction)) <= 1e-6)
+        continue;
+      const [hit] = shapeIntersections(
+        { kind: 'line', line: { ...a.line, finite: false } },
+        { kind: 'line', line: { ...b.line, finite: false } },
+      );
+      if (!hit || (a.entry.ray && hit.a < -1e-8) || (b.entry.ray && hit.b < -1e-8)) continue;
+      const gap = distance(pointer, hit.position);
+      if (gap > radius) continue;
+      const tracks = (
+        [
+          [a, hit.a],
+          [b, hit.b],
+        ] as const
+      ).flatMap(([source, t]) => {
+        if (!source.line.finite || (t >= -1e-9 && t <= 1 + 1e-9)) return [];
+        const point = t < 0 ? source.line.a : add(source.line.a, source.line.d);
+        return [{ point, direction: unit(sub(hit.position, point)) }];
+      });
+      if (!tracks.length) continue;
+      const sources = [a.entry, b.entry];
+      const axis = sources.find((entry) => !entry.entity);
+      result.push({
+        id: `EXTENSION_INTERSECTION:${sources
+          .map(({ ref }) => referenceKey(ref))
+          .sort()
+          .join(',')}`,
+        kind: 'INTERSECTION',
+        composite: 'extension',
+        label: axis ? `延长线交点 · ${axis.name}` : '延长线交点',
+        position: hit.position,
+        distance: gap,
+        positionOnly: true,
+        entityIds: sources.flatMap(({ entity }) => (entity ? [entity.id] : [])),
+        reference: axis?.ref,
+        tracks,
+      });
+    }
+  return result;
+}
+
 export function geometricIntersections(
   doc: GeometryDocument,
   viewId: string,
@@ -205,36 +311,82 @@ export function geometricIntersections(
         });
       }
     }
-  result.push(...transferIntersections(doc,viewId,p,radius,options));
+  result.push(...transferIntersections(doc, viewId, p, radius, options));
   return result
     .sort((a, b) => a.distance - b.distance || a.id!.localeCompare(b.id!))
     .filter((c, i, all) => !all.slice(0, i).some((v) => distance(v.position, c.position) < 1e-7));
 }
-/** The transfer ray crosses the unused quadrant of the unfolded sheet. A bordering
- * line can belong to either view. Use paper coordinates without merging their nodes. */
-function transferIntersections(doc:GeometryDocument, viewId:string, p:Vec2, radius:number, options:SnapOptions) {
-  if (options.axes===false || !hasGeometryBaseAxis(doc.editorType, 'MITER_45')) return [];
-  const ref = resolveReference(doc,{kind:'baseAxis',axisId:'MITER_45'});
-  const a = sheetToLocal(doc,viewId,ref.anchor), axis = sheetDeltaToLocal(doc,viewId,ref.direction!);
-  if (Math.abs(cross(sub(p,a),unit(axis)))>radius || dot(sub(p,a),unit(axis))<-radius) return [];
-  const result:SnapCandidate[]=[];
-  for (const e of doc.entities) {
-    if (e.viewId===viewId || e.scope==='SHEET' || (e.kind!=='segment' && e.kind!=='line') ||
-        options.hiddenLayers?.includes(e.layerId) || options.exclude?.includes(e.id)) continue;
-    const l=lineGeometry(doc,e);
-    const convert=(q:Vec2)=>sheetToLocal(doc,viewId,localToSheet(doc,e.viewId,q));
-    const start=convert(l.a), d=sub(convert(add(l.a,l.d)),start);
-    const det=cross(axis,d), delta=sub(start,a);
-    if (Math.abs(det)<1e-9) continue;
-    const t=cross(delta,d)/det, u=cross(delta,axis)/det;
-    if (t < -1e-8 || l.finite&&(u < -1e-8 || u > 1+1e-8)) continue;
-    const position=add(a,scale(axis,t)), gap=distance(position,p);
-    if (gap<=radius) result.push({
-      id:'INTERSECTION:axis:MITER_45,'+e.id, kind:'INTERSECTION', position, positionOnly:true,
-      label:'交点 · 45° 传宽线', distance:gap, entityIds:[e.id],
-    });
-  }
-  return result;
+function miterNearPointer(
+  entries: readonly IndexEntry[],
+  p: Vec2,
+  radius: number,
+  options: SnapOptions,
+) {
+  if (options.axes === false) return;
+  return entries.find(
+    ({ ref, shape }) =>
+      ref.kind === 'baseAxis' &&
+      ref.axisId === 'MITER_45' &&
+      shape.kind === 'line' &&
+      distance(p, foot(p, shape.line)) <= radius &&
+      dot(sub(p, shape.line.a), unit(shape.line.d)) >= -radius,
+  );
+}
+
+/** Edges in the neighbouring projection can also meet the transfer ray on the sheet. */
+function transferBoundaryEntries(
+  doc: GeometryDocument,
+  viewId: string,
+  options: SnapOptions,
+): IndexEntry[] {
+  return doc.entities.flatMap((entity): IndexEntry[] => {
+    if (
+      entity.viewId === viewId ||
+      entity.scope === 'SHEET' ||
+      (entity.kind !== 'segment' && entity.kind !== 'line') ||
+      options.hiddenLayers?.includes(entity.layerId) ||
+      options.exclude?.includes(entity.id)
+    )
+      return [];
+    return [
+      {
+        entity,
+        ref: { kind: 'entity', entityId: entity.id },
+        ray: false,
+        name: entity.kind === 'segment' ? '线段' : '辅助线',
+        shape: {
+          kind: 'line',
+          line: lineInView(doc, lineGeometry(doc, entity), entity.viewId, viewId),
+        },
+      },
+    ];
+  });
+}
+
+function transferIntersections(
+  doc: GeometryDocument,
+  viewId: string,
+  p: Vec2,
+  radius: number,
+  options: SnapOptions,
+): SnapCandidate[] {
+  const axis = miterNearPointer(snapIndex(doc, viewId).entries, p, radius, options);
+  if (!axis) return [];
+  return transferBoundaryEntries(doc, viewId, options).flatMap((entry): SnapCandidate[] => {
+    const [hit] = shapeIntersections(axis.shape, entry.shape);
+    if (!hit || hit.a < -1e-8 || distance(p, hit.position) > radius) return [];
+    return [
+      {
+        id: `INTERSECTION:axis:MITER_45,${referenceKey(entry.ref)}`,
+        kind: 'INTERSECTION',
+        position: hit.position,
+        positionOnly: true,
+        label: '交点 · 45° 传宽线',
+        distance: distance(p, hit.position),
+        entityIds: [entry.entity!.id],
+      },
+    ];
+  });
 }
 
 export function curvedSnapPositions(

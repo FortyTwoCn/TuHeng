@@ -70,7 +70,10 @@ export function finishDraftingGesture(
       if (g.next) {
         setPickedGrip(undefined);
         setState('idle');
-        accept(g.next);
+        const next = g.candidate?.composite && g.snapSource
+          ? confirmSnap(g.base, g.next, g.candidate, g.snapSource, role)
+          : g.next;
+        accept(next);
       }
     } else {
       setPickedGrip({ base: doc, grip: g.grip });

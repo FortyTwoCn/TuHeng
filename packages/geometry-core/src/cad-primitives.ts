@@ -73,7 +73,11 @@ function boundaryLoops(doc: GeometryDocument, ids: string[], viewId: string) {
   return rings;
 }
 /** Produce only candidate entities. The same geometry is passed to validation on confirmation. */
-export function cadPrimitiveEntities(doc: GeometryDocument, s: CadSession): GeometryEntity[] {
+export function cadPrimitiveEntities(
+  doc: GeometryDocument,
+  s: CadSession,
+  pickedNodes?: Map<number, string>,
+): GeometryEntity[] {
   const { points, pointIds, parameters: p, commandId: cmd, viewId } = s;
   const [a, b, c] = points;
   const role =
@@ -110,6 +114,7 @@ export function cadPrimitiveEntities(doc: GeometryDocument, s: CadSession): Geom
         return existing.id;
     }
     const next = id();
+    if (sourceIndex !== undefined) pickedNodes?.set(sourceIndex, next);
     created.push({
       ...base,
       id: next,

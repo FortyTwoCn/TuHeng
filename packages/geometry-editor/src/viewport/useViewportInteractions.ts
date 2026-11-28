@@ -10,8 +10,8 @@ import type {
 import type { Vec2, GeometryDocument } from '@tuheng/contracts';
 import {
   editable,
-  previewCadGrip,
   sub,
+  snapCandidates,
   sheetToLocal,
   drawingViewAt,
   localToSheet,
@@ -37,6 +37,7 @@ import { useViewportInputLifecycle } from './useViewportInputLifecycle';
 import { beginViewportGesture } from './viewport-gesture-start';
 import { appendPenSample, useViewportPointerSession } from './useViewportPointerSession';
 import { coordinateReadout, pointerOnSheet } from './viewport-coordinates';
+import { draftingSnapControls } from '../drafting-snap-controls';
 
 export function useViewportInteractions(props: ViewportProps) {
   const { document: doc, viewId, tool, role, readOnly, report } = props;
@@ -100,6 +101,7 @@ export function useViewportInteractions(props: ViewportProps) {
     setCandidateView,
     setPreviewDoc,
     setState,
+    tracked: tracking.active,
     resetPreview() {
       setSteps([]);
       setOperationView(undefined);
@@ -379,15 +381,13 @@ export function useViewportInteractions(props: ViewportProps) {
       const frameId = drawingFrame(local(e));
       showCursor(inputPoint(e), frameId);
       setHoverView(frameId);
+      const threshold = interactionThresholds[e.pointerType === 'pen' ? 'pen' : 'mouse'].snap;
       if (placingGrip && !readOnly) {
-        const entity = doc.entities.find((e) => e.id === placingGrip.entityId);
-        if (entity) {
-          const p = sheetToLocal(doc, entity.viewId, local(e));
-          try {
-            setPreviewDoc(previewCadGrip(doc, placingGrip, p, role));
-          } catch {
-            setPreviewDoc(null);
-          }
+        try {
+          edits.previewGrip(doc, placingGrip, local(e), cssScale(), threshold, e.altKey);
+        } catch {
+          setPreviewDoc(null);
+          setCandidate(null);
         }
         return;
       }
@@ -401,12 +401,19 @@ export function useViewportInteractions(props: ViewportProps) {
           inputPoint(e),
           frameId,
           cssScale(),
-          interactionThresholds[e.pointerType === 'pen' ? 'pen' : 'mouse'].snap,
+          threshold,
           e.altKey,
           true,
         );
         setCadCursor({ op: cad, pick });
         return;
+      }
+      if (!readOnly && tool === 'select' && props.tracking) {
+        const options = draftingSnapControls(props, threshold, e.altKey);
+        const snap = options.enabled
+          ? snapCandidates(doc, frameId, sheetToLocal(doc, frameId, local(e)), cssScale(), undefined, options)[0]
+          : undefined;
+        tracking.visit(frameId, snap, props.hiddenLayers);
       }
       if (props.session.construction) {
         try {

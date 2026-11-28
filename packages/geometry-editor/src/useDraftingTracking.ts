@@ -1,18 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
-import { distance, trackingBase, type SnapCandidate } from '@tuheng/geometry-core';
+import { distance, isPointFeature, trackingBase, type SnapCandidate } from '@tuheng/geometry-core';
 
 type Retained = ReturnType<typeof trackingBase>;
-const features: SnapCandidate['kind'][] = [
-  'COINCIDENT',
-  'ENDPOINT',
-  'ORIGIN',
-  'MIDPOINT',
-  'CENTER',
-  'INTERSECTION',
-  'QUADRANT',
-];
-
 export function useDraftingTracking(
   doc: GeometryDocument,
   scope: string | undefined,
@@ -39,15 +29,15 @@ export function useDraftingTracking(
     };
   }, [doc, scope, enabled]);
 
-  function visit(viewId: string, snap?: SnapCandidate) {
-    if (!enabled || !scope || !snap || !features.includes(snap.kind)) {
+  function visit(viewId: string, snap?: SnapCandidate, hiddenLayers?: string[]) {
+    if (!enabled || !scope || !snap || !isPointFeature(snap)) {
       leave();
       return;
     }
     const id = viewId + ':' + snap.position.x.toFixed(7) + ',' + snap.position.y.toFixed(7);
     if (hover.current?.id === id) return;
     leave();
-    const base = trackingBase(doc, viewId, snap);
+    const base = trackingBase(doc, viewId, snap, { hiddenLayers });
     hover.current = {
       id,
       timer: setTimeout(() => {

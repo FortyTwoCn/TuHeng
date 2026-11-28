@@ -44,12 +44,16 @@ export function RelationGuide({
     ? unit(sub(sheet(add(guide.contact, guide.direction)), contact))
     : unit(sub(finish, begin));
   const rotation = -angle(direction);
-  const title = [
+  const relation = [
     guide && { parallel: '平行', perpendicular: '垂直', tangent: '相切' }[guide.kind],
     equal && '等长',
   ]
     .filter(Boolean)
     .join(' · ');
+  const title =
+    candidate.composite === 'constraints' && candidate.label?.includes(' ∩ ')
+      ? candidate.label
+      : relation;
   let sourceSpan: [Vec2, Vec2] | null = null;
   if (source?.kind === 'line' || source?.kind === 'segment') {
     const geometry = lineGeometry(doc, source);
