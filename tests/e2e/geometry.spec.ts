@@ -15,6 +15,11 @@ async function login(page: Page, who = 'teacher') {
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/${who}/dashboard`));
 }
+async function showNarration(page: Page) {
+  await page.getByRole('group', { name: '工作区模式' }).getByRole('button', { name: '讲解' }).click();
+  const tabs = page.getByRole('group', { name: '工作区视图' });
+  if (await tabs.isVisible()) await tabs.getByRole('button', { name: '讲解', exact: true }).click();
+}
 async function selectSegment(page: Page, style: string) {
   const shape = page
     .locator(`.geo-active [data-kind=segment][data-style="${style}"] > line`)
@@ -331,6 +336,11 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await expect(task).toContainText('第 1 / 1 题');
   await expect(task).toContainText('补全对应投影，保留辅助线。');
   await expect(task.getByText('未保存', { exact: true })).toBeVisible();
+  await choose(student, '参考图纸');
+  const reference = student.getByRole('complementary', { name: '参考图纸预览' });
+  await expect(reference.getByRole('heading', { name: '题目参考图纸' })).toBeVisible();
+  await expect(reference.locator('[data-kind=segment][data-style=PROBLEM_VISIBLE]')).toHaveCount(1);
+  await choose(student, '关闭参考图纸');
   await draw(student, '虚线', 180, 140);
   await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
   await draw(student, '辅助线', 120, 100);
@@ -418,11 +428,11 @@ test('teacher geometry question is versioned and student submits a pure vector s
     buffer: Buffer.from(serializeConstructionAnimationJson(animation)),
   });
   await expect(student.getByRole('heading', { name: firstStep })).toBeVisible();
-  await choose(student, '分步动画');
+  await choose(student, '作图');
   await student.getByRole('button', { name: '正式提交并排队批改' }).click();
   await expect(student).toHaveURL(/\/student\/results\//);
   await expect(student.locator('[data-kind=segment][data-style=ANSWER_HIDDEN]')).toHaveCount(1);
-  await choose(student, '分步动画');
+  await showNarration(student);
   await expect(student.getByRole('heading', { name: firstStep })).toBeVisible();
   const id = student.url().split('/').at(-1);
   await teacher.emulateMedia({ reducedMotion: 'reduce' });
@@ -432,7 +442,7 @@ test('teacher geometry question is versioned and student submits a pure vector s
   await expect(
     teacher.locator('.geometry-editor').getByRole('button', { name: '撤销', exact: true }),
   ).toBeDisabled();
-  await choose(teacher, '分步动画');
+  await showNarration(teacher);
   await expect(teacher.getByRole('heading', { name: firstStep })).toBeVisible();
   await expect(teacher.getByRole('button', { name: '编排步骤', exact: true })).toHaveCount(0);
   const animated = teacher.locator('[data-construction-play-key] .geo-ink-trace').first();

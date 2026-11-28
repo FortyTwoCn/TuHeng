@@ -1,11 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
-import {
-  decodeDxfBytes,
-  DXF_MAX_BYTES,
-  importDxfToDocument,
-  type DxfImportReport,
-} from '@tuheng/geometry-core';
+import { importDxfToDocument, type DxfImportReport } from '@tuheng/geometry-core';
+import { readDxfFile } from './drawing-file-readers';
 
 type ImportReceipt = Pick<
   DxfImportReport,
@@ -50,8 +46,7 @@ export function DxfImportDialog({
     setBusy(true);
     setError('');
     try {
-      if (file.size > DXF_MAX_BYTES) throw Error('DXF 文件超过 8 MB');
-      const text = decodeDxfBytes(new Uint8Array(await file.arrayBuffer()));
+      const text = await readDxfFile(file);
       const current = latest.current;
       if (!dialogRef.current?.open || !current) return;
       if (current.doc !== doc || current.role !== role) throw Error('当前图纸已更新，请重新导入');

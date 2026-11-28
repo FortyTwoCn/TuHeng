@@ -97,7 +97,18 @@ test('逐笔蓝线和红线、阶段跳转、暂停、擦除与加深的浏览�
   await load(page);
   const view = canvas(page);
   await expect(view.locator('[data-entity-id="v-outline-1"]')).toHaveCount(1);
-  await button(page, '分步动画').click();
+  const grid = view.locator('[data-viewport-grid]');
+  const minor = view.locator('[data-world-grid="minor"]');
+  await expect(grid).toBeVisible();
+  await expect(minor).toHaveAttribute('width', '5');
+  await button(page, '讲解').click();
+  await expect(grid).toBeVisible();
+  await expect(minor).toHaveAttribute('width', '5');
+  await expect(view.locator('[data-reference-id="axis:X"]')).toBeVisible();
+  await button(page, '显示网格').click();
+  await expect(grid).toHaveCount(0);
+  await button(page, '显示网格').click();
+  await expect(grid).toBeVisible();
   const controls = panel(page);
   const clock = view.locator('[data-construction-play-key]');
   const shape = (id: string) => view.locator(`[data-entity-id="${id}"]`);
@@ -166,7 +177,7 @@ test('逐笔蓝线和红线、阶段跳转、暂停、擦除与加深的浏览�
   await expect(shape('v-center-1')).toHaveCSS('stroke-dasharray', '12px, 3px, 2px, 3px');
   await shot(page, info, '04-deepened');
   await view.press('Delete');
-  await button(page, '分步动画').click();
+  await button(page, '作图').click();
   await expect(shape('v-overrun-1')).toHaveCount(1);
 });
 
@@ -179,7 +190,7 @@ test('动画 JSON 独立往返、错误定位和编排保存回写完整图纸',
     'tuheng.construction-animation/1.0.0',
   );
   await closePanels(page);
-  await button(page, '分步动画').click();
+  await button(page, '讲解').click();
   const controls = panel(page);
   await controls.getByText('动画 JSON', { exact: true }).click();
   const animation = await download(page, () => button(controls, '导出动画 JSON').click());
@@ -270,6 +281,7 @@ test('审核定位错位，生成真实三维实体并在两种布局联动', as
     )
     .toBe(true);
   const preview = page.getByRole('region', { name: '立体图三维预览' });
+  await expect(panel(page)).toBeVisible();
   for (const view of ['正视', '俯视', '左视', '轴测']) {
     await button(preview, view).click();
     await expect(button(preview, view)).toHaveAttribute('aria-pressed', 'true');
@@ -292,7 +304,7 @@ test('审核定位错位，生成真实三维实体并在两种布局联动', as
   await expect(view3D).not.toHaveAttribute('data-orbit', rotated!);
   await button(preview, '正视').click();
   await expect(canvas(page).locator('[data-entity-id="v-outline-1"]')).toHaveAttribute(
-    'data-selected',
+    'data-model-linked',
     'true',
   );
   await button(preview, '二维-三维联动').click();
@@ -305,14 +317,13 @@ test('审核定位错位，生成真实三维实体并在两种布局联动', as
   const separator = page.getByRole('separator', { name: '调整二维与三维分屏宽度' });
   await separator.press('ArrowLeft');
   await expect(separator).toHaveAttribute('aria-valuenow', '54');
-  await button(page, '分步动画').click();
   await panel(page).getByLabel('选择作图步骤').selectOption('5');
   await expect(canvas(page)).toBeVisible();
   await expect(view3D).toBeVisible();
   await shot(page, info, '06-animation-and-solid');
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const tabs = page.getByRole('group', { name: '二维与三维视图' });
+  const tabs = page.getByRole('group', { name: '工作区视图' });
   await expect(tabs).toBeVisible();
   await button(tabs, '立体').click();
   await expect(view3D).toBeVisible();

@@ -50,6 +50,18 @@ export function contentBounds(doc: GeometryDocument, viewId: string): Bounds {
   return { x: (minX + maxX - width) / 2, y: (minY + maxY - height) / 2, width, height };
 }
 
+// 导入的多段线和投影轮廓可以含重复顶点，拾取时把零长边视作点。
+function distanceToPath(p: Vec2, path: Vec2[]) {
+  let nearest = path.length ? distance(p, path[0]) : Infinity;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const d = sub(path[i], a);
+    const closest = dot(d, d) > 1e-16 ? foot(p, { a, d, finite: true }) : a;
+    nearest = Math.min(nearest, distance(p, closest));
+  }
+  return nearest;
+}
+
 export function hitDistance(doc: GeometryDocument, e: GeometryEntity, p: Vec2, box: Bounds) {
   if (e.kind === 'ellipse' || e.kind === 'curve') {
     const shape = boundaryShape(doc, e);
@@ -67,15 +79,7 @@ export function hitDistance(doc: GeometryDocument, e: GeometryEntity, p: Vec2, b
       const dy = Math.max(0, -dot(v, y), dot(v, y) - distance(a, d));
       nearest = Math.min(nearest, Math.hypot(dx, dy));
     }
-    for (const path of drawing.strokes)
-      for (let i = 1; i < path.length; i++) {
-        const a = path[i - 1],
-          d = sub(path[i], a);
-        nearest = Math.min(
-          nearest,
-          dot(d, d) > 1e-16 ? distance(p, foot(p, { a, d, finite: true })) : distance(p, a),
-        );
-      }
+    for (const path of drawing.strokes) nearest = Math.min(nearest, distanceToPath(p, path));
     return nearest;
   }
   if (e.kind === 'point') return distance(e.position, p);
@@ -90,12 +94,5 @@ export function hitDistance(doc: GeometryDocument, e: GeometryEntity, p: Vec2, b
       distance(p, arcPoint(c, e.radius, e.startAngle + e.sweep)),
     );
   }
-  const path = entityPath(doc, e, box);
-  return Math.min(
-    ...path.map((a, i) =>
-      i
-        ? distance(p, foot(p, { a: path[i - 1], d: sub(a, path[i - 1]), finite: true }))
-        : distance(p, a),
-    ),
-  );
+  return distanceToPath(p, entityPath(doc, e, box));
 }

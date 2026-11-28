@@ -1,5 +1,5 @@
 import type { GeometryDocument, GeometryEntity, Vec2 } from '@tuheng/contracts';
-import { add, sub, scale, dot, angle, unit, distance } from './math';
+import { add, sub, scale, dot, unit, distance } from './math';
 import {
   appendSelectionCopies,
   copySelectionEntities,
@@ -10,6 +10,7 @@ import {
 import { localToSheet, sheetToLocal } from './sheet';
 import { spatialTranslation } from './projections';
 import { evaluateDependencies } from './dependencies';
+import { mapEntityCoordinates } from './entity-coordinates';
 
 export type CadRole = 'teacher' | 'student';
 export type CadTransform =
@@ -83,61 +84,15 @@ function applyTransform(
   map: (p: Vec2) => Vec2,
   circularSpans: ReadonlySet<string>,
 ) {
-  const local = (p: Vec2) => sheetToLocal(doc, e.viewId, map(localToSheet(doc, e.viewId, p)));
-  const origin = local({ x: 0, y: 0 }),
-    vector = (v: Vec2) => sub(local(v), origin);
+  const at = (p: Vec2) => sheetToLocal(doc, e.viewId, map(localToSheet(doc, e.viewId, p)));
   const reorient = s.kind === 'rotate' || s.kind === 'mirror';
-  const bearing = (theta: number) => (reorient ? angle(vector(dir(theta))) : theta);
-  if ('position' in e) e.position = local(e.position);
-  if (e.kind === 'point') e.spatial = null;
-  if (e.kind === 'line') {
-    e.anchor = local(e.anchor);
-    if (reorient) e.direction = vector(e.direction);
-  }
-  if (e.kind === 'polyline') e.points = e.points.map(local);
-  if (e.kind === 'dimension' && e.dimensionType === 'LINEAR' && reorient) {
-    e.linearAngle = bearing(e.linearAngle ?? (e.linearAxis === 'Y' ? 90 : 0));
-  }
-  if (e.kind === 'arc') {
-    e.startAngle = bearing(e.startAngle);
-    if (s.kind === 'mirror') e.sweep *= -1;
-  }
-  if (e.kind === 'ellipse') {
-    e.angle = bearing(e.angle);
-    if (s.kind === 'mirror') {
-      e.startAngle = -e.startAngle;
-      e.sweep = -e.sweep;
-    }
-  }
-  if (e.kind === 'text' || e.kind === 'symbol' || e.kind === 'engineeringAnnotation')
-    e.angle = bearing(e.angle);
-  if (e.kind==='engineeringAnnotation' && e.leader) e.leader=local(e.leader);
-  if (e.kind==='symbol' && e.labelPosition) e.labelPosition=local(e.labelPosition);
-  if (e.kind === 'symbol' && s.kind === 'mirror') {
-    if (e.symbolType === 'LEFT_ROTATION') e.symbolType = 'RIGHT_ROTATION';
-    else if (e.symbolType === 'RIGHT_ROTATION') e.symbolType = 'LEFT_ROTATION';
-  }
-  if (e.kind === 'hatch') {
-    e.origin = local(e.origin);
-    e.angle = bearing(e.angle);
-    if (reorient && e.spans) {
-      const sign = s.kind === 'mirror' ? -1 : 1;
-      const offset = bearing(0)/360;
-      e.spans = e.spans.map(ring=>ring.map(span => {
-        if (!circularSpans.has(span.entityId)) return span;
-        const translated = offset + span.from * sign;
-        return {...span, from: translated-Math.floor(translated), to: offset + span.to*sign - Math.floor(translated)};
-      }));
-    }
-  }
+  mapEntityCoordinates(e, at, { reorient, reflected: s.kind === 'mirror', circularSpans });
   if (e.kind === 'plane') {
     if (s.kind === 'mirror' || s.kind === 'rotate')
       throw Error('三维参考平面不能使用二维旋转或镜像');
-    const d = spatialTranslation(doc, e.viewId, origin);
+    const d = spatialTranslation(doc, e.viewId, at({ x: 0, y: 0 }));
     e.origin = { x: e.origin.x + d.x, y: e.origin.y + d.y, z: e.origin.z + d.z };
   }
-  if ('samples' in e && e.samples)
-    e.samples = e.samples.map((p) => ({ ...local(p), pressure: p.pressure }));
 }
 /** Bases and vectors are in unfolded sheet millimetres. Every point ID is transformed once. */
 export function transformSelection(

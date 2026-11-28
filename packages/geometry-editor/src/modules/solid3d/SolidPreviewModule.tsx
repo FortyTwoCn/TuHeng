@@ -12,7 +12,7 @@ import {
   solidFeatureEdges,
   type SolidCamera,
 } from './solid-canvas';
-import type { LinkedFace } from './useTeachingWorkspace';
+import type { LinkedFace } from './useSolidPreview';
 
 const presetViews = [
   { name: '轴测', yaw: 0.65, pitch: 0.48 },
@@ -249,15 +249,21 @@ function InteractiveSolid({
   );
 }
 
-export function SolidPreview({
+export function SolidPreviewModule({
   solid,
   build,
   generate,
+  available,
+  review,
+  reason,
   ...props
 }: Omit<PreviewProps, 'solid'> & {
   solid?: ReconstructedSolid3D;
   build?: { result?: SolidReconstructionResult; error?: string };
   generate: () => void;
+  available: boolean;
+  review?: () => void;
+  reason?: string;
 }) {
   const failure =
     build?.error ?? (build?.result && !build.result.ok ? build.result.reason : undefined);
@@ -266,6 +272,15 @@ export function SolidPreview({
       <h3>立体图 3D</h3>
       {solid ? (
         <InteractiveSolid {...props} solid={solid} />
+      ) : !available ? (
+        <div className="geo-solid-message">
+          <p>{reason}</p>
+          {review && (
+            <button type="button" onClick={review}>
+              查看审核项
+            </button>
+          )}
+        </div>
       ) : (
         <div className="geo-solid-message">
           {build && !failure ? (
@@ -274,7 +289,7 @@ export function SolidPreview({
             <>
               <p role={failure ? 'alert' : undefined}>{failure ?? '当前图纸需要生成三维模型。'}</p>
               <button type="button" onClick={generate}>
-                重新生成三维模型
+                {failure ? '重新生成三维模型' : '生成三维模型'}
               </button>
             </>
           )}

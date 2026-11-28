@@ -85,7 +85,11 @@ export function hitTargets(
       d: hitDistance(doc, e, sheetToLocal(doc, e.viewId, p), localBounds(doc, e.viewId, box)),
     }))
     .filter((v) => v.d * scale < threshold)
-    .sort((a, b) => a.d - b.d);
+    .sort((a, b) =>
+      Math.abs(a.d - b.d) < 1e-8
+        ? Number(selected.includes(b.e.id)) - Number(selected.includes(a.e.id))
+        : a.d - b.d,
+    );
   // 触摸命中区较大。明确命中线身时，优先允许整段移动，避免被较远的端点抢占。
   const coreRadius = Math.max(4, threshold * 0.42);
   const nearBody = body.length && body[0].d * scale <= 2;

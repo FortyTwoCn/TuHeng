@@ -23,8 +23,8 @@ import {
   type ConstructionVisual,
 } from '@tuheng/geometry-core';
 import { semanticLineStyles } from '@tuheng/geometry-core';
-import { constructionInk } from './construction-playback';
-import { ProgressiveStroke } from './ProgressiveStroke';
+import { constructionInk } from './modules/animation/construction-playback';
+import { ProgressiveStroke } from './modules/animation/ProgressiveStroke';
 export const lineStyles = semanticLineStyles;
 export const EntityShape = memo(function EntityShape({
   document: doc,
@@ -35,7 +35,8 @@ export const EntityShape = memo(function EntityShape({
   scale,
   sourceDocument,
   sheetPoints,
-  playback,
+  animationVisual,
+  inspectOnly,
 }: {
   document: GeometryDocument;
   entity: GeometryEntity;
@@ -45,7 +46,8 @@ export const EntityShape = memo(function EntityShape({
   scale: number;
   sourceDocument?: GeometryDocument;
   sheetPoints: ReadonlyMap<string, Vec2>;
-  playback?: { visual: ConstructionVisual; timing?: CSSProperties; linked: boolean };
+  animationVisual?: { visual: ConstructionVisual; timing?: CSSProperties; linked: boolean };
+  inspectOnly?: boolean;
 }) {
   const source = sourceDocument ?? doc;
   const baseStyle = drawingStyle(e, scale);
@@ -54,27 +56,30 @@ export const EntityShape = memo(function EntityShape({
     [source, e, baseStyle.strokeDasharray],
   );
   const appearance = runLength !== undefined ? drawingStyle(e, scale, runLength) : baseStyle;
-  if (!e.appearance?.color) {
+  // DXF 会把缺省墨色记录为 RGB。参考图把这种缺省颜色映射到当前纸面主题。
+  const color = e.appearance?.color?.toLowerCase();
+  if (!color || (inspectOnly && color === semanticLineStyles[e.lineStyle].stroke)) {
     if (e.lineStyle.startsWith('ANSWER')) appearance.stroke = 'var(--cad-ink,#253b47)';
     if (e.lineStyle === 'CONSTRUCTION') appearance.stroke = 'var(--cad-axis,#638894)';
     if (e.lineStyle.startsWith('PROBLEM')) appearance.stroke = 'var(--cad-stem,#4585dd)';
   }
-  if (playback) Object.assign(appearance, constructionInk(e, playback.visual, scale));
+  if (animationVisual) Object.assign(appearance, constructionInk(e, animationVisual.visual, scale));
   const style = {
     ...appearance,
     strokeWidth: selected ? Math.max(appearance.strokeWidth + 1, 3) : appearance.strokeWidth,
     fill: 'none',
     vectorEffect: 'non-scaling-stroke' as const,
   };
-  if (playback?.linked) {
+  if (animationVisual?.linked) {
     style.stroke = 'var(--cad-accent)';
     style.strokeWidth += 1.2;
   }
+  if (inspectOnly && selected) style.stroke = 'var(--cad-accent,#0f766e)';
   const trace = (shape: ReactElement<SVGProps<SVGElement>>) =>
-    playback?.timing && box ? (
+    animationVisual?.timing && box ? (
       <ProgressiveStroke
         shape={shape}
-        timing={playback.timing}
+        timing={animationVisual.timing}
         box={box}
         scale={scale}
         width={style.strokeWidth}
@@ -110,7 +115,7 @@ export const EntityShape = memo(function EntityShape({
               fontSize={l.size}
               textAnchor={l.anchor}
               textDecoration={selected ? 'underline' : undefined}
-              fill={appearance.stroke}
+              fill={style.stroke}
               stroke="none"
             >
               {l.text}
@@ -217,14 +222,14 @@ export const EntityShape = memo(function EntityShape({
       data-selected={selected}
       data-kind={e.kind}
       data-style={e.lineStyle}
-      data-construction-role={playback?.visual.role}
-      data-stroke-order={playback?.visual.order}
-      data-model-linked={playback?.linked || undefined}
+      data-construction-role={animationVisual?.visual.role}
+      data-stroke-order={animationVisual?.visual.order}
+      data-model-linked={animationVisual?.linked || undefined}
       {...style}
     >
       <title>{e.id}</title>
       {shape}
-      {selected && (
+      {selected && !inspectOnly && (
         <g data-transient="handles" stroke="#0f766e" fill="#ffffff80">
           {(e.kind === 'point'
             ? [e.position]

@@ -152,6 +152,8 @@ export function SubmissionEditor({
           <GeometryEditor
             value={geometry}
             problemDocument={problemGeometry ?? undefined}
+            referenceDocument={problemGeometry}
+            referenceTitle="题目参考图纸"
             onChange={(next) => {
               edited();
               setGeometry(next);

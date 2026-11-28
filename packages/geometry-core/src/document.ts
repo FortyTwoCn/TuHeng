@@ -311,8 +311,9 @@ export function appendSelectionCopies(
   d: GeometryDocument,
   doc: GeometryDocument,
   selected: GeometryEntity[],
+  nextId = createId,
 ) {
-  const mapping = new Map(selected.map((e) => [e.id, createId()]));
+  const mapping = new Map(selected.map((e) => [e.id, nextId()]));
   for (const original of selected) {
     const e = structuredClone(original);
     e.id = mapping.get(e.id)!;
@@ -340,7 +341,7 @@ export function appendSelectionCopies(
   for (const relation of doc.constraints.filter((r) => r.entityIds.every((id) => mapping.has(id))))
     d.constraints.push({
       ...relation,
-      id: createId(),
+      id: nextId(),
       entityIds: relation.entityIds.map((id) => mapping.get(id)!),
     });
   for (const r of doc.referenceRelations ?? [])
@@ -348,7 +349,7 @@ export function appendSelectionCopies(
       d.referenceRelations ??= [];
       d.referenceRelations.push({
         ...r,
-        id: createId(),
+        id: nextId(),
         targetId: mapping.get(r.targetId)!,
         reference:
           r.reference.kind === 'entity'
@@ -364,7 +365,7 @@ export function appendSelectionCopies(
   ))
     d.projectionGroups.push({
       ...relation,
-      id: createId(),
+      id: nextId(),
       entityIds: relation.entityIds.map((id) => mapping.get(id)!),
     });
   return mapping;

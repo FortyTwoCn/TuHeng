@@ -31,6 +31,7 @@ export * from './cad-session';
 export * from './cad-input';
 export * from './cad-package';
 export * from './cad-transforms';
+export * from './reference-copy';
 export * from './cad-cut';
 export * from './cad-geometry';
 export * from './hatch';

@@ -1,7 +1,7 @@
 import { useRef, type ReactNode, type RefObject } from 'react';
 import {
   Check,
-  Box,
+  BookOpen,
   ClipboardCheck,
   CornerUpLeft,
   Crosshair,
@@ -37,7 +37,8 @@ import { EditorPopover } from './EditorPopover';
 import type { CadController, CadId } from './useCadCommand';
 import { WorkspaceAction } from './WorkspaceAction';
 import { CommandParameters, CommandSetup } from './CommandParameters';
-import type { ConstructionFileActions } from './ConstructionPanelWorkspace';
+import type { ConstructionFileActions } from './modules/animation/AnimationNarrationModule';
+import type { WorkspaceMode } from './modules/useWorkspaceLayout';
 
 interface TopbarProps {
   title: string;
@@ -50,13 +51,11 @@ interface TopbarProps {
   startCad: (id: CadId) => void;
   readOnly: boolean;
   filesReadOnly: boolean;
-  teaching: {
-    animation: boolean;
-    audit: boolean;
-    solid: boolean;
-    toggleAnimation: () => void;
-    toggleAudit: () => void;
-    toggleSolid: () => void;
+  workspace: {
+    mode: WorkspaceMode;
+    changeMode: (mode: WorkspaceMode) => void;
+    audit?: { open: boolean; toggle: () => void };
+    reference?: { open: boolean; toggle: () => void };
   };
   canUndo: boolean;
   canRedo: boolean;
@@ -80,7 +79,7 @@ interface TopbarProps {
     | 'inspect',
     () => void
   > &
-    ConstructionFileActions;
+    ConstructionFileActions & { loadReference?: () => void };
 }
 export function WorkspaceTopbar(p: TopbarProps) {
   return (
@@ -145,25 +144,39 @@ export function WorkspaceTopbar(p: TopbarProps) {
         {p.styleControls}
       </div>
       <div className="cad-view-actions">
-        <div className="cad-teaching-actions" role="group" aria-label="作图教学">
-          <WorkspaceAction
-            label="分步动画"
-            icon={Film}
-            pressed={p.teaching.animation}
-            onClick={p.teaching.toggleAnimation}
-          />
-          <WorkspaceAction
-            label="格式审核"
-            icon={ClipboardCheck}
-            pressed={p.teaching.audit}
-            onClick={p.teaching.toggleAudit}
-          />
-          <WorkspaceAction
-            label="立体图 3D"
-            icon={Box}
-            pressed={p.teaching.solid}
-            onClick={p.teaching.toggleSolid}
-          />
+        <div className="cad-teaching-actions">
+          <div className="cad-workspace-mode" role="group" aria-label="工作区模式">
+            <button
+              type="button"
+              aria-pressed={p.workspace.mode === 'drafting'}
+              onClick={() => p.workspace.changeMode('drafting')}
+            >
+              作图
+            </button>
+            <button
+              type="button"
+              aria-pressed={p.workspace.mode === 'teaching'}
+              onClick={() => p.workspace.changeMode('teaching')}
+            >
+              讲解
+            </button>
+          </div>
+          {p.workspace.audit && (
+            <WorkspaceAction
+              label="格式审核"
+              icon={ClipboardCheck}
+              pressed={p.workspace.audit.open}
+              onClick={p.workspace.audit.toggle}
+            />
+          )}
+          {p.workspace.reference && (
+            <WorkspaceAction
+              label="参考图纸"
+              icon={BookOpen}
+              pressed={p.workspace.reference.open}
+              onClick={p.workspace.reference.toggle}
+            />
+          )}
         </div>
         <WorkspaceAction label="完整展开图" icon={Focus} onClick={p.fit} />
         <EditorPopover
@@ -184,6 +197,13 @@ export function WorkspaceTopbar(p: TopbarProps) {
           />
           {!p.filesReadOnly && (
             <WorkspaceAction label="导入 DXF" icon={Upload} onClick={p.fileActions.importDxf} />
+          )}
+          {p.fileActions.loadReference && (
+            <WorkspaceAction
+              label="加载参考图纸"
+              icon={BookOpen}
+              onClick={p.fileActions.loadReference}
+            />
           )}
           <WorkspaceAction label="导出 JSON" icon={FileJson} onClick={p.fileActions.json} />
           <WorkspaceAction label="导出 DXF" icon={ScanLine} onClick={p.fileActions.dxf} />

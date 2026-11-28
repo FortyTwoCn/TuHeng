@@ -25,7 +25,7 @@ A=(30,20,40) 的纸面位置为 V=(-30,40)、H=(-30,-20)、W=(20,40)。学生实
 - `references.ts`：类型化目标、实际参考几何、selectable/snappable/referenceable/editable/deletable；渲染、命中、吸附和构造共享。基准射线、原点与偏移新轴不伪造成答案线。
 - `interaction-controller.ts`、`marquee.ts`：点/端点/线身命中、重叠候选、Window/Crossing 精确几何；多选共享节点只移动一次。
 - `commands.ts`（core）：构造、精确参数、方向调整与显式轴绑定的纯命令；浮层/详细属性使用同一参数描述。
-- `Viewport.tsx`：根据工具和手势派发指针事件。按下固定文档基线和坐标变换，移动时更新预览，松手提交。Escape、意外丢失指针捕获或外部换图会结束未提交操作。
+- `Viewport.tsx` 组装画布和浮层。`viewport/` 分别管理指针、CAD 取点、夹点拖动与提交。按下时固定文档基线和坐标变换，移动时更新预览，松手提交。Escape、意外丢失指针捕获或外部换图会结束未提交操作。
 - `usePointerFrames.ts`：合并每帧的移动预览，组件卸载时清理待处理任务。笔迹原始采样由视口单独保留。
 - `ViewportScene.tsx` 和 `ViewportDrawing.tsx`：按统一图纸坐标绘制实体、选择、吸附和测量提示。`ViewportProjection.tsx` 与 `ViewportFeedback.tsx` 负责投影面板与可点击反馈。
 - `drawing-session.ts`：分步绘图与笔迹应用；`OperationRecovery.tsx`：取消吸附、恢复原笔迹及恢复中断笔迹。
@@ -57,16 +57,22 @@ CAD 命令目录位于 `cad-registry.ts`。每个命令声明工具组、别名�
 
 - `contracts/src/construction-animation.ts` 提供动画 Zod 校验、跨实体引用校验和独立 Schema。几何 3.0 契约复用这套动画定义。保存动画走现有文档历史，删除正式几何时同步整理失效引用。
 - `geometry-core/src/construction-animation.ts` 负责验证 AI 数据、文件解析、默认教学过程和当前步的角色求值。播放图元、临时线、定位点的状态按步号确定，跳步与重播可复用同一份动画。
-- `ConstructionDrawing.tsx` 复用现有 SVG 实体路径，按实际路径渐进描边。讲解、速度、暂停、文件和编排控件独立于画布手势。评分用例提取只含几何的题干及答案快照。
+- `ViewportDrawing` 在同一个 SVG 中绘制纸面、主次网格和投影轴。`ViewportEntities` 为 `EntityShape` 附加动画角色、描边时序和联动高亮。`ConstructionOverlays` 负责临时投影线和定位点。评分用例提取只含几何的题干及答案快照。
 - `drawing-audit.ts` 将视图局部数据按映射轴及正负号转成规范投影坐标，检查包围盒、对应特征和线型。轮廓分析复用 `cad-faces.ts` 的曲线误差自适应采样，经交点分面提取闭环及嵌套孔。
 - `solid-reconstruction.ts` 复用审核得到的闭环。`solid-panels.ts` 沿每条轮廓边的展开面扫描其他投影视图，裁剪出柱体正交交集的表面。`solid-mesh.ts` 对齐接缝、三角化、计算法线和体积，并从相邻面夹角提取特征棱。顶点上限 30,000，面数上限 50,000。裁剪超限、空交集和开放网格返回明确的失败原因。
-- `solid-worker.ts` 在浏览器 Worker 里执行重建。Canvas 投影渲染、正交视角、旋转、二维图元和三维面的联动由 `SolidPreview.tsx` 与 `solid-canvas.ts` 承担。三维结果与当前几何版本关联。
+- `modules/solid3d/solid-worker.ts` 在浏览器 Worker 里执行重建。`SolidPreviewModule` 与 `solid-canvas.ts` 负责 Canvas 渲染、旋转、正交视角和联动。三维结果与当前几何版本关联。
+
+## 工作区与参考图纸
+
+`modules/EditorWorkspaceShell` 编排主画布和可选模块。作图模式保留绘图工具，讲解模式打开 `AnimationNarrationModule`、`AnimationTimelineModule` 和 `SolidPreviewModule`。桌面可单独收起模块，窄屏使用工作区标签切换。格式审核可从任一模式打开。
+
+`ReferenceDrawingModule` 使用相同的 `ViewportDrawing` 和独立的镜头与选集。JSON、DXF 与 ZIP 在浏览器中读取，文件输入复用主编辑器的解析与限制。核心函数 `copyEntitiesFromReferenceDocument` 分配新 ID、重映射几何依赖，并把学生复制的对象放在作答或辅助图层。匹配视图保留局部坐标，其他视图按图纸毫米坐标平移至当前视图。跨投影体系的空间平面以其图纸轮廓转移。编辑器通过原有文档事务一次提交复制结果。
 
 ## 入口和公共组件
 
 登录后访问 `/geometry` 独立作图，JSON 保存到本地；教学页面通过既有草稿/提交用例保存。未登录或会话失效会先登录，再回到编辑器。
 
-`GeometryEditor` 支持 `value` / `onChange`、`defaultValue`、`role`、`readOnly`、`problemDocument` 和 `highlightedEntityIds`。ref 提供 `getDocument`、`exportJSON`、`exportNarrative`、`undo`、`redo` 和 `fitToContent`。文件输入、预览和导出走 `DrawingFiles.tsx` 与核心 `document-json.ts`。面向用户的 JSON 排版与评分证据分开。非法加载保留当前文档并反馈出错字段。SVG 导出默认覆盖整张展开图。
+`GeometryEditor` 支持 `value` / `onChange`、`defaultValue`、`role`、`readOnly`、`problemDocument` 和 `highlightedEntityIds`。宿主可通过 `workspaceMode` 指定初始模式，通过 `enabledModules` 配置可用模块，并传入 `referenceDocument` 与 `referenceTitle`。ref 提供 `getDocument`、`exportJSON`、`exportNarrative`、`undo`、`redo` 和 `fitToContent`。文件输入、预览和导出复用核心 `document-json.ts`。面向用户的 JSON 排版与评分证据分开。非法加载保留当前文档并反馈出错字段。SVG 导出默认覆盖整张展开图。
 
 照片识别导入留待下一轮，届时仍通过同一 GeometryDocument 校验入口；当前不调用识别模型。已有图片作答保持兼容。
 

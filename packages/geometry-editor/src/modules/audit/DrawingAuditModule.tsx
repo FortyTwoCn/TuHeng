@@ -8,7 +8,7 @@ import {
 const status = { PASS: '通过', WARN: '有警告', FAIL: '未通过' };
 const severity = { PASS: '通过', WARN: '警告', ERROR: '需修正' };
 
-export function DrawingAuditPanel({
+export function DrawingAuditModule({
   report,
   selected,
   select,
@@ -17,7 +17,7 @@ export function DrawingAuditPanel({
   report: DrawingAuditReport;
   selected?: DrawingAuditCheck;
   select: (id: string) => void;
-  generate: () => void;
+  generate?: () => void;
 }) {
   const checks = [...report.checks].sort(
     (a, b) =>
@@ -32,14 +32,16 @@ export function DrawingAuditPanel({
       <p>
         {report.summary} 投影容差 {report.toleranceMm} mm。
       </p>
-      <button
-        type="button"
-        className="geo-teaching-primary"
-        onClick={generate}
-        disabled={!report.canReconstruct3D}
-      >
-        生成三维模型
-      </button>
+      {generate && (
+        <button
+          type="button"
+          className="geo-teaching-primary"
+          onClick={generate}
+          disabled={!report.canReconstruct3D}
+        >
+          生成三维模型
+        </button>
+      )}
       {!report.canReconstruct3D && (
         <p className="geo-audit-notice">
           {report.status === 'FAIL'

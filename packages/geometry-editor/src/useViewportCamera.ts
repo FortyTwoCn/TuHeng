@@ -1,4 +1,11 @@
-import { useState, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  type RefObject,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import { sheetBounds, localToSheet, type Bounds } from '@tuheng/geometry-core';
 import type { CameraFit } from './types';
@@ -36,25 +43,38 @@ export function useViewportCamera(
 ) {
   const [size, setSize] = useState({ width: 800, height: 600 }),
     [fitSize, setFitSize] = useState<{ width: number; height: number } | null>(null),
-    [pan, setPan] = useState({ x: 0, y: 0 }),
+    [pan, setPanValue] = useState({ x: 0, y: 0 }),
     [localZoom, setLocalZoom] = useState(1),
     [fitted, setFitted] = useState<Bounds>(() => sheetBounds(doc));
-  const [previous, setPrevious] = useState({ fit, focusKey });
-  if (previous.fit !== fit || previous.focusKey !== focusKey) {
-    setPrevious({ fit, focusKey });
+  const [cameraBaseline, setCameraBaseline] = useState<typeof size>();
+  // 分屏调整可见面积。用户移动或缩放过的镜头保持中心和毫米比例。
+  const baseline = cameraBaseline ?? (adaptiveFit ? size : (fitSize ?? size));
+  const [previous, setPrevious] = useState({ fit, focusKey, zoom });
+  if (previous.fit !== fit || previous.focusKey !== focusKey || previous.zoom !== zoom) {
+    setPrevious({ fit, focusKey, zoom });
     if (previous.fit !== fit) {
       setFitted(fit.bounds ?? sheetBounds(doc));
       setFitSize(size);
-      setPan({ x: 0, y: 0 });
+      setPanValue({ x: 0, y: 0 });
       setLocalZoom(1);
-    } else {
+      setCameraBaseline(undefined);
+    } else if (previous.focusKey !== focusKey) {
       const v = doc.views.findIndex((v) => v.id === viewId),
         p = localToSheet(doc, viewId, { x: 30, y: v === 1 ? -25 : 30 });
-      setPan({ x: p.x - (fitted.x + fitted.width / 2), y: p.y - (fitted.y + fitted.height / 2) });
-    }
+      setPanValue({
+        x: p.x - (fitted.x + fitted.width / 2),
+        y: p.y - (fitted.y + fitted.height / 2),
+      });
+      setCameraBaseline(baseline);
+    } else setCameraBaseline(baseline);
   }
-  // 工具抽屉改变可见面积，图纸每毫米对应的像素数保持稳定。
-  const baseline = adaptiveFit ? size : fitSize ?? size;
+  const setPan: Dispatch<SetStateAction<Vec2>> = useCallback(
+    (value) => {
+      setCameraBaseline((current) => current ?? baseline);
+      setPanValue(value);
+    },
+    [baseline],
+  );
   const mmPerPixel =
     Math.max(fitted.height / baseline.height, fitted.width / baseline.width) / (zoom * localZoom);
   const height = size.height * mmPerPixel,
@@ -100,6 +120,6 @@ export function useViewportCamera(
     };
     el.addEventListener('wheel', wheel, { passive: false });
     return () => el.removeEventListener('wheel', wheel);
-  }, [svg, localZoom, busy]);
+  }, [svg, localZoom, busy, setPan]);
   return { size, box, setPan, zoomAt };
 }

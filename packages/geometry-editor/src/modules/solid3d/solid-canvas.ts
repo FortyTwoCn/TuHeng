@@ -1,5 +1,5 @@
 import type { ReconstructedSolid3D } from '@tuheng/geometry-core';
-import type { LinkedFace } from './useTeachingWorkspace';
+import type { LinkedFace } from './useSolidPreview';
 
 type Point3 = ReconstructedSolid3D['vertices'][number];
 export type SolidCamera = { yaw: number; pitch: number; zoom: number };

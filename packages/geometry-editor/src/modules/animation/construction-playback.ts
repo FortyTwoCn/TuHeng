@@ -104,6 +104,14 @@ export function useConstructionPlayback(
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<ConstructionSpeed>('normal');
   const [guides, setGuides] = useState(true);
+  const [previousEnabled, setPreviousEnabled] = useState(enabled);
+  if (previousEnabled !== enabled) {
+    setPreviousEnabled(enabled);
+    if (!enabled) {
+      setPlaying(false);
+      setPaused(false);
+    }
+  }
   const last = animation.steps.length - 1;
   const index = Math.min(cursor.index, last);
   const step = animation.steps[index];

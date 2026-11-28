@@ -1,71 +1,24 @@
-import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
-import type { Bounds, ConstructionVisualRole } from '@tuheng/geometry-core';
+import type { Bounds } from '@tuheng/geometry-core';
 import { beatStyle, type ConstructionPlayback } from './construction-playback';
-import { EntityShape } from './rendering';
 import { ProgressiveStroke } from './ProgressiveStroke';
 
-const paintOrder: Partial<Record<ConstructionVisualRole, number>> = {
-  COMPLETED_DRAFT: 0,
-  DEEPENED: 0,
-  ACTIVE_CONSTRUCT: 1,
-  ERASING: 2,
-  ACTIVE_DRAW: 3,
-};
-
-export function ConstructionDrawing({
-  source,
-  doc,
-  points,
+// 只有临时投影线和定位标记属于动画覆盖层。
+export function ConstructionOverlays({
   playback,
   box,
   scale,
-  highlighted,
+  activeGuideCount,
 }: {
-  source: GeometryDocument;
-  doc: GeometryDocument;
-  points: ReadonlyMap<string, Vec2>;
   playback: ConstructionPlayback;
   box: Bounds;
   scale: number;
-  highlighted: string[];
+  activeGuideCount: number;
 }) {
-  const { duration, state, playKey } = playback;
-  const entities = doc.entities
-    .flatMap((entity) => {
-      const visual = state.entities.get(entity.id);
-      if (!visual || paintOrder[visual.role] === undefined) return [];
-      if (visual.isGuide && !visual.isCenterline && !playback.guides && visual.role !== 'ERASING')
-        return [];
-      if (entity.kind === 'point' && !entity.labelVisible && visual.role === 'DEEPENED') return [];
-      return [{ entity, visual }];
-    })
-    .sort(
-      (a, b) =>
-        paintOrder[a.visual.role]! - paintOrder[b.visual.role]! || a.visual.order - b.visual.order,
-    );
-  const guides = [...state.temporaryGuides.entries()];
-  const pointsToShow = [...state.focusPoints.entries()].filter(
-    ([, point]) => point.role === 'ACTIVE_DRAW',
-  );
-  const activeGuideCount = Math.max(
-    0,
-    ...[...entities.map(({ visual }) => visual), ...guides.map(([, visual]) => visual)]
-      .filter(({ role }) => role === 'ACTIVE_CONSTRUCT')
-      .map(({ order }) => order + 1),
-  );
-  const activeDrawCount = Math.max(
-    0,
-    ...entities
-      .filter(({ visual }) => visual.role === 'ACTIVE_DRAW')
-      .map(({ visual }) => visual.order + 1),
-  );
-  const focused = new Set(highlighted);
+  const { duration, state } = playback;
+  const guides = [...state.temporaryGuides];
+  const pointsToShow = [...state.focusPoints].filter(([, point]) => point.role === 'ACTIVE_DRAW');
   return (
-    <g
-      key={playKey}
-      data-construction-play-key={playKey}
-      data-construction-paused={playback.paused}
-    >
+    <g aria-hidden="true" pointerEvents="none" data-construction-overlays>
       {playback.guides &&
         guides.map(([id, guide]) => {
           if (guide.role !== 'COMPLETED_DRAFT' && guide.role !== 'ACTIVE_CONSTRUCT') return null;
@@ -119,28 +72,6 @@ export function ConstructionDrawing({
             </g>
           );
         })}
-      {entities.map(({ entity, visual }) => {
-        const timing =
-          visual.role === 'ACTIVE_CONSTRUCT'
-            ? beatStyle('construct', visual.order, activeGuideCount, duration)
-            : visual.role === 'ACTIVE_DRAW'
-              ? beatStyle('draw', visual.order, activeDrawCount, duration)
-              : undefined;
-        return (
-          <EntityShape
-            key={entity.id}
-            document={doc}
-            sourceDocument={source}
-            entity={entity}
-            sheetPoints={points}
-            selected={false}
-            labels={entity.kind === 'point' && entity.labelVisible}
-            playback={{ visual, timing, linked: focused.has(entity.id) }}
-            box={box}
-            scale={scale}
-          />
-        );
-      })}
       {pointsToShow.map(([id, point]) => (
         <g
           key={id}
