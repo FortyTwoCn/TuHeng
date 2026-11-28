@@ -219,9 +219,9 @@ export function useViewportInteractions(props: ViewportProps) {
     setDragMeasure(undefined);
     setDragFields(undefined);
   }
-  const [oldCommand, setOldCommand] = useState(cad?.commandId);
-  if (oldCommand !== cad?.commandId) {
-    setOldCommand(cad?.commandId);
+  const [oldCommandPrefix, setOldCommandPrefix] = useState(cad?.prefix);
+  if (oldCommandPrefix !== cad?.prefix) {
+    setOldCommandPrefix(cad?.prefix);
     setCadCursor(null);
     setPreview([]);
     setPreviewDoc(null);

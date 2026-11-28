@@ -342,7 +342,7 @@ export function WorkspaceStatus({ cursorStatusRef, ...p }: StatusProps) {
               <WorkspaceAction
                 label="取消"
                 icon={X}
-                onClick={() => p.cad.send({ type: 'cancel' })}
+                onClick={() => p.cad.send({ type: 'cancel', exit: true })}
               />
               <WorkspaceAction
                 label="完成"

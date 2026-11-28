@@ -109,9 +109,13 @@ test('canvas keyboard commits a 40/20/30 mm chain with shared nodes, a world gri
   await input.setInputFiles({ name: 'saved.json', mimeType: 'application/json', buffer: bytes });
   await expect.poll(() => read(page)).toEqual(drawing);
 });
-test('right click completes, Escape discards a typed but uncommitted segment', async ({ page }) => {
+test('focused Escape breaks the chain, and right click, Space and Enter complete it', async ({
+  page,
+}) => {
   const editor = await open(page),
     svg = editor.locator('.geo-view > svg');
+  const lineButton = editor.locator('[data-command=segment]:visible');
+  const selectButton = editor.locator('[data-command=select]:visible');
   const a = await at(svg, -12, 20),
     b = await at(svg, 18, 15);
   await page.mouse.click(a.x, a.y);
@@ -119,18 +123,26 @@ test('right click completes, Escape discards a typed but uncommitted segment', a
   const saved = await read(page);
   expect(saved.entities.filter((e) => e.kind === 'segment')).toHaveLength(1);
   await page.keyboard.type('22');
+  await expect(editor.getByRole('textbox', { name: '动态长度' })).toBeFocused();
   await page.keyboard.press('Escape');
   expect((await read(page)).entities).toEqual(saved.entities);
   await expect(editor.getByRole('textbox', { name: '动态长度' })).toHaveCount(0);
-  await activateCommand(editor, 'segment');
+  await expect(lineButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(svg).toBeFocused();
   await page.mouse.click(a.x, a.y);
   await page.mouse.click(b.x, b.y, { button: 'right' });
-  await expect(editor.getByRole('textbox', { name: '动态长度' })).toHaveCount(0);
+  await expect(selectButton).toHaveAttribute('aria-pressed', 'true');
+  expect((await read(page)).entities).toEqual(saved.entities);
+  await page.keyboard.press('Space');
+  await expect(lineButton).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.click(a.x, a.y);
+  await page.keyboard.press('Space');
+  await expect(selectButton).toHaveAttribute('aria-pressed', 'true');
   expect((await read(page)).entities).toEqual(saved.entities);
   await activateCommand(editor, 'segment');
   await page.mouse.click(a.x, a.y);
   await page.keyboard.press('Enter');
-  await expect(editor.getByRole('textbox', { name: '动态长度' })).toHaveCount(0);
+  await expect(selectButton).toHaveAttribute('aria-pressed', 'true');
   expect((await read(page)).entities).toEqual(saved.entities);
 });
 test('a locked length uses the orthogonal pointer direction and skips an incompatible endpoint snap', async ({

@@ -35,7 +35,10 @@ export function useViewportCommandPointer(
 ) {
   const { document: doc, viewId } = props;
   const cad = props.cad.session;
-  const tracking = useDraftingTracking(doc, cad?.commandId, props.snapping && props.objectSnap);
+  // 连续落点和画线只新增几何，已有追踪基点可跨提交使用。
+  const trackingScope =
+    cad?.commandId === 'point' || cad?.commandId === 'segment' ? cad.id : cad?.prefix;
+  const tracking = useDraftingTracking(doc, trackingScope, props.snapping && props.objectSnap);
   const [cadCursor, setCadCursor] = useState<{ op: CadSession; pick: CadPick } | null>(null);
   const lastCadPointer = useRef<{
     prefix: string;
@@ -98,10 +101,7 @@ export function useViewportCommandPointer(
       threshold,
       paused || skippedPick === session.prefix,
       candidate ?? undefined,
-      tracking.active.filter(
-        ({ viewId }) =>
-          viewId === (session.points.length || session.ids.length ? session.viewId : frameId),
-      ),
+      tracking.active,
     );
     if (acquire) tracking.visit(result.pick.viewId, paused ? undefined : result.candidate);
     setCandidate(result.candidate ?? null);

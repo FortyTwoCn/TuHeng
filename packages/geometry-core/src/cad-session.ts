@@ -27,7 +27,8 @@ export type CadEvent =
   | { type: 'input'; value: string }
   | { type: 'stamp'; position: Vec2 }
   | { type: 'parameters'; values: Record<string, string> }
-  | { type: 'confirm' | 'back' | 'cancel' };
+  | { type: 'confirm' | 'back' }
+  | { type: 'cancel'; exit?: boolean };
 export interface CadStepResult {
   session: CadSession | null;
   document?: GeometryDocument;
@@ -78,12 +79,14 @@ export function startCadSession(
     (['objects', 'boundaries', 'radial'].includes(def.selection) && !ids.length)
       ? 'selection'
       : 'points';
+  const id = createId();
   return {
+    id,
     commandId: def.id,
     baseDocument: doc,
     viewId: selection[0]?.viewId ?? viewId,
     role,
-    prefix: createId(),
+    prefix: id,
     points: [],
     pointIds: [],
     ids,
@@ -359,7 +362,22 @@ export function cadStep(
   event: CadEvent,
 ): CadStepResult {
   const progress = (s: CadSession): CadStepResult => ({ session: s, message: cadPrompt(s) });
-  if (event.type === 'cancel') return { session: null, message: '操作已取消' };
+  if (event.type === 'cancel') {
+    if (
+      !event.exit &&
+      session.baseDocument === doc &&
+      isChain(session.commandId) &&
+      session.points.length
+    )
+      return {
+        session: {
+          ...startCadSession('segment', doc, session.viewId, session.role),
+          appearance: session.appearance,
+        },
+        message: '已结束当前线段，请指定新起点（再按 Esc 返回选择）',
+      };
+    return { session: null, message: '操作已取消' };
+  }
   if (session.baseDocument !== doc) return { session: null, message: '图纸已更新，请重新开始命令' };
   let current = session;
   try {

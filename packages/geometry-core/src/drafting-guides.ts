@@ -8,18 +8,21 @@ import {
   type Conic,
 } from './parametric-geometry';
 import { nearbyEntries, snapIndex, objectSnapEnabled } from './snap-geometry';
+import { localToSheet, sheetDeltaToLocal, sheetToLocal, viewTransform } from './sheet';
 import { segmentSatisfiesGuide, type SnapCandidate, type SnapOptions } from './snapping';
 
 export interface TrackingBase {
   position: Vec2;
   direction?: Vec2;
+  /** Coordinates are local to this view, or to the active view if omitted. */
+  viewId?: string;
 }
 
 export function trackingBase(
   doc: GeometryDocument,
   viewId: string,
   candidate: SnapCandidate,
-): TrackingBase {
+): TrackingBase & { viewId: string } {
   const line = snapIndex(doc, viewId).entries.find(
     (entry) =>
       entry.shape.kind === 'line' &&
@@ -35,36 +38,58 @@ export function trackingBase(
           ))),
   );
   return {
+    viewId,
     position: candidate.position,
     direction: line?.shape.kind === 'line' ? unit(line.shape.line.d) : undefined,
   };
 }
 
 type Guide = { point: Vec2; direction: Vec2 };
+type TrackingGuide = Guide & { label: string };
+type TrackingCandidate = SnapCandidate & { tracks: Guide[]; intersection: boolean };
 const trackLine = ({ point, direction }: Guide): BoundaryShape => ({
   kind: 'line',
   line: { a: point, d: direction, finite: false },
 });
 const close = (a: Vec2, b: Vec2) => distance(a, b) < 1e-7;
-function guideSet(bases: readonly TrackingBase[]) {
-  const directions = [
-    { x: 1, y: 0 },
-    { x: 0, y: 1 },
-  ];
-  const guides: Guide[] = [];
-  for (const base of bases)
-    for (const direction of base.direction ? [...directions, base.direction] : directions) {
+function guideSet(doc: GeometryDocument, viewId: string, bases: readonly TrackingBase[]) {
+  const anchors: Vec2[] = [];
+  const guides: TrackingGuide[] = [];
+  for (const base of bases) {
+    const source = base.viewId && base.viewId !== viewId ? base.viewId : undefined;
+    const point = source
+      ? sheetToLocal(doc, viewId, localToSheet(doc, source, base.position))
+      : base.position;
+    anchors.push(point);
+    const directions = [
+      { direction: { x: 1, y: 0 }, label: '水平追踪' },
+      { direction: { x: 0, y: 1 }, label: '垂直追踪' },
+    ];
+    if (base.direction) directions.push({ direction: base.direction, label: '延长线追踪' });
+    const frame = source ? viewTransform(doc, source) : undefined;
+    for (const { direction: delta, label } of directions) {
+      const direction = unit(
+        frame
+          ? sheetDeltaToLocal(
+              doc,
+              viewId,
+              add(scale(frame.xAxis, delta.x), scale(frame.yAxis, delta.y)),
+            )
+          : delta,
+      );
       if (
+        length(direction) < 1e-8 ||
         guides.some(
           (g) =>
             Math.abs(cross(direction, g.direction)) < 1e-8 &&
-            Math.abs(cross(sub(base.position, g.point), g.direction)) < 1e-8,
+            Math.abs(cross(sub(point, g.point), g.direction)) < 1e-8,
         )
       )
         continue;
-      guides.push({ point: base.position, direction });
+      guides.push({ point, direction, label });
     }
-  return guides;
+  }
+  return { anchors, guides };
 }
 
 export function trackingCandidate(
@@ -75,26 +100,40 @@ export function trackingCandidate(
   radius: number,
   options: SnapOptions,
   accepts: (q: Vec2) => boolean = () => true,
-): SnapCandidate | undefined {
-  const near = guideSet(bases).filter(
+): TrackingCandidate | undefined {
+  const { anchors, guides } = guideSet(doc, viewId, bases);
+  const near = guides.filter(
     (g) => Math.abs(cross(sub(pointer, g.point), g.direction)) <= radius,
   );
   if (!near.length) return;
-  let intersection: SnapCandidate | undefined, alignment: SnapCandidate | undefined;
-  const candidate = (p: Vec2, guides: Guide[], label: string, entities: string[] = []) => ({
-    kind: 'TRACKING' as const,
+  let intersection: TrackingCandidate | undefined, alignment: TrackingCandidate | undefined;
+  const candidate = (p: Vec2, tracks: Guide[], label: string): TrackingCandidate => ({
+    kind: 'TRACKING',
     position: p,
     positionOnly: true,
-    tracks: guides,
+    tracks,
     distance: distance(pointer, p),
-    entityIds: entities,
+    entityIds: [],
     label,
+    intersection: false,
   });
-  const crossPoint = (p: Vec2, guides: Guide[], entities?: string[]) => {
-    if (bases.some((base) => close(base.position, p)) || !accepts(p)) return;
-    const next = candidate(p, guides, '追踪交点', entities);
-    if (next.distance <= radius && (!intersection || next.distance < intersection.distance))
+  const crossPoint = (p: Vec2, tracks: Guide[], entry?: ReturnType<typeof nearbyEntries>[number]) => {
+    if (anchors.some((anchor) => close(anchor, p)) || !accepts(p)) return;
+    const reference = entry && !entry.entity ? entry.ref : undefined;
+    const label = entry && reference ? `追踪交点 · ${entry.name}` : '追踪交点';
+    const next = {
+      ...candidate(p, tracks, label),
+      intersection: true,
+      entityIds: entry?.entity ? [entry.entity.id] : [],
+      reference,
+    };
+    if (next.distance > radius) return;
+    if (intersection && close(intersection.position, p)) {
+      const winner = reference && !intersection.reference ? next : intersection;
+      intersection = { ...winner, tracks: [...new Set([...intersection.tracks, ...tracks])] };
+    } else if (!intersection || next.distance < intersection.distance) {
       intersection = next;
+    }
   };
   for (const [i, g] of near.entries()) {
     for (const h of near.slice(i + 1)) {
@@ -107,17 +146,12 @@ export function trackingCandidate(
     }
     const pos = add(g.point, scale(g.direction, dot(sub(pointer, g.point), g.direction)));
     if (!accepts(pos)) continue;
-    const name =
-      Math.abs(g.direction.y) < 1e-8
-        ? '水平追踪'
-        : Math.abs(g.direction.x) < 1e-8
-          ? '垂直追踪'
-          : '延长线追踪';
-    const next = candidate(pos, [g], name);
+    const next = candidate(pos, [g], g.label);
     if (!alignment || next.distance < alignment.distance) alignment = next;
   }
-  if (objectSnapEnabled(options, 'intersection'))
-    for (const entry of nearbyEntries(doc, viewId, pointer, radius, options))
+  const objects = objectSnapEnabled(options, 'intersection');
+  if (objects || options.axes !== false)
+    for (const entry of nearbyEntries(doc, viewId, pointer, radius, { ...options, objects }))
       for (const g of near) {
         if (
           entry.shape.kind === 'line' &&
@@ -126,8 +160,7 @@ export function trackingCandidate(
           continue;
         try {
           for (const hit of shapeIntersections(trackLine(g), entry.shape))
-            if (!entry.ray || hit.b >= -1e-8)
-              crossPoint(hit.position, [g], entry.entity ? [entry.entity.id] : []);
+            if (!entry.ray || hit.b >= -1e-8) crossPoint(hit.position, [g], entry);
         } catch {
           // Coincident surfaces have no isolated intersection.
         }
@@ -151,7 +184,8 @@ export function combinedLineCandidate(
     (c.guide || c.kind === 'AXIS_DIRECTION') && !close(c.position, origin),
   );
   if (!rays.length) return;
-  const guides = guideSet(bases).filter(
+  const { anchors, guides } = guideSet(doc, viewId, bases);
+  const near = guides.filter(
     (g) => Math.abs(cross(sub(pointer, g.point), g.direction)) <= radius,
   );
   const span = distance(pointer, origin);
@@ -174,10 +208,10 @@ export function combinedLineCandidate(
     const connected = ray.guide?.kind === 'perpendicular' && close(ray.guide.contact, origin)
       ? segments.find(({ id }) => id === ray.guide?.sourceId)
       : undefined;
-    const anchors = [origin, ...bases.map((b) => b.position)];
-    if (connected) anchors.push(connected.start, connected.end);
+    const lengthAnchors = [origin, ...anchors];
+    if (connected) lengthAnchors.push(connected.start, connected.end);
     const lengths = segments.filter((s) => Math.abs(s.length - span) <= radius &&
-      anchors.some((a) => close(a, s.start) || close(a, s.end)),
+      lengthAnchors.some((a) => close(a, s.start) || close(a, s.end)),
     );
     function offer(end: Vec2, tracks: Guide[]) {
       const gap = distance(end, pointer);
@@ -203,7 +237,7 @@ export function combinedLineCandidate(
         equalLength: reference ? { sourceId: reference.id, length: reference.length } : undefined,
       };
     }
-    for (const g of guides) {
+    for (const g of near) {
       const det = cross(along, g.direction);
       if (Math.abs(det) > 1e-8)
         offer(add(origin, scale(along, cross(sub(g.point, origin), g.direction) / det)), [g]);

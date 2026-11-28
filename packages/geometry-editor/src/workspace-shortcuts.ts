@@ -66,6 +66,7 @@ export function workspaceShortcuts({
       (e.key === 'Escape' || (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)))
     ) {
       e.preventDefault();
+      if (e.key === 'Escape' && e.repeat) return;
       cad.send({ type: e.key === 'Escape' ? 'cancel' : 'confirm' });
       return;
     }

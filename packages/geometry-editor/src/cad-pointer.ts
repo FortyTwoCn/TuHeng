@@ -28,6 +28,18 @@ export type CadPick = {
   snap?: SnapCandidate;
 };
 
+const pointFeatures: SnapCandidate['kind'][] = [
+  'COINCIDENT',
+  'ENDPOINT',
+  'ORIGIN',
+  'INTERSECTION',
+  'CENTER',
+  'MIDPOINT',
+  'QUADRANT',
+];
+const isWeakSnap = (candidate?: SnapCandidate) =>
+  !candidate || ['AXIS', 'AXIS_DIRECTION', 'GRID'].includes(candidate.kind);
+
 /** 显式长度可以沿同一方向移动终点。保留相切预览时，有限线段必须仍覆盖切点。 */
 export function lineSnapAt(pick: CadPick, anchor: Vec2, end: Vec2): SnapCandidate | undefined {
   const snap = pick.snap;
@@ -54,7 +66,23 @@ export function lineSnapAt(pick: CadPick, anchor: Vec2, end: Vec2): SnapCandidat
 }
 export function locateCadPoint(
   session: CadSession,
-  controls: EditorControls,
+  controls: Pick<
+    EditorControls,
+    | 'document'
+    | 'ortho'
+    | 'snapping'
+    | 'skipSnap'
+    | 'direction'
+    | 'tracking'
+    | 'objectSnap'
+    | 'objectTypes'
+    | 'gridSpacing'
+    | 'axes'
+    | 'axesSnap'
+    | 'gridSnap'
+    | 'projectionSnap'
+    | 'hiddenLayers'
+  >,
   sheet: Vec2,
   frameId: string,
   hits: Hit[],
@@ -116,12 +144,12 @@ export function locateCadPoint(
       onAxis(c.position),
     );
     candidate = ordinary[0];
-    const weak = !candidate || ['AXIS_DIRECTION', 'GRID'].includes(candidate.kind);
     const radius = threshold / scale;
-    if (straightCommand && !last && (!candidate || weak || candidate.kind === 'FOOT')) {
+    if (straightCommand && !last && (isWeakSnap(candidate) || candidate?.kind === 'FOOT')) {
       const tangent = commonTangentCandidates(doc, frame, position, radius, options)[0];
       if (tangent) candidate = tangent;
     }
+    let combined: SnapCandidate | undefined;
     const paired = lineRelations ? session.pointSnaps?.[0]?.pairedTangent : undefined;
     if (
       paired &&
@@ -150,7 +178,7 @@ export function locateCadPoint(
         },
       };
     } else if (session.commandId === 'segment' && last && options.direction && options.objects) {
-      const combined = combinedLineCandidate(
+      combined = combinedLineCandidate(
         doc,
         frame,
         last,
@@ -161,40 +189,45 @@ export function locateCadPoint(
         options,
         onAxis,
       );
-      if (combined) {
-        const precise =
-          candidate &&
-          candidate.distance <= radius * 0.4 &&
-          [
-            'COINCIDENT',
-            'ENDPOINT',
-            'CENTER',
-            'ORIGIN',
-            'INTERSECTION',
-            'MIDPOINT',
-            'QUADRANT',
-          ].includes(candidate.kind);
-        if (!precise) candidate = combined;
-        else if (candidate && distance(candidate.position, combined.position) < 1e-7) {
+    }
+    if (session.phase === 'points') {
+      const bases =
+        last && straightCommand && (controls.direction || ortho)
+          ? [...tracked, { position: last }]
+          : tracked;
+      const tracking = controls.tracking
+        ? trackingCandidate(doc, frame, position, bases, radius, options, onAxis)
+        : undefined;
+      const guided = tracking?.intersection ? tracking : combined;
+      if (guided) {
+        const featureRadius = Math.min(4 / scale, radius * 0.4);
+        const precise = ordinary.find(
+          (snap) => snap.distance <= featureRadius && pointFeatures.includes(snap.kind),
+        );
+        if (precise && distance(precise.position, guided.position) >= 1e-7) {
+          candidate = precise;
+        } else {
+          const aligned = [combined, candidate].find(
+            (snap) =>
+              snap &&
+              distance(snap.position, guided.position) < 1e-7 &&
+              (snap.guide || snap.equalLength),
+          );
           candidate = {
-            ...candidate,
-            guide: combined.guide ?? candidate.guide,
-            tracks: combined.tracks,
-            equalLength: combined.equalLength,
+            ...(precise ?? guided),
+            guide: aligned?.guide ?? precise?.guide ?? guided.guide,
+            tracks: guided.tracks,
+            equalLength: aligned?.equalLength ?? guided.equalLength,
           };
         }
+      } else if (isWeakSnap(candidate)) {
+        candidate =
+          tracking ??
+          nearestDraftingCandidate(doc, frame, position, radius, options, onAxis) ??
+          candidate;
+      } else if (tracking && candidate && distance(tracking.position, candidate.position) < 1e-7) {
+        candidate = { ...candidate, tracks: tracking.tracks };
       }
-    }
-    if (
-      (!candidate || ['AXIS_DIRECTION', 'GRID'].includes(candidate.kind)) &&
-      session.phase === 'points'
-    ) {
-      candidate =
-        (controls.tracking
-          ? trackingCandidate(doc, frame, position, tracked, radius, options, onAxis)
-          : undefined) ??
-        nearestDraftingCandidate(doc, frame, position, radius, options, onAxis) ??
-        candidate;
     }
   }
   const angularBody =

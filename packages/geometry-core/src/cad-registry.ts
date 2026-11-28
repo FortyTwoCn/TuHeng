@@ -280,6 +280,7 @@ export function cadDefinition(command: string) {
   return found;
 }
 export interface CadSession {
+  id: string;
   commandId: CadCommandId;
   viewId: string;
   role: 'student' | 'teacher';

@@ -2,6 +2,7 @@ import type { Ref } from 'react';
 import type { GeometryDocument, Vec2 } from '@tuheng/contracts';
 import {
   cadGrips,
+  distance,
   localToSheet,
   point,
   type Bounds,
@@ -85,6 +86,7 @@ export function ViewportScene({
   const relationEnd = lineEnd ?? cursor?.position;
   // SVG 的 Y 轴向下。这里统一由局部坐标转图纸坐标，再映射到 SVG。
   const cursorSheet = cursor && localToSheet(doc, cursor.viewId, cursor.position);
+  const snapSheet = candidate ? localToSheet(doc, viewId, candidate.position) : null;
   const lineSheet = cad && lineEnd && localToSheet(doc, cad.viewId, lineEnd);
   const leaf = measurementDocument?.entities.at(-1);
   const measure =
@@ -120,7 +122,7 @@ export function ViewportScene({
         scale={scale}
         preview={cad ? [] : path}
         steps={points}
-        candidate={candidate ? localToSheet(doc, viewId, candidate.position) : null}
+        candidate={snapSheet}
         axisDraft={axis && ['side', 'confirm'].includes(axis.phase) ? axis.spec : null}
       />
       {grips.map((grip) => {
@@ -220,17 +222,26 @@ export function ViewportScene({
           );
         })}
       {canGuide &&
-        cursorSheet &&
-        candidate?.tracks?.map(({ point, direction }) => {
+        snapSheet &&
+        candidate?.tracks?.map(({ point, direction }, _, tracks) => {
           const from = localToSheet(doc, viewId, point);
+          // 橡皮筋已覆盖起笔方向，交点处只需补画其他基点的追踪线。
+          if (
+            tracks.length > 1 &&
+            lineSheet &&
+            points[0] &&
+            distance(from, points[0]) < 1e-7 &&
+            distance(snapSheet, lineSheet) < 1e-7
+          )
+            return null;
           return (
             <line
               key={`${point.x},${point.y},${direction.x},${direction.y}`}
               data-transient="tracking"
               x1={from.x}
               y1={-from.y}
-              x2={cursorSheet.x}
-              y2={-cursorSheet.y}
+              x2={snapSheet.x}
+              y2={-snapSheet.y}
               pointerEvents="none"
               stroke="var(--cad-relation)"
               strokeWidth={1 / scale}

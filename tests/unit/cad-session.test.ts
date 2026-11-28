@@ -35,6 +35,54 @@ describe('CAD local-mm command transactions', () => {
     expect(point(c.document!, lines[1].endPoint)).toEqual({ x: 23, y: 14 });
     expect(original.entities).toHaveLength(0);
   });
+  it('breaks the segment chain, resets drafts and accepts the next first point in another view', () => {
+    const started = startCadSession('segment', original, 'view-0', 'student');
+    const first = cadStep(started, original, {
+      type: 'point',
+      position: { x: 20, y: 25 },
+      rawPosition: { x: 20.5, y: 25 },
+      snap: { kind: 'GRID', position: { x: 20, y: 25 }, entityIds: [], distance: 0.5 },
+    }).session!;
+    expect(first.rawPoints).toHaveLength(1);
+    expect(first.pointSnaps).toHaveLength(1);
+    expect(cadStep(first, original, { type: 'cancel' }).session).toMatchObject({ points: [] });
+
+    const saved = cadStep(first, original, { type: 'input', value: '40,25' });
+    const doc = saved.document!;
+    const drafted = cadStep(saved.session!, doc, {
+      type: 'parameters',
+      values: { length: '10', angle: '45' },
+    }).session!;
+    const stopped = cadStep(drafted, doc, { type: 'cancel' });
+    expect(stopped.document).toBeUndefined();
+    expect(stopped.message).toContain('请指定新起点');
+    const waiting = stopped.session!;
+    expect(waiting).toMatchObject({
+      commandId: 'segment',
+      phase: 'points',
+      points: [],
+      pointIds: [],
+      parameters: { length: '', angle: '0' },
+    });
+    expect(waiting.baseDocument).toBe(doc);
+    expect(waiting.prefix).not.toBe(drafted.prefix);
+    expect(waiting.rawPoints).toBeUndefined();
+    expect(waiting.pointSnaps).toBeUndefined();
+    expect(cadPreview(waiting, doc)).toBeNull();
+    expect(cadStep(waiting, doc, { type: 'cancel' }).session).toBeNull();
+
+    const next = cadStep(waiting, doc, {
+      type: 'point',
+      viewId: 'view-1',
+      position: { x: 20, y: -32 },
+    }).session!;
+    expect(next.viewId).toBe('view-1');
+    const resumed = cadStep(next, doc, { type: 'input', value: '34,-32' }).document!;
+    const segments = resumed.entities.filter((e) => e.kind === 'segment');
+    expect(segments.map((segment) => segment.viewId)).toEqual(['view-0', 'view-1']);
+    expect(segments[0]).toEqual(doc.entities.at(-1));
+    expect(segments[1].startPoint).not.toBe(segments[0].endPoint);
+  });
   it('rejects invalid coordinate expressions and drops a stale command', () => {
     expect(() => parseCadCoordinate('@20<alert(0)', { x: 0, y: 0 })).toThrow();
     const s = startCadSession('circle', original, 'view-0', 'student');

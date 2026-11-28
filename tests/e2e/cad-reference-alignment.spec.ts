@@ -77,6 +77,94 @@ test('acquires two independent tracking bases and commits their exact crossing t
   expect(after.entities.slice(0, d.entities.length)).toEqual(d.entities);
 });
 
+test('tracks from a V endpoint onto X and into H after committing the axis point', async ({
+  page,
+}) => {
+  const { e, svg, pick, hover, read } = await fixture(page, createDocument('VHW_PROJECTION'));
+  await activateCommand(e, 'segment');
+  await page.keyboard.press('F8');
+  await pick(-52, 39);
+  await pick(-24, 39);
+  const front = await read();
+  const segment = front.entities.find((entity) => entity.kind === 'segment')!;
+  expect(segment.viewId).toBe('view-0');
+  const endpoint = point(front, segment.endPoint);
+  expect(endpoint.y).toBe(point(front, segment.startPoint).y);
+  const source = localToSheet(front, segment.viewId, endpoint);
+
+  await activateCommand(e, 'point');
+  await page.keyboard.press('F11');
+  await hover(source.x, source.y);
+  const base = svg.locator('[data-transient=tracking-base]');
+  await expect(base).toHaveCount(1);
+  const guide = svg.locator('[data-transient=tracking]');
+  const onAxis = await hover(source.x + 0.7, 0.8);
+  const feedback = e.locator('[data-snap-feedback=true]');
+  await expect(feedback).toContainText('追踪交点 · X 轴');
+  await expect(guide).toHaveCSS('visibility', 'visible');
+  await expect(guide).toHaveAttribute('stroke-dasharray', /\S/);
+  await expect(guide).toHaveAttribute('x1', String(source.x));
+  await expect(guide).toHaveAttribute('y1', String(-source.y));
+  await expect(guide).toHaveAttribute('x2', String(source.x));
+  await expect(guide).toHaveAttribute('y2', '0');
+  await page.mouse.click(onAxis.x, onAxis.y);
+  expect((await read()).entities.at(-1)).toMatchObject({
+    kind: 'point',
+    viewId: 'view-0',
+    position: v(endpoint.x, 0),
+  });
+
+  const inTop = await hover(source.x + 0.7, -28);
+  await expect(base).toHaveCount(1);
+  await expect(feedback).toContainText('垂直追踪');
+  await expect(guide).toHaveCSS('visibility', 'visible');
+  await expect(guide).toHaveAttribute('x1', String(source.x));
+  await expect(guide).toHaveAttribute('y1', String(-source.y));
+  await expect(guide).toHaveAttribute('x2', String(source.x));
+  expect(Number(await guide.getAttribute('y2'))).toBeCloseTo(28, 0);
+  await page.mouse.click(inTop.x, inTop.y);
+  const after = await read();
+  expect(after.entities.at(-1)).toMatchObject({
+    kind: 'point',
+    viewId: 'view-1',
+    position: { x: endpoint.x, y: expect.closeTo(-28, 0) },
+  });
+});
+
+test('Escape breaks a V chain and lets the active line tool start an independent H segment', async ({
+  page,
+}) => {
+  const { e, svg, pick, hover, read } = await fixture(page, createDocument('VHW_PROJECTION'));
+  const lineButton = e.locator('[data-command=segment]:visible');
+  const selectButton = e.locator('[data-command=select]:visible');
+  await activateCommand(e, 'segment');
+  await pick(-52, 33);
+  await pick(-24, 39);
+  const first = await read();
+  await hover(-16, 23);
+  await expect(svg.locator('[data-transient=rubber-band]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(lineButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(e.getByRole('region', { name: 'CAD 命令' })).toContainText('请指定新起点');
+  await expect(svg.locator('[data-transient=rubber-band]')).toHaveCount(0);
+  expect(await read()).toEqual(first);
+
+  await pick(-43, -18);
+  await pick(-28, -36);
+  const after = await read();
+  const segments = after.entities.filter((entity) => entity.kind === 'segment');
+  expect(segments.map((segment) => segment.viewId)).toEqual(['view-0', 'view-1']);
+  expect(segments[0]).toEqual(first.entities.at(-1));
+  expect(segments[1].startPoint).not.toBe(segments[0].endPoint);
+  expect(point(after, segments[1].startPoint).y).toBeCloseTo(-18, 0);
+
+  await page.keyboard.press('Escape');
+  await expect(lineButton).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+  await expect(selectButton).toHaveAttribute('aria-pressed', 'true');
+  expect(await read()).toEqual(after);
+});
+
 test('uses the fixed 45-degree miter line for an exact intersection on the unfolded sheet', async ({
   page,
 }) => {

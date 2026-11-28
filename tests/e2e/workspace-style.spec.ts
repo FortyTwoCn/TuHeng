@@ -88,6 +88,7 @@ test('toolbar applies all three style fields to new geometry, one object and a m
   await clickPoint(page, svg, { x: 22, y: -23 });
   await clickPoint(page, svg, { x: 60, y: -23 });
   await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
   const created = await read(page),
     fresh = created.entities.at(-1)!;
   expect(fresh).toMatchObject({
