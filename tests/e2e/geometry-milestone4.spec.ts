@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { exportCadPackage, exportDocumentToDxf, loadGeometryDocument } from '@tuheng/geometry-core';
 import { prepareLogin } from './identity-login';
+import { captureCadReconstruction } from './cad-reconstruction-evidence';
 
 const fixture = readFileSync('docs/geometry-examples/construction/THREE-VIEW-CONSTRUCTION.json');
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
@@ -35,6 +36,7 @@ test('讲解模块随工作区模式显示，可单独收起并保持主画布�
   await expect(editor).toHaveAttribute('data-workspace-mode', 'drafting');
   for (const pane of [narration, timeline, solid]) await expect(pane).toHaveCount(0);
   await expect(button(page, '直线')).toBeVisible();
+  await captureCadReconstruction(page, '02-drafting-mode');
   const drawing = main(page);
   await drawing.hover();
   await page.mouse.wheel(0, -170);
@@ -49,6 +51,7 @@ test('讲解模块随工作区模式显示，可单独收起并保持主画布�
   for (const pane of [narration, timeline, solid]) await expect(pane).toBeVisible();
   await expect(drawing.locator('[data-viewport-grid]')).toBeVisible();
   await expect(button(page, '直线')).toHaveCount(0);
+  await captureCadReconstruction(page, '03-teaching-mode');
   const after = await camera();
   expect(after.x).toBeCloseTo(before.x, 3);
   expect(after.y).toBeCloseTo(before.y, 3);
@@ -83,6 +86,7 @@ test('参考图纸分屏、浮窗、属性、跨类型复制和撤销', async ({
   await expect(reference(page)).toHaveAttribute('data-placement', 'docked');
   await expect(referenceView).toBeVisible();
   await expect(referenceView.locator('[data-entity-id="v-outline-1"]')).toHaveCount(1);
+  await captureCadReconstruction(page, '04-reference-docked');
   const divider = page.getByRole('separator', { name: '调整参考图纸分屏宽度' });
   const split = (await divider.boundingBox())!;
   await page.mouse.move(split.x + split.width / 2, split.y + split.height / 2);
@@ -116,8 +120,10 @@ test('参考图纸分屏、浮窗、属性、跨类型复制和撤销', async ({
   await page.mouse.move(resize.x + 62, resize.y + 38, { steps: 4 });
   await page.mouse.up();
   expect((await reference(page).boundingBox())!.width).toBeGreaterThan(beforeSize.width + 40);
+  await captureCadReconstruction(page, '05-reference-floating');
   await button(page, '最小化参考图纸').click();
   await expect(reference(page)).toBeHidden();
+  await captureCadReconstruction(page, '06-reference-minimized');
   await button(page, '参考图纸 · 点击展开').click();
   await expect(reference(page)).toHaveAttribute('data-placement', 'floating');
   await button(page, '停靠分屏').click();
@@ -139,6 +145,7 @@ test('参考图纸分屏、浮窗、属性、跨类型复制和撤销', async ({
   await expect(props.getByText('起点坐标')).toBeVisible();
   await expect(props.getByText('终点坐标')).toBeVisible();
   await expect(props.getByText(midpoint.length + ' mm')).toBeVisible();
+  await captureCadReconstruction(page, '07-reference-properties');
   const adjacent = await referenceView
     .locator('[data-entity-id="v-outline-4"] > line')
     .evaluate((line: SVGLineElement) => {
@@ -159,6 +166,7 @@ test('参考图纸分屏、浮窗、属性、跨类型复制和撤销', async ({
   await expect(drawing.locator('[data-entity-id]')).toHaveCount(empty + 5);
   const copied = drawing.locator('[data-kind="segment"][data-selected="true"] > line');
   await expect(copied).toHaveCount(2);
+  await captureCadReconstruction(page, '08-reference-copied');
   expect(
     await copied.first().evaluate((line: SVGLineElement) => line.getTotalLength()),
   ).toBeCloseTo(midpoint.length, 5);

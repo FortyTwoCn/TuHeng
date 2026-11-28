@@ -9,7 +9,12 @@ const epsilon = 1e-9;
 
 export type ContourEdge = { from: Vec2; to: Vec2; entityId: string };
 export type DrawingContour = { edges: ContourEdge[]; area: number; hole: boolean };
-export type ContourProblem = { entityIds: string[]; points: Vec2[]; detail: string };
+export type ContourProblem = {
+  entityIds: string[];
+  points: Vec2[];
+  detail: string;
+  openEnds?: true;
+};
 export type ContourPath = { entity: GeometryEntity; points: Vec2[] };
 
 export function isContourEntity(entity: GeometryEntity) {
@@ -70,7 +75,7 @@ type Segment = ContourEdge & {
   maxY: number;
   cuts: number[];
 };
-type HalfEdge = { from: number; to: number; reverse: number; entityId: string; angle: number };
+type HalfEdge = { from: number; to: number; reverse: number; entityIds: string[]; angle: number };
 const mix = (a: Vec2, b: Vec2, t: number): Vec2 => ({
   x: a.x + (b.x - a.x) * t,
   y: a.y + (b.y - a.y) * t,
@@ -78,7 +83,7 @@ const mix = (a: Vec2, b: Vec2, t: number): Vec2 => ({
 const inSegment = (t: number) => t >= -epsilon && t <= 1 + epsilon;
 const interior = (t: number) => t > epsilon && t < 1 - epsilon;
 
-function splitAtIntersections(segments: Segment[]) {
+function splitAtIntersections(segments: Segment[], allowOverlap = false) {
   const problems: ContourProblem[] = [];
   const problemKeys = new Set<string>();
   const mark = (a: Segment, b: Segment, point: Vec2, detail: string) => {
@@ -91,12 +96,14 @@ function splitAtIntersections(segments: Segment[]) {
   };
   segments.sort((a, b) => a.minX - b.minX);
   let comparisons = 0;
+  let sweep = 0;
   for (const [i, a] of segments.entries()) {
     const ad = sub(a.to, a.from);
     for (let j = i + 1; j < segments.length && segments[j].minX <= a.maxX + CONTOUR_JOIN_MM; j++) {
-      if (++comparisons > 750000) throw Error('轮廓交点过密，已达到审核计算上限');
+      if (++sweep > 6_000_000) throw Error('轮廓交点过密，已达到审核计算上限');
       const b = segments[j];
       if (b.maxY < a.minY - CONTOUR_JOIN_MM || b.minY > a.maxY + CONTOUR_JOIN_MM) continue;
+      if (++comparisons > 750000) throw Error('轮廓交点过密，已达到审核计算上限');
       const bd = sub(b.to, b.from);
       const ab = sub(b.from, a.from);
       const determinant = cross(ad, bd);
@@ -108,8 +115,15 @@ function splitAtIntersections(segments: Segment[]) {
         const u = t + dot(bd, ad) / (lenA * lenA);
         const low = Math.max(0, Math.min(t, u));
         const high = Math.min(1, Math.max(t, u));
-        if ((high - low) * lenA > CONTOUR_JOIN_MM)
+        if ((high - low) * lenA > CONTOUR_JOIN_MM && !allowOverlap)
           mark(a, b, mix(a.from, a.to, (low + high) / 2), '发现重复或部分重叠的轮廓');
+        if (allowOverlap && high >= low - epsilon) {
+          for (const cut of [t, u]) if (interior(cut)) a.cuts.push(cut);
+          const ba = sub(a.from, b.from);
+          const v = dot(ba, bd) / (lenB * lenB);
+          for (const cut of [v, v + dot(ad, bd) / (lenB * lenB)])
+            if (interior(cut)) b.cuts.push(cut);
+        }
         continue;
       }
       const t = cross(ab, bd) / determinant;
@@ -129,7 +143,7 @@ function contourGraph(segments: Segment[]) {
   const outgoing: number[][] = [];
   const buckets = new Map<string, number[]>();
   const halfEdges: HalfEdge[] = [];
-  const edgeKeys = new Set<string>();
+  const edgeKeys = new Map<string, string[]>();
   const vertex = (p: Vec2) => {
     const x = Math.floor(p.x / CONTOUR_JOIN_MM),
       y = Math.floor(p.y / CONTOUR_JOIN_MM);
@@ -153,18 +167,22 @@ function contourGraph(segments: Segment[]) {
       const to = vertex(mix(segment.from, segment.to, t));
       if (to === from) continue;
       const key = `${Math.min(from, to)},${Math.max(from, to)}`;
-      if (!edgeKeys.has(key)) {
-        edgeKeys.add(key);
+      const existing = edgeKeys.get(key);
+      if (existing) {
+        if (!existing.includes(segment.entityId)) existing.push(segment.entityId);
+      } else {
+        const entityIds = [segment.entityId];
+        edgeKeys.set(key, entityIds);
         if (halfEdges.length >= CONTOUR_SEGMENT_LIMIT * 4) throw Error('分面后的轮廓边数超过上限');
         const d = sub(points[to], points[from]),
           i = halfEdges.length;
         halfEdges.push(
-          { from, to, reverse: i + 1, entityId: segment.entityId, angle: Math.atan2(d.y, d.x) },
+          { from, to, reverse: i + 1, entityIds, angle: Math.atan2(d.y, d.x) },
           {
             from: to,
             to: from,
             reverse: i,
-            entityId: segment.entityId,
+            entityIds,
             angle: Math.atan2(-d.y, -d.x),
           },
         );
@@ -178,7 +196,10 @@ function contourGraph(segments: Segment[]) {
   return { points, outgoing, halfEdges };
 }
 
-function exteriorLoops({ points, outgoing, halfEdges }: ReturnType<typeof contourGraph>) {
+function faceLoops(
+  { points, outgoing, halfEdges }: ReturnType<typeof contourGraph>,
+  orientation: 1 | -1,
+) {
   const loops: { edges: ContourEdge[]; area: number; pinched: boolean }[] = [];
   const visited = new Uint8Array(halfEdges.length);
   for (let start = 0; start < halfEdges.length; start++) {
@@ -201,14 +222,14 @@ function exteriorLoops({ points, outgoing, halfEdges }: ReturnType<typeof contou
         (sum, { from, to }) => sum + cross(sub(points[from], origin), sub(points[to], origin)),
         0,
       ) / 2;
-    if (area < -epsilon)
+    if (area * orientation > epsilon)
       loops.push({
-        edges: outer.map(({ from, to, entityId }) => ({
+        edges: outer.map(({ from, to, entityIds }) => ({
           from: points[from],
           to: points[to],
-          entityId,
+          entityId: entityIds[0],
         })),
-        area: -area,
+        area: area * orientation,
         pinched:
           new Set(outer.map(({ from }) => from)).size !== outer.length ||
           outer.some(({ to }, i) => to !== outer[(i + 1) % outer.length].from),
@@ -217,31 +238,64 @@ function exteriorLoops({ points, outgoing, halfEdges }: ReturnType<typeof contou
   return loops;
 }
 
-export function extractDrawingContours(paths: readonly ContourPath[], tolerance: number) {
+export function pathEdges(paths: readonly ContourPath[]): ContourEdge[] {
+  return paths.flatMap(({ entity, points }) =>
+    points.slice(1).map((to, i) => ({
+      from: points[i],
+      to: i === points.length - 2 && distance(points[0], to) <= epsilon ? points[0] : to,
+      entityId: entity.id,
+    })),
+  );
+}
+
+function prepareSegments(edges: readonly ContourEdge[]) {
   const segments: Segment[] = [];
-  for (const { entity, points } of paths) {
-    for (let i = 1; i < points.length; i++) {
-      const from = points[i - 1],
-        to = points[i];
-      if (distance(from, to) <= CONTOUR_JOIN_MM) continue;
-      if (segments.length >= CONTOUR_SEGMENT_LIMIT) throw Error('轮廓采样边数超过审核上限');
-      segments.push({
-        from,
-        to,
-        entityId: entity.id,
-        cuts: [0, 1],
-        minX: Math.min(from.x, to.x),
-        maxX: Math.max(from.x, to.x),
-        minY: Math.min(from.y, to.y),
-        maxY: Math.max(from.y, to.y),
-      });
-    }
+  for (const { from, to, entityId } of edges) {
+    if (distance(from, to) <= CONTOUR_JOIN_MM) continue;
+    if (segments.length >= CONTOUR_SEGMENT_LIMIT) throw Error('轮廓采样边数超过审核上限');
+    segments.push({
+      from,
+      to,
+      entityId,
+      cuts: [0, 1],
+      minX: Math.min(from.x, to.x),
+      maxX: Math.max(from.x, to.x),
+      minY: Math.min(from.y, to.y),
+      maxY: Math.max(from.y, to.y),
+    });
   }
+  return segments;
+}
+
+export type PlanarEdge = { from: Vec2; to: Vec2; entityIds: string[] };
+export type PlanarFace = { edges: ContourEdge[]; area: number };
+
+/** The face with the smallest containing loop owns the point, including nested loops. */
+export function planarFaceAt(faces: readonly PlanarFace[], point: Vec2) {
+  return faces.findIndex(({ edges }) => containsContourPoint(edges, point));
+}
+
+export function subdividePlanarEdges(edges: readonly ContourEdge[]) {
+  const segments = prepareSegments(edges);
+  splitAtIntersections(segments, true);
+  const graph = contourGraph(segments);
+  return {
+    edges: graph.halfEdges.flatMap(({ from, to, entityIds }, index): PlanarEdge[] =>
+      index % 2 ? [] : [{ from: graph.points[from], to: graph.points[to], entityIds }],
+    ),
+    faces: faceLoops(graph, 1)
+      .filter(({ pinched }) => !pinched)
+      .sort((a, b) => a.area - b.area),
+  };
+}
+
+export function extractDrawingContours(paths: readonly ContourPath[], tolerance: number) {
+  const segments = prepareSegments(pathEdges(paths));
   const problems = splitAtIntersections(segments);
   const graph = contourGraph(segments);
   const ends = graph.outgoing.flatMap((list, index) =>
     list.length === 1
-      ? [{ position: graph.points[index], entityId: graph.halfEdges[list[0]].entityId }]
+      ? [{ position: graph.points[index], entityId: graph.halfEdges[list[0]].entityIds[0] }]
       : [],
   );
   if (ends.length) {
@@ -250,6 +304,7 @@ export function extractDrawingContours(paths: readonly ContourPath[], tolerance:
       for (const other of ends)
         if (end !== other) gap = Math.min(gap, distance(end.position, other.position));
     problems.push({
+      openEnds: true,
       entityIds: [...new Set(ends.map(({ entityId }) => entityId))],
       points: ends.slice(0, 24).map(({ position }) => position),
       detail:
@@ -258,7 +313,7 @@ export function extractDrawingContours(paths: readonly ContourPath[], tolerance:
           : `发现 ${ends.length} 个悬空端点，请将轮廓端点闭合`,
     });
   }
-  const loops = exteriorLoops(graph);
+  const loops = faceLoops(graph, -1);
   const contours: DrawingContour[] = [];
   for (const loop of loops) {
     if (loop.pinched) {

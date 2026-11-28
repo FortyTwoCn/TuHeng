@@ -1,19 +1,9 @@
-import type { SolidPanel, SolidPoint } from './solid-panels';
+import type { SolidPanel } from './solid-panels';
+import { cross3 as cross, dot3 as dot, sub3 as subtract, type SolidPoint } from './spatial-math';
 
 export type SolidTriangle = [number, number, number];
 const weldDistance = 1e-7;
 const vertexLimit = 30000;
-const subtract = (a: SolidPoint, b: SolidPoint): SolidPoint => [
-  a[0] - b[0],
-  a[1] - b[1],
-  a[2] - b[2],
-];
-const dot = (a: SolidPoint, b: SolidPoint) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a: SolidPoint, b: SolidPoint): SolidPoint => [
-  a[1] * b[2] - a[2] * b[1],
-  a[2] * b[0] - a[0] * b[2],
-  a[0] * b[1] - a[1] * b[0],
-];
 
 export function meshSolidPanels(panels: SolidPanel[]) {
   const vertices: SolidPoint[] = [];
@@ -95,7 +85,20 @@ export function meshSolidPanels(panels: SolidPanel[]) {
       id,
       ...splitEdge(vertices[id], vertices[ring[(i + 1) % ring.length]]),
     ]);
-    if (split.length === ring.length) {
+    const needsCenter =
+      split.length !== ring.length ||
+      ring
+        .slice(2)
+        .some(
+          (id, i) =>
+            Math.hypot(
+              ...cross(
+                subtract(vertices[ring[i + 1]], vertices[ring[0]]),
+                subtract(vertices[id], vertices[ring[0]]),
+              ),
+            ) < 1e-13,
+        );
+    if (!needsCenter) {
       for (let i = 2; i < ring.length; i++) addTriangle([ring[0], ring[i - 1], ring[i]], source);
     } else {
       // Preserve all shared boundary vertices, including T junctions between clipped panels.
@@ -126,6 +129,30 @@ export function meshSolidPanels(panels: SolidPanel[]) {
     if (dot(normals[faces[0]], normals[faces[1]]) < 0.95)
       edges.push([vertices[from], vertices[to]]);
   }
+  const incident = Array.from({ length: vertices.length }, () => 0);
+  for (const triangle of triangles) for (const id of triangle) incident[id]++;
+  const visited = new Uint8Array(vertices.length);
+  for (const [face, triangle] of triangles.entries())
+    for (const id of triangle) {
+      if (visited[id]) continue;
+      visited[id] = 1;
+      let from = face,
+        current = face,
+        count = 0;
+      do {
+        const next = triangles[current].flatMap((neighbor) => {
+          if (neighbor === id) return [];
+          const key = Math.min(id, neighbor) * vertexLimit + Math.max(id, neighbor);
+          return adjacency.get(key)!.faces.filter((index) => index !== current);
+        });
+        const across = next.find((neighbor) => neighbor !== from);
+        if (across === undefined) break;
+        from = current;
+        current = across;
+        count++;
+      } while (current !== face && count <= incident[id]);
+      if (count !== incident[id]) throw Error('投影交集存在仅在顶点接触的表面，无法生成可靠实体');
+    }
   const mapping = new Map<number, number>();
   const min: SolidPoint = [Infinity, Infinity, Infinity],
     max: SolidPoint = [-Infinity, -Infinity, -Infinity];
@@ -137,8 +164,8 @@ export function meshSolidPanels(panels: SolidPanel[]) {
         const point = vertices[id];
         compact.push(point);
         for (const axis of [0, 1, 2]) {
-          min[axis] = Math.min(min[axis], point[axis]);
-          max[axis] = Math.max(max[axis], point[axis]);
+          min[axis] = Math.min(min[axis], point[axis] || 0);
+          max[axis] = Math.max(max[axis], point[axis] || 0);
         }
       }
       triangle[i] = mapping.get(id)!;

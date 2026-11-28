@@ -86,7 +86,7 @@ export function EditorWorkspaceBody({
           solid={
             layout.showSolid && (
               <SolidPreviewModule
-                solid={solid.solid}
+                scene={solid.scene}
                 build={solid.build}
                 generate={features.generateSolid}
                 available={!!audit.report?.canReconstruct3D}

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ProjectionDirection,
-  ReconstructedSolid3D,
-  SolidReconstructionResult,
+  ReconstructedDrawing3D,
+  DrawingReconstructionResult,
 } from '@tuheng/geometry-core';
 import {
   linkedSolidFaces,
@@ -10,15 +10,16 @@ import {
   pickSolidFace,
   solidEdgeKeys,
   solidFeatureEdges,
-  type SolidCamera,
 } from './solid-canvas';
+import { paintSpatial, pickSpatialFeature, spatialHighlight } from './spatial-canvas';
+import type { SolidCamera } from './scene-camera';
 import type { LinkedFace } from './useSolidPreview';
 
 const presetViews = [
-  { name: '轴测', yaw: 0.65, pitch: 0.48 },
-  { name: '正视', yaw: 0, pitch: 0, direction: 'V' },
-  { name: '俯视', yaw: 0, pitch: Math.PI / 2, direction: 'H' },
-  { name: '左视', yaw: -Math.PI / 2, pitch: 0, direction: 'W' },
+  { name: '轴测', yaw: Math.PI - 0.66, pitch: 0.53 },
+  { name: '正视', yaw: Math.PI, pitch: 0, direction: 'V' },
+  { name: '俯视', yaw: Math.PI, pitch: Math.PI / 2, direction: 'H' },
+  { name: '左视', yaw: Math.PI / 2, pitch: 0, direction: 'W' },
 ] as const satisfies {
   name: string;
   yaw: number;
@@ -27,7 +28,7 @@ const presetViews = [
 }[];
 
 type PreviewProps = {
-  solid: ReconstructedSolid3D;
+  scene: ReconstructedDrawing3D;
   link: boolean;
   setLink: (link: boolean) => void;
   linkedIds?: ReadonlySet<string>;
@@ -40,8 +41,8 @@ const zoomCamera = (camera: SolidCamera, factor: number) => ({
   zoom: Math.max(0.35, Math.min(6, camera.zoom * factor)),
 });
 
-function InteractiveSolid({
-  solid,
+function InteractivePreview({
+  scene,
   link,
   setLink,
   linkedIds,
@@ -53,6 +54,9 @@ function InteractiveSolid({
   const [preset, setPreset] = useState<string | undefined>('轴测');
   const [transparent, setTransparent] = useState(false);
   const [wireframe, setWireframe] = useState(false);
+  const [projections, setProjections] = useState(true);
+  const solid = scene.kind === 'SOLID' ? scene : undefined;
+  const spatial = scene.kind === 'DESCRIPTIVE_GEOMETRY' ? scene : undefined;
   const canvas = useRef<HTMLCanvasElement>(null);
   const gesture = useRef<{
     id: number;
@@ -61,14 +65,23 @@ function InteractiveSolid({
     startX: number;
     startY: number;
   } | null>(null);
-  const painted = useRef<ReturnType<typeof paintSolid>>([]);
+  const pickPainted = useRef<(x: number, y: number) => LinkedFace | undefined>(() => undefined);
   const [size, setSize] = useState({ width: 1, height: 1 });
-  const features = useMemo(() => solidFeatureEdges(solid), [solid]);
+  const features = useMemo(() => (solid ? solidFeatureEdges(solid) : []), [solid]);
   const featureKeys = useMemo(() => solidEdgeKeys(features), [features]);
   const highlighted = useMemo(
-    () => linkedSolidFaces(solid, linkedIds, linkedFace),
+    () => (solid ? linkedSolidFaces(solid, linkedIds, linkedFace) : new Set<number>()),
     [solid, linkedIds, linkedFace],
   );
+  const highlightSpatial = useMemo(
+    () => spatialHighlight(linkedIds, linkedFace),
+    [linkedIds, linkedFace],
+  );
+  const highlightedSpatial = spatial
+    ? spatial.points.filter(({ projections }) => highlightSpatial(projections)).length +
+      spatial.segments.filter(({ sources }) => highlightSpatial(sources)).length +
+      spatial.faces.filter(({ sources }) => highlightSpatial(sources)).length
+    : undefined;
   useEffect(() => {
     const node = canvas.current;
     if (!node) return;
@@ -99,20 +112,48 @@ function InteractiveSolid({
         node.height = height;
       }
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      painted.current = paintSolid(context, solid, size.width, size.height, features, featureKeys, {
-        camera,
-        transparent,
-        wireframe,
-        highlighted,
-      });
+      if (spatial) {
+        const targets = paintSpatial(
+          context,
+          spatial,
+          size.width,
+          size.height,
+          camera,
+          projections,
+          highlightSpatial,
+        );
+        pickPainted.current = (x, y) => pickSpatialFeature(targets, x, y);
+      } else if (solid) {
+        const faces = paintSolid(context, solid, size.width, size.height, features, featureKeys, {
+          camera,
+          transparent,
+          wireframe,
+          highlighted,
+        });
+        pickPainted.current = (x, y) => {
+          const face = pickSolidFace(faces, x, y);
+          return face === undefined ? undefined : solid.faceSources[face];
+        };
+      }
     });
     return () => cancelAnimationFrame(frame);
-  }, [solid, camera, size, features, featureKeys, transparent, wireframe, highlighted]);
+  }, [
+    solid,
+    spatial,
+    camera,
+    size,
+    features,
+    featureKeys,
+    transparent,
+    wireframe,
+    highlighted,
+    projections,
+    highlightSpatial,
+  ]);
 
   function pick(target: HTMLCanvasElement, x: number, y: number) {
     const box = target.getBoundingClientRect();
-    const face = pickSolidFace(painted.current, x - box.left, y - box.top);
-    return face === undefined ? undefined : solid.faceSources[face];
+    return pickPainted.current(x - box.left, y - box.top);
   }
 
   return (
@@ -121,7 +162,7 @@ function InteractiveSolid({
         {presetViews.map((view) => {
           const mapping =
             'direction' in view &&
-            solid.sourceViewMapping.find((item) => item.direction === view.direction);
+            scene.sourceViewMapping.find((item) => item.direction === view.direction);
           const linked = mapping ? { viewId: mapping.viewId } : undefined;
           return (
             <button
@@ -145,9 +186,13 @@ function InteractiveSolid({
         ref={canvas}
         className="geo-solid-canvas"
         tabIndex={0}
-        aria-label="三维实体画布"
-        data-triangle-count={solid.triangles.length}
-        data-highlighted-faces={highlighted.size}
+        aria-label={spatial ? '画法几何三维画布' : '三维实体画布'}
+        data-triangle-count={solid?.triangles.length}
+        data-highlighted-faces={solid ? highlighted.size : undefined}
+        data-spatial-points={spatial?.points.length}
+        data-spatial-faces={spatial?.faces.length}
+        data-projection-rays={spatial && (projections ? spatial.projectionRays.length : 0)}
+        data-highlighted-features={highlightedSpatial}
         data-orbit={`${camera.yaw.toFixed(3)},${camera.pitch.toFixed(3)},${camera.zoom.toFixed(3)}`}
         onPointerDown={(event) => {
           if (gesture.current || event.button !== 0) return;
@@ -218,28 +263,42 @@ function InteractiveSolid({
         }}
       />
       <div className="geo-teaching-controls geo-solid-options" role="group" aria-label="三维显示">
-        <button
-          type="button"
-          aria-pressed={transparent}
-          onClick={() => setTransparent(!transparent)}
-        >
-          半透明
-        </button>
-        <button type="button" aria-pressed={wireframe} onClick={() => setWireframe(!wireframe)}>
-          {wireframe ? '实体' : '线框'}
-        </button>
+        {spatial ? (
+          <button
+            type="button"
+            aria-pressed={projections}
+            onClick={() => setProjections(!projections)}
+          >
+            投影射线
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              aria-pressed={transparent}
+              onClick={() => setTransparent(!transparent)}
+            >
+              半透明
+            </button>
+            <button type="button" aria-pressed={wireframe} onClick={() => setWireframe(!wireframe)}>
+              {wireframe ? '实体' : '线框'}
+            </button>
+          </>
+        )}
         <button type="button" aria-pressed={link} onClick={() => setLink(!link)}>
           二维-三维联动
         </button>
       </div>
       <details className="geo-solid-details">
         <summary>
-          {solid.bounds.size.map((size) => Number(size.toFixed(2))).join(' × ')} mm · 模型说明
+          {spatial ? '画法几何' : '正交实体'} ·{' '}
+          {scene.bounds.size.map((size) => Number(size.toFixed(2))).join(' × ')} mm
+          {scene.warnings.length ? ` · ${scene.warnings.length} 项需核对` : ''}
         </summary>
-        <p>{solid.confidenceNote}</p>
-        {!!solid.warnings.length && (
+        <p>{scene.confidenceNote}</p>
+        {!!scene.warnings.length && (
           <ul>
-            {solid.warnings.map((warning, i) => (
+            {scene.warnings.map((warning, i) => (
               <li key={i}>{warning}</li>
             ))}
           </ul>
@@ -250,16 +309,16 @@ function InteractiveSolid({
 }
 
 export function SolidPreviewModule({
-  solid,
+  scene,
   build,
   generate,
   available,
   review,
   reason,
   ...props
-}: Omit<PreviewProps, 'solid'> & {
-  solid?: ReconstructedSolid3D;
-  build?: { result?: SolidReconstructionResult; error?: string };
+}: Omit<PreviewProps, 'scene'> & {
+  scene?: ReconstructedDrawing3D;
+  build?: { result?: DrawingReconstructionResult; error?: string };
   generate: () => void;
   available: boolean;
   review?: () => void;
@@ -268,10 +327,10 @@ export function SolidPreviewModule({
   const failure =
     build?.error ?? (build?.result && !build.result.ok ? build.result.reason : undefined);
   return (
-    <section className="geo-solid-pane" aria-label="立体图三维预览">
+    <section className="geo-solid-pane" aria-label="立体图三维预览" data-scene-kind={scene?.kind}>
       <h3>立体图 3D</h3>
-      {solid ? (
-        <InteractiveSolid {...props} solid={solid} />
+      {scene ? (
+        <InteractivePreview {...props} scene={scene} />
       ) : !available ? (
         <div className="geo-solid-message">
           <p>{reason}</p>
@@ -284,7 +343,7 @@ export function SolidPreviewModule({
       ) : (
         <div className="geo-solid-message">
           {build && !failure ? (
-            <p role="status">正在求投影交集…</p>
+            <p role="status">正在重建三维场景…</p>
           ) : (
             <>
               <p role={failure ? 'alert' : undefined}>{failure ?? '当前图纸需要生成三维模型。'}</p>

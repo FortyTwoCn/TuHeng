@@ -5,6 +5,7 @@ export * from './document-json';
 export * from './construction-animation';
 export * from './drawing-audit';
 export * from './solid-reconstruction';
+export type { ReconstructedSpatial3D } from './spatial-reconstruction';
 export * from './analysis';
 export * from './pen';
 export * from './snapping';

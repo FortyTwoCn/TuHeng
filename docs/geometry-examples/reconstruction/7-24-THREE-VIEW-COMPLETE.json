@@ -1,0 +1,2021 @@
+{
+  "schemaVersion": "tuheng.geometry/3.0.0",
+  "editorType": "THREE_VIEW",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "主视图",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 9
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["x", "z"],
+      "signs": [1, 1]
+    },
+    {
+      "id": "view-1",
+      "name": "俯视图",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": -9
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["x", "y"],
+      "signs": [1, -1]
+    },
+    {
+      "id": "view-2",
+      "name": "左视图",
+      "transform": {
+        "origin": {
+          "x": 12,
+          "y": 9
+        },
+        "xAxis": {
+          "x": 1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["y", "z"],
+      "signs": [1, 1]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "v-ear-center",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": 58
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p0",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": 73
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 73
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p2",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p3",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p4",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p5",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 88,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p6",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 88,
+        "y": 17
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p7",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 68,
+        "y": 31.11764705882353
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-p8",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 68,
+        "y": 58
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-outer-1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-outer-p0",
+      "endPoint": "v-outer-p1"
+    },
+    {
+      "id": "v-outer-2",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-outer-p1",
+      "endPoint": "v-outer-p2"
+    },
+    {
+      "id": "v-outer-3",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-outer-p2",
+      "endPoint": "v-outer-p3"
+    },
+    {
+      "id": "v-outer-4",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-outer-p3",
+      "endPoint": "v-outer-p4"
+    },
+    {
+      "id": "v-outer-5",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-outer-p4",
+      "endPoint": "v-outer-p5"
+    },
+    {
+      "id": "v-outer-6",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-outer-p5",
+      "endPoint": "v-outer-p6"
+    },
+    {
+      "id": "v-outer-7",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-outer-p6",
+      "endPoint": "v-outer-p7"
+    },
+    {
+      "id": "v-outer-8",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-outer-p7",
+      "endPoint": "v-outer-p8"
+    },
+    {
+      "id": "v-ramp-p0",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 68,
+        "y": 31.11764705882353
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-ramp-p1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 37,
+        "y": 53
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-ramp-p2",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 37,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-ramp-p3",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-ramp-1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-ramp-p0",
+      "endPoint": "v-ramp-p1"
+    },
+    {
+      "id": "v-ramp-2",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-ramp-p1",
+      "endPoint": "v-ramp-p2"
+    },
+    {
+      "id": "v-ramp-3",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-ramp-p2",
+      "endPoint": "v-ramp-p3"
+    },
+    {
+      "id": "v-slot-p0",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 78,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-slot-p1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 78,
+        "y": 10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-slot-p2",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-slot-p3",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-slot-1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "v-slot-p0",
+      "endPoint": "v-slot-p1"
+    },
+    {
+      "id": "v-slot-2",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "v-slot-p1",
+      "endPoint": "v-slot-p2"
+    },
+    {
+      "id": "v-slot-3",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "v-slot-p2",
+      "endPoint": "v-slot-p3"
+    },
+    {
+      "id": "v-ear-wall-p0",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 68,
+        "y": 31.11764705882353
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-ear-wall-p1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 68,
+        "y": 10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-ear-wall-1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "v-ear-wall-p0",
+      "endPoint": "v-ear-wall-p1"
+    },
+    {
+      "id": "v-ear-fillet",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "arc",
+      "center": "v-ear-center",
+      "radius": 15,
+      "startAngle": 0,
+      "sweep": 90
+    },
+    {
+      "id": "v-through-hole",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "circle",
+      "center": "v-ear-center",
+      "radius": 8.5
+    },
+    {
+      "id": "v-center-x-p0",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 72,
+        "y": 58
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-center-x-p1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 40,
+        "y": 58
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-center-x-1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "appearance": {
+        "pattern": "CENTER"
+      },
+      "kind": "segment",
+      "startPoint": "v-center-x-p0",
+      "endPoint": "v-center-x-p1"
+    },
+    {
+      "id": "v-center-z-p0",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": 75.5
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-center-z-p1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": 45
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-center-z-1",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "appearance": {
+        "pattern": "CENTER"
+      },
+      "kind": "segment",
+      "startPoint": "v-center-z-p0",
+      "endPoint": "v-center-z-p1"
+    },
+    {
+      "id": "h-outer-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 88,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-outer-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-outer-p2",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": -53
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-outer-p3",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 88,
+        "y": -53
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-outer-p4",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 88,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-outer-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-outer-p0",
+      "endPoint": "h-outer-p1"
+    },
+    {
+      "id": "h-outer-2",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-outer-p1",
+      "endPoint": "h-outer-p2"
+    },
+    {
+      "id": "h-outer-3",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-outer-p2",
+      "endPoint": "h-outer-p3"
+    },
+    {
+      "id": "h-outer-4",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-outer-p3",
+      "endPoint": "h-outer-p4"
+    },
+    {
+      "id": "h-slot-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": -22
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-slot-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": -10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-slot-p2",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 78,
+        "y": -10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-slot-p3",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 78,
+        "y": -43
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-slot-p4",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": -43
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-slot-p5",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": -32
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-slot-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-slot-p0",
+      "endPoint": "h-slot-p1"
+    },
+    {
+      "id": "h-slot-2",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-slot-p1",
+      "endPoint": "h-slot-p2"
+    },
+    {
+      "id": "h-slot-3",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-slot-p2",
+      "endPoint": "h-slot-p3"
+    },
+    {
+      "id": "h-slot-4",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-slot-p3",
+      "endPoint": "h-slot-p4"
+    },
+    {
+      "id": "h-slot-5",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-slot-p4",
+      "endPoint": "h-slot-p5"
+    },
+    {
+      "id": "h-ear-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 68,
+        "y": -22
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-ear-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": -22
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-ear-p2",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": -32
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-ear-p3",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 68,
+        "y": -32
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-ear-p4",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 68,
+        "y": -22
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-ear-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-ear-p0",
+      "endPoint": "h-ear-p1"
+    },
+    {
+      "id": "h-ear-2",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-ear-p1",
+      "endPoint": "h-ear-p2"
+    },
+    {
+      "id": "h-ear-3",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-ear-p2",
+      "endPoint": "h-ear-p3"
+    },
+    {
+      "id": "h-ear-4",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-ear-p3",
+      "endPoint": "h-ear-p4"
+    },
+    {
+      "id": "h-hole-0-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 61.5,
+        "y": -22
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-hole-0-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 61.5,
+        "y": -32
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-hole-0-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "h-hole-0-p0",
+      "endPoint": "h-hole-0-p1"
+    },
+    {
+      "id": "h-hole-1-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 44.5,
+        "y": -22
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-hole-1-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 44.5,
+        "y": -32
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-hole-1-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "h-hole-1-p0",
+      "endPoint": "h-hole-1-p1"
+    },
+    {
+      "id": "h-step-away-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 37,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-step-away-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 37,
+        "y": -10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-step-away-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-step-away-p0",
+      "endPoint": "h-step-away-p1"
+    },
+    {
+      "id": "h-step-near-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 37,
+        "y": -43
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-step-near-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 37,
+        "y": -53
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-step-near-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-step-near-p0",
+      "endPoint": "h-step-near-p1"
+    },
+    {
+      "id": "h-center-x-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 92,
+        "y": -27
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-center-x-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": -4,
+        "y": -27
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-center-x-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "appearance": {
+        "pattern": "CENTER"
+      },
+      "kind": "segment",
+      "startPoint": "h-center-x-p0",
+      "endPoint": "h-center-x-p1"
+    },
+    {
+      "id": "h-center-y-p0",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": -18
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-center-y-p1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": -36
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-center-y-1",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "appearance": {
+        "pattern": "CENTER"
+      },
+      "kind": "segment",
+      "startPoint": "h-center-y-p0",
+      "endPoint": "h-center-y-p1"
+    },
+    {
+      "id": "w-outer-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-p2",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-p3",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 32,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-p4",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 32,
+        "y": 73
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-p5",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 73
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-p6",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-p7",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-p8",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-outer-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-outer-p0",
+      "endPoint": "w-outer-p1"
+    },
+    {
+      "id": "w-outer-2",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-outer-p1",
+      "endPoint": "w-outer-p2"
+    },
+    {
+      "id": "w-outer-3",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-outer-p2",
+      "endPoint": "w-outer-p3"
+    },
+    {
+      "id": "w-outer-4",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-outer-p3",
+      "endPoint": "w-outer-p4"
+    },
+    {
+      "id": "w-outer-5",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-outer-p4",
+      "endPoint": "w-outer-p5"
+    },
+    {
+      "id": "w-outer-6",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-outer-p5",
+      "endPoint": "w-outer-p6"
+    },
+    {
+      "id": "w-outer-7",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-outer-p6",
+      "endPoint": "w-outer-p7"
+    },
+    {
+      "id": "w-outer-8",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-outer-p7",
+      "endPoint": "w-outer-p8"
+    },
+    {
+      "id": "w-lip-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-lip-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-lip-p2",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 43,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-lip-p3",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 43,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-lip-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-lip-p0",
+      "endPoint": "w-lip-p1"
+    },
+    {
+      "id": "w-lip-2",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-lip-p1",
+      "endPoint": "w-lip-p2"
+    },
+    {
+      "id": "w-lip-3",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-lip-p2",
+      "endPoint": "w-lip-p3"
+    },
+    {
+      "id": "w-base-lip-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 17
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-base-lip-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": 17
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-base-lip-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-base-lip-p0",
+      "endPoint": "w-base-lip-p1"
+    },
+    {
+      "id": "w-step-away-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0,
+        "y": 53
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-step-away-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 53
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-step-away-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-step-away-p0",
+      "endPoint": "w-step-away-p1"
+    },
+    {
+      "id": "w-step-near-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 43,
+        "y": 53
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-step-near-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 53,
+        "y": 53
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-step-near-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-step-near-p0",
+      "endPoint": "w-step-near-p1"
+    },
+    {
+      "id": "w-slot-floor-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-slot-floor-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 10,
+        "y": 10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-slot-floor-p2",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 43,
+        "y": 10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-slot-floor-p3",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 43,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-slot-floor-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "w-slot-floor-p0",
+      "endPoint": "w-slot-floor-p1"
+    },
+    {
+      "id": "w-slot-floor-2",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "w-slot-floor-p1",
+      "endPoint": "w-slot-floor-p2"
+    },
+    {
+      "id": "w-slot-floor-3",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "w-slot-floor-p2",
+      "endPoint": "w-slot-floor-p3"
+    },
+    {
+      "id": "w-ear-side-0-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-ear-side-0-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-ear-side-0-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-ear-side-0-p0",
+      "endPoint": "w-ear-side-0-p1"
+    },
+    {
+      "id": "w-ear-root-0-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-ear-root-0-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-ear-root-0-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "w-ear-root-0-p0",
+      "endPoint": "w-ear-root-0-p1"
+    },
+    {
+      "id": "w-ear-side-1-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 32,
+        "y": 63
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-ear-side-1-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 32,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-ear-side-1-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "w-ear-side-1-p0",
+      "endPoint": "w-ear-side-1-p1"
+    },
+    {
+      "id": "w-ear-root-1-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 32,
+        "y": 24.058823529411764
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-ear-root-1-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 32,
+        "y": 10
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-ear-root-1-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "w-ear-root-1-p0",
+      "endPoint": "w-ear-root-1-p1"
+    },
+    {
+      "id": "w-hole-0-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 49.5
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-hole-0-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 32,
+        "y": 49.5
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-hole-0-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "w-hole-0-p0",
+      "endPoint": "w-hole-0-p1"
+    },
+    {
+      "id": "w-hole-1-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22,
+        "y": 66.5
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-hole-1-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 32,
+        "y": 66.5
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-hole-1-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_HIDDEN",
+      "appearance": {
+        "pattern": "DASHED"
+      },
+      "kind": "segment",
+      "startPoint": "w-hole-1-p0",
+      "endPoint": "w-hole-1-p1"
+    },
+    {
+      "id": "w-center-y-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 18,
+        "y": 58
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-center-y-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 36,
+        "y": 58
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-center-y-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {
+        "pattern": "CENTER"
+      },
+      "kind": "segment",
+      "startPoint": "w-center-y-p0",
+      "endPoint": "w-center-y-p1"
+    },
+    {
+      "id": "w-center-z-p0",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 27,
+        "y": -3
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-center-z-p1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 27,
+        "y": 76
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "w-center-z-1",
+      "viewId": "view-2",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "appearance": {
+        "pattern": "CENTER"
+      },
+      "kind": "segment",
+      "startPoint": "w-center-z-p0",
+      "endPoint": "w-center-z-p1"
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": false
+  },
+  "metadata": {
+    "title": "7-24 补画第三视图（四）"
+  }
+}

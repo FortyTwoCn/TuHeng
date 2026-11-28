@@ -58,9 +58,12 @@ CAD 命令目录位于 `cad-registry.ts`。每个命令声明工具组、别名�
 - `contracts/src/construction-animation.ts` 提供动画 Zod 校验、跨实体引用校验和独立 Schema。几何 3.0 契约复用这套动画定义。保存动画走现有文档历史，删除正式几何时同步整理失效引用。
 - `geometry-core/src/construction-animation.ts` 负责验证 AI 数据、文件解析、默认教学过程和当前步的角色求值。播放图元、临时线、定位点的状态按步号确定，跳步与重播可复用同一份动画。
 - `ViewportDrawing` 在同一个 SVG 中绘制纸面、主次网格和投影轴。`ViewportEntities` 为 `EntityShape` 附加动画角色、描边时序和联动高亮。`ConstructionOverlays` 负责临时投影线和定位点。评分用例提取只含几何的题干及答案快照。
-- `drawing-audit.ts` 将视图局部数据按映射轴及正负号转成规范投影坐标，检查包围盒、对应特征和线型。轮廓分析复用 `cad-faces.ts` 的曲线误差自适应采样，经交点分面提取闭环及嵌套孔。
-- `solid-reconstruction.ts` 复用审核得到的闭环。`solid-panels.ts` 沿每条轮廓边的展开面扫描其他投影视图，裁剪出柱体正交交集的表面。`solid-mesh.ts` 对齐接缝、三角化、计算法线和体积，并从相邻面夹角提取特征棱。顶点上限 30,000，面数上限 50,000。裁剪超限、空交集和开放网格返回明确的失败原因。
-- `modules/solid3d/solid-worker.ts` 在浏览器 Worker 里执行重建。`SolidPreviewModule` 与 `solid-canvas.ts` 负责 Canvas 渲染、旋转、正交视角和联动。三维结果与当前几何版本关联。
+- `projection-coordinates.ts` 按视图映射轴与正负号统一 V、H、W 的投影坐标。`drawing-audit.ts` 按图纸内容选择制图检查。实体图检查外部轮廓、投影范围、对应特征与线型，画法几何按同名点检查长对正、宽相等和高平齐，并在二维画布标出不吻合的投影点。
+- `spatial-projections.ts` 优先按名称和撇号配对。未标注端点使用显式投影组、跨面辅助线和唯一 X 对齐。X、Z 取自 V 投影，Y 取自 H 投影。`spatial-reconstruction.ts` 与 `spatial-faces.ts` 还原有限空间线段、闭合共面多边形、由相交解线张成的面片、直角标记与投影射线。场景中保留二维落点和图元 ID。
+- `drawing-contours.ts` 对实线和虚线计算交点，在半边图中取得最小区域及所属边。圆、圆弧及其他曲线沿用 `cad-faces.ts` 的自适应采样。中心线与辅助线从实体边界分面中排除。
+- `solid-cell-partition.ts` 用平行及倾斜的投影扫掠面裁剪候选凸单元，按每个视图的外部空区和相应视图虚线切点约束的孔道去除单元。`solid-cell-visibility.ts` 以成对射线比较实线处的最近表面变化和虚线处被遮挡的材料进出变化，并检查空白位置的可见表面连续性。`solid-cell-topology.ts` 同时约束棱边投影和棱边周围的占用连续性。`solid-cell-solver.ts` 运行有上限的约束传播和回溯，优先保留缺乏挖空证据的材料。
+- `solid-cell-boundary.ts` 移除相邻实体单元的共用面。`solid-mesh.ts` 焊接接缝、三角化并验证有向棱和顶点流形，再计算法线与体积。简单轮廓及显式贯通内环可使用 `solid-panels.ts` 的正交交集路径。上限包括 16,000 个空间分区、11,000 个候选单元、30,000 个网格顶点和 50,000 个三角面。圆柱与圆角的网格精度取决于曲线离散误差。复杂两视图的内部槽深和厚度可能有多解。
+- `solid-reconstruction.ts` 提供联合场景返回值 `SOLID` / `DESCRIPTIVE_GEOMETRY`，同时保留实体调用入口 `reconstructSolid3D`。`modules/solid3d/solid-worker.ts` 在浏览器 Worker 执行重建，返回当前图纸版本的结果。`SolidPreviewModule` 共享镜头和联动状态，`solid-canvas.ts` 和 `spatial-canvas.ts` 分别绘制网格和空间点线面。场景只用于预览，图纸沿用 v3 数据契约。
 
 ## 工作区与参考图纸
 

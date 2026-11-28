@@ -6,6 +6,7 @@ import { loadGeometryDocument, serializeGeometryDocument } from '@tuheng/geometr
 import { prepareLogin } from './identity-login';
 import { choose, closePanels } from './editor-controls';
 import { at } from './editor-fixture';
+import { captureCadReconstruction } from './cad-reconstruction-evidence';
 
 const base = 'docs/geometry-examples/construction/THREE-VIEW-CONSTRUCTION';
 const read = (suffix: string) => readFileSync(base + suffix, 'utf8');
@@ -145,6 +146,7 @@ test('逐笔蓝线和红线、阶段跳转、暂停、擦除与加深的浏览�
   await freeze(view, 1510);
   await expect(view.locator('[data-focus-kind="SPECIAL"]')).toHaveCount(1);
   await shot(page, info, '02-projection-and-strokes');
+  await captureCadReconstruction(page, '01-animation-on-grid');
 
   await button(controls, '作图线').click();
   await expect(guide).toHaveCount(0);

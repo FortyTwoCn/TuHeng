@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { GeometryDocument } from '@tuheng/contracts';
-import type { SolidReconstructionResult } from '@tuheng/geometry-core';
+import type { DrawingReconstructionResult } from '@tuheng/geometry-core';
 
-export type LinkedFace = { viewId: string; entityId?: string };
-type Build = { revision: string; result?: SolidReconstructionResult; error?: string };
+export type LinkedFace = { viewId: string; entityId?: string; entityIds?: string[] };
+type Build = { revision: string; result?: DrawingReconstructionResult; error?: string };
 
 // 三维计算留在工作线程。二维和三维只交换可追溯的视图与图元 ID。
 export function useSolidPreview(
@@ -20,10 +20,10 @@ export function useSolidPreview(
   const workerRef = useRef<Worker>(null);
   useEffect(() => () => workerRef.current?.terminate(), []);
   const currentBuild = build?.revision === revision ? build : undefined;
-  const solid = currentBuild?.result?.ok ? currentBuild.result.solid : undefined;
-  const linkedFace = active && solid && link ? (faceHover ?? faceSelection) : undefined;
+  const scene = currentBuild?.result?.ok ? currentBuild.result.scene : undefined;
+  const linkedFace = active && scene && link ? (faceHover ?? faceSelection) : undefined;
   const view =
-    linkedFace && solid?.sourceViewMapping.find(({ viewId }) => viewId === linkedFace.viewId);
+    linkedFace && scene?.sourceViewMapping.find(({ viewId }) => viewId === linkedFace.viewId);
 
   function generate() {
     if (currentBuild && (!currentBuild.result || currentBuild.result.ok) && !currentBuild.error)
@@ -41,7 +41,7 @@ export function useSolidPreview(
         worker.terminate();
         workerRef.current = null;
       }
-      worker.onmessage = ({ data }: MessageEvent<SolidReconstructionResult>) =>
+      worker.onmessage = ({ data }: MessageEvent<DrawingReconstructionResult>) =>
         finish({ revision, result: data });
       worker.onerror = () => finish({ revision, error: '三维计算进程启动失败，请重新生成。' });
       worker.postMessage(doc);
@@ -54,12 +54,14 @@ export function useSolidPreview(
 
   return {
     generate,
-    solid,
+    scene,
     build: currentBuild,
     link,
     setLink,
     linkedFace,
-    linked2D: linkedFace?.entityId ? [linkedFace.entityId] : (view?.entityIds ?? []),
+    linked2D:
+      linkedFace?.entityIds ??
+      (linkedFace?.entityId ? [linkedFace.entityId] : (view?.entityIds ?? [])),
     linked3D:
       active && link ? new Set([...selected, ...(entityHover ? [entityHover] : [])]) : undefined,
     setEntityHover,

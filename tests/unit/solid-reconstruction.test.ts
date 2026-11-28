@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { GeometryDocument } from '@tuheng/contracts';
 import {
   createDocument,
+  loadGeometryDocument,
   reconstructSolid3D,
   type ReconstructedSolid3D,
 } from '@tuheng/geometry-core';
@@ -13,6 +15,13 @@ import {
   rectangle,
   type Position,
 } from '../drawing-projection-fixtures';
+import {
+  cross3,
+  dot3,
+  norm3,
+  sub3,
+  type SolidPoint,
+} from '../../packages/geometry-core/src/spatial-math';
 
 function reconstruct(doc: GeometryDocument) {
   const result = reconstructSolid3D(doc);
@@ -50,7 +59,103 @@ function axialCrossings(mesh: ReconstructedSolid3D, p: Position) {
   }).length;
 }
 
+function contains(mesh: ReconstructedSolid3D, point: SolidPoint) {
+  const angle = mesh.triangles.reduce((sum, face) => {
+    const [a, b, c] = face.map((id) => sub3(mesh.vertices[id], point));
+    return (
+      sum +
+      2 *
+        Math.atan2(
+          dot3(a, cross3(b, c)),
+          norm3(a) * norm3(b) * norm3(c) +
+            dot3(a, b) * norm3(c) +
+            dot3(b, c) * norm3(a) +
+            dot3(c, a) * norm3(b),
+        )
+    );
+  }, 0);
+  return Math.abs(angle) > 2 * Math.PI;
+}
+
+const completeDrawing = () =>
+  loadGeometryDocument(
+    readFileSync('docs/geometry-examples/reconstruction/7-24-THREE-VIEW-COMPLETE.json', 'utf8'),
+  );
+
 describe('正交投影实体重建', () => {
+  it('从另一组矩形嵌套轮廓与虚线恢复独立的盲槽深度', () => {
+    const doc = boxDrawing();
+    outline(doc, 1, 'recess', rectangle(4, 3, 12, 8));
+    const hidden = { lineStyle: 'ANSWER_HIDDEN', layerId: 'answer' } as const;
+    outline(
+      doc,
+      0,
+      'front-recess',
+      [
+        [4, 10],
+        [4, 6],
+        [16, 6],
+        [16, 10],
+      ],
+      false,
+      hidden,
+    );
+    outline(
+      doc,
+      2,
+      'side-recess',
+      [
+        [3, 10],
+        [3, 6],
+        [11, 6],
+        [11, 10],
+      ],
+      false,
+      hidden,
+    );
+    const solid = reconstruct(doc);
+    expect(solid.reconstructionMethod).toBe('PROJECTION_CELL_DECOMPOSITION');
+    expect(solid.volumeMm3).toBeCloseTo(20 * 14 * 10 - 12 * 8 * 4, 7);
+    expect(contains(solid, [8, 7, 8])).toBe(false);
+    expect(contains(solid, [8, 7, 4])).toBe(true);
+    checkMesh(solid, 0);
+  });
+
+  it('7-24 从 57 个投影图元重建斜坡、盲槽与带贯穿孔的圆角耳板', () => {
+    const result = reconstructSolid3D(completeDrawing());
+    if (!result.ok) throw Error(result.reason);
+    const { solid } = result;
+    expect(result.audit.status).toBe('PASS');
+    expect(solid.reconstructionMethod).toBe('PROJECTION_CELL_DECOMPOSITION');
+    expect(solid.verification).toMatchObject({ explainedEntities: 57, cylindricalCuts: 1 });
+    expect(solid.bounds.size).toEqual([88, 53, 73]);
+    const shell = 53 * ((51 * (17 + 53)) / 2 + 37 * 63);
+    const slot = 33 * (41 * ((17 + 360 / 51 + 53) / 2 - 10) + 15 * (63 - 10));
+    const ear = 10 * (15 * (58 - 10) + (Math.PI * 15 ** 2) / 4 + 31 * (73 - 10) + 12 * (73 - 63));
+    const hole = 10 * Math.PI * 8.5 ** 2;
+    expect(Math.abs(solid.volumeMm3 - (shell - slot + ear - hole))).toBeLessThan(5);
+    checkMesh(solid, 1);
+
+    expect(contains(solid, [55, 16, 20])).toBe(false); // 盲槽内，耳板外
+    expect(contains(solid, [55, 16, 5])).toBe(true); // 槽底以下的材料
+    expect(contains(solid, [40, 27, 55])).toBe(true); // 耳板内，孔径外
+    for (const y of [21, 22.5, 27, 31.5, 33]) {
+      expect(contains(solid, [53, y, 58])).toBe(false); // 连通两侧的圆孔
+      if (y > 22 && y < 32) expect(contains(solid, [53, y, 68])).toBe(true);
+    }
+    expect(contains(solid, [83, 38, 46])).toBe(false); // 斜坡上方的切除区
+    expect(contains(solid, [70, 27, 69])).toBe(false); // 圆角外侧
+  });
+
+  it('7-24 只有主、俯视图时保留内部凹槽与厚度的多解提示', () => {
+    const partial = completeDrawing();
+    partial.entities = partial.entities.filter(({ viewId }) => viewId !== 'view-2');
+    const solid = reconstruct(partial);
+    expect(solid.sourceViewMapping.map(({ direction }) => direction)).toEqual(['V', 'H']);
+    expect(solid.warnings).toEqual(
+      expect.arrayContaining([expect.stringMatching(/两视图.*内部凹槽.*多解.*第三视图/)]),
+    );
+  });
   it.each(['THREE_VIEW', 'VHW_PROJECTION', 'VH_PROJECTION'] as const)('生成 %s 长方体', (type) => {
     const solid = reconstruct(boxDrawing(type));
     expect(solid.bounds).toEqual({ min: [0, 0, 0], max: [20, 14, 10], size: [20, 14, 10] });

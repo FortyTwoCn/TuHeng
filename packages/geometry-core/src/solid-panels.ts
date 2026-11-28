@@ -1,14 +1,12 @@
-import { projectionPlaneAxes, type AuditedDrawingView, type SolidAxis } from './drawing-audit';
+import type { AuditedDrawingView } from './drawing-audit';
 import type { ContourEdge } from './drawing-contours';
+import { projectionPlaneAxes } from './projection-coordinates';
+import { axes3, solidAxes, type AxisIndex, type SolidPoint } from './spatial-math';
 
-export type SolidPoint = [number, number, number];
-export type SolidBounds = { min: SolidPoint; max: SolidPoint; size: SolidPoint };
 export type SolidPanel = { points: SolidPoint[]; viewId: string; entityId: string };
-export const solidAxes = { x: 0, y: 1, z: 2 } as const satisfies Record<SolidAxis, number>;
 export const SOLID_EPSILON = 1e-8;
 
-const axisIndices = [0, 1, 2] as const;
-type AxisIndex = (typeof axisIndices)[number];
+const axisIndices = axes3;
 type Height = { start: number; slope: number };
 type DepthRange = { lower: Height; upper: Height };
 type Band = DepthRange & { from: number; to: number };

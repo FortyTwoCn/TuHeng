@@ -1,10 +1,14 @@
 import type { ReconstructedSolid3D } from '@tuheng/geometry-core';
+import {
+  dot,
+  sceneProjection,
+  type Point3,
+  type ScreenPoint,
+  type SolidCamera,
+} from './scene-camera';
 import type { LinkedFace } from './useSolidPreview';
 
-type Point3 = ReconstructedSolid3D['vertices'][number];
-export type SolidCamera = { yaw: number; pitch: number; zoom: number };
-type ScreenPoint = { x: number; y: number; depth: number };
-type ScreenFace = { index: number; points: ScreenPoint[]; depth: number };
+type ScreenFace = { index: number; points: ScreenPoint[]; depth: number; front: boolean };
 type DrawOptions = {
   camera: SolidCamera;
   transparent: boolean;
@@ -12,7 +16,6 @@ type DrawOptions = {
   highlighted: ReadonlySet<number>;
 };
 
-const dot = (a: Point3, b: Point3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const edgeKey = (a: number, b: number) => `${Math.min(a, b)}:${Math.max(a, b)}`;
 
 export function solidFeatureEdges(solid: ReconstructedSolid3D) {
@@ -29,6 +32,7 @@ export function linkedSolidFaces(
 ) {
   const entities = new Set(ids);
   if (linked?.entityId) entities.add(linked.entityId);
+  for (const id of linked?.entityIds ?? []) entities.add(id);
   const faces = new Set<number>();
   const matched = new Set<string>();
   solid.faceSources.forEach(({ entityId }, index) => {
@@ -57,30 +61,14 @@ export function paintSolid(
   options: DrawOptions,
 ) {
   context.clearRect(0, 0, width, height);
-  const { yaw, pitch, zoom } = options.camera;
-  const s = Math.sin(yaw),
-    c = Math.cos(yaw),
-    sp = Math.sin(pitch),
-    cp = Math.cos(pitch);
-  const right: Point3 = [c, s, 0],
-    up: Point3 = [-s * sp, c * sp, cp],
-    toward: Point3 = [s * cp, -c * cp, sp];
-  const center = solid.bounds.min.map((min, i) => min + solid.bounds.size[i] / 2) as Point3;
-  const scale = (Math.min(width, height) * 0.82 * zoom) / Math.hypot(...solid.bounds.size);
-  const points = solid.vertices.map((vertex) => {
-    const local = vertex.map((coordinate, i) => coordinate - center[i]) as Point3;
-    return {
-      x: width / 2 + dot(local, right) * scale,
-      y: height / 2 - dot(local, up) * scale,
-      depth: dot(local, toward),
-    };
-  });
+  const { toward, at } = sceneProjection(solid.bounds, options.camera, width, height);
+  const points = solid.vertices.map(at);
   const faces: ScreenFace[] = [];
   solid.triangles.forEach((triangle, index) => {
-    if (!options.transparent && !options.wireframe && dot(solid.normals[index], toward) < 1e-7)
-      return;
+    const front = dot(solid.normals[index], toward) > 1e-7;
+    if (!options.transparent && !options.wireframe && !front) return;
     const [a, b, c] = triangle.map((id) => points[id]);
-    faces.push({ index, points: [a, b, c], depth: (a.depth + b.depth + c.depth) / 3 });
+    faces.push({ index, points: [a, b, c], depth: (a.depth + b.depth + c.depth) / 3, front });
   });
   faces.sort((a, b) => a.depth - b.depth);
   context.lineJoin = 'round';
@@ -91,7 +79,8 @@ export function paintSolid(
     context.lineTo(b.x, b.y);
     context.stroke();
   }
-  const light: Point3 = [-0.38, -0.47, 0.79];
+  const light: Point3 = [0.38, 0.47, 0.79];
+  const ink = new Set<string>();
   for (const face of faces) {
     const {
       index,
@@ -100,10 +89,10 @@ export function paintSolid(
     const highlighted = options.highlighted.has(index);
     if (options.wireframe && !highlighted) continue;
     const shade = Math.max(0, dot(solid.normals[index], light));
-    const opacity = options.wireframe ? 0.15 : options.transparent ? 0.39 : 1;
+    const opacity = options.wireframe ? 0.15 : options.transparent ? (face.front ? 0.26 : 0.13) : 1;
     context.fillStyle = highlighted
       ? `rgba(2, 156, 170, ${opacity})`
-      : `hsla(203, 37%, ${50 + shade * 29}%, ${opacity})`;
+      : `hsla(${face.front ? 198 : 216}, 47%, ${43 + shade * 36}%, ${opacity})`;
     context.beginPath();
     context.moveTo(a.x, a.y);
     context.lineTo(b.x, b.y);
@@ -116,11 +105,14 @@ export function paintSolid(
       context.stroke();
     }
     if (!options.wireframe) {
-      context.strokeStyle = options.transparent ? '#23445b78' : '#1b3b4f';
-      context.lineWidth = 1.25;
+      context.strokeStyle = options.transparent ? '#21485fa0' : '#1b3b4f';
+      context.lineWidth = options.transparent ? 1 : 1.3;
       solid.triangles[index].forEach((from, i, triangle) => {
-        if (featureKeys.has(edgeKey(from, triangle[(i + 1) % 3])))
+        const key = edgeKey(from, triangle[(i + 1) % 3]);
+        if (featureKeys.has(key) && (!options.transparent || !ink.has(key))) {
           line(face.points[i], face.points[(i + 1) % 3]);
+          if (options.transparent) ink.add(key);
+        }
       });
     }
   }

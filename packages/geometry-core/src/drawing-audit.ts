@@ -3,18 +3,32 @@ import {
   CONTOUR_JOIN_MM,
   CONTOUR_SEGMENT_LIMIT,
   contourLineRole,
+  containsContourPoint,
   extractDrawingContours,
   isContourEntity,
   sampleContour,
   type ContourPath,
   type DrawingContour,
 } from './drawing-contours';
+import {
+  directionOf,
+  fromProjectionPlane,
+  projectionPlaneAxes,
+  toProjectionPlane,
+  type DrawingView,
+  type ProjectionDirection,
+  type SolidAxis,
+} from './projection-coordinates';
 import { orthographic } from './sheet';
+import { analyzeSpatialProjections, type SpatialProjectionAnalysis } from './spatial-projections';
 
-export type DrawingView = GeometryDocument['views'][number];
-export type SolidAxis = 'x' | 'y' | 'z';
-export const projectionPlaneAxes = { V: ['x', 'z'], H: ['x', 'y'], W: ['y', 'z'] } as const;
-export type ProjectionDirection = keyof typeof projectionPlaneAxes;
+export {
+  projectionPlaneAxes,
+  toProjectionPlane,
+  type DrawingView,
+  type ProjectionDirection,
+  type SolidAxis,
+};
 type Category = 'VIEWS' | 'LENGTH' | 'HEIGHT' | 'DEPTH' | 'CONTOUR' | 'OVERLAP' | 'LINE_STYLE';
 export type DrawingAuditMarker = { viewId: string; position: Vec2; label?: string };
 export type DrawingAuditCheck = {
@@ -30,6 +44,7 @@ export type DrawingAuditCheck = {
 export type DrawingAuditReport = {
   status: 'PASS' | 'WARN' | 'FAIL';
   canReconstruct3D: boolean;
+  reconstructionKind?: 'SOLID' | 'DESCRIPTIVE_GEOMETRY';
   toleranceMm: number;
   summary: string;
   checks: DrawingAuditCheck[];
@@ -44,35 +59,8 @@ export type AuditedDrawingView = {
   hidden: ContourPath[];
   centers: ContourPath[];
   bounds?: Bounds2;
+  hasOpenEnds?: boolean;
 };
-
-function directionOf(view: DrawingView) {
-  return (Object.keys(projectionPlaneAxes) as ProjectionDirection[]).find((direction) =>
-    projectionPlaneAxes[direction].every((axis) => view.mapping.includes(axis)),
-  );
-}
-
-export function toProjectionPlane(
-  view: DrawingView,
-  direction: ProjectionDirection,
-  position: Vec2,
-): Vec2 {
-  const value = (axis: SolidAxis) =>
-    view.mapping[0] === axis ? position.x * view.signs[0] : position.y * view.signs[1];
-  const [u, v] = projectionPlaneAxes[direction];
-  return { x: value(u), y: value(v) };
-}
-
-function fromProjectionPlane(
-  view: DrawingView,
-  direction: ProjectionDirection,
-  position: Vec2,
-): Vec2 {
-  const [u] = projectionPlaneAxes[direction];
-  return view.mapping[0] === u
-    ? { x: position.x * view.signs[0], y: position.y * view.signs[1] }
-    : { x: position.y * view.signs[0], y: position.x * view.signs[1] };
-}
 
 function boundsOf(paths: readonly ContourPath[]) {
   const min = { x: Infinity, y: Infinity },
@@ -182,12 +170,19 @@ function inspectView(
   if (!result.bounds) return result;
   const { contours, problems } = extractDrawingContours(result.boundary, tolerance);
   result.contours = contours;
+  result.hasOpenEnds = problems.some(({ openEnds }) => openEnds);
+  const isInternalEnd = (problem: (typeof problems)[number]) =>
+    !!direction &&
+    problem.openEnds === true &&
+    problem.points.every((p) =>
+      contours.some(({ edges, hole }) => !hole && containsContourPoint(edges, p)),
+    );
   for (const [index, problem] of problems.entries()) {
     const overlap = problem.detail.includes('重叠');
     check(
       `topology-${index}`,
       overlap ? 'OVERLAP' : 'CONTOUR',
-      'ERROR',
+      isInternalEnd(problem) ? 'WARN' : 'ERROR',
       overlap ? '重叠图元' : '轮廓拓扑',
       problem.detail,
       problem.entityIds,
@@ -197,7 +192,7 @@ function inspectView(
   check(
     'closed',
     'CONTOUR',
-    !contours.length || problems.length ? 'ERROR' : 'PASS',
+    !contours.length || problems.some((problem) => !isInternalEnd(problem)) ? 'ERROR' : 'PASS',
     '闭合轮廓',
     contours.length
       ? `识别 ${contours.filter((contour) => !contour.hole).length} 个外环、${contours.filter((contour) => contour.hole).length} 个内环。端点合并阈值 ${CONTOUR_JOIN_MM} mm。`
@@ -314,6 +309,19 @@ function compareProjections(
   }
   const featuresA = details(a),
     featuresB = details(b);
+  const alignmentKnots = (s: AuditedDrawingView) => {
+    const c = component(s);
+    const boundaries = [...s.boundary, ...s.hidden].flatMap(({ entity, points }) => {
+      if (!points.length) return [];
+      if (entity.kind === 'arc' || entity.kind === 'circle' || entity.kind === 'ellipse')
+        return points.reduce(
+          ([lo, hi], p) => [Math.min(lo, p[c]), Math.max(hi, p[c])],
+          [Infinity, -Infinity],
+        );
+      return [points[0][c], points.at(-1)![c]];
+    });
+    return boundaries;
+  };
   if (featuresA.length && featuresB.length) {
     for (const [s, own, other, counterparts] of [
       [a, featuresA, b, featuresB],
@@ -321,17 +329,19 @@ function compareProjections(
     ] as const) {
       const k = component(s),
         l = component(other);
-      const sorted = [...counterparts].sort((a, b) => a.p[l] - b.p[l]);
+      const sorted = [...counterparts.map(({ p }) => p[l]), ...alignmentKnots(other)].sort(
+        (a, b) => a - b,
+      );
       for (const sample of own) {
         const position = sample.p[k];
         let lo = 0,
           hi = sorted.length;
         while (lo < hi) {
           const mid = (lo + hi) >>> 1;
-          if (sorted[mid].p[l] < position - tolerance) lo = mid + 1;
+          if (sorted[mid] < position - tolerance) lo = mid + 1;
           else hi = mid;
         }
-        if (lo === sorted.length || sorted[lo].p[l] > position + tolerance) mark(s, sample);
+        if (lo === sorted.length || sorted[lo] > position + tolerance) mark(s, sample);
       }
     }
   }
@@ -349,6 +359,7 @@ function compareProjections(
 export function inspectDrawing(doc: GeometryDocument): {
   report: DrawingAuditReport;
   views: AuditedDrawingView[];
+  spatial?: SpatialProjectionAnalysis;
 } {
   const toleranceMm = doc.settings.tolerance;
   const checks: DrawingAuditCheck[] = [];
@@ -374,6 +385,52 @@ export function inspectDrawing(doc: GeometryDocument): {
         return { view, direction, contours: [], boundary: [], hidden: [], centers: [] };
       }
     });
+  const spatial = analyzeSpatialProjections(
+    doc,
+    views.map(({ view }) => view),
+    views.some(
+      ({ contours, boundary, hasOpenEnds }) => hasOpenEnds || (!contours.length && boundary.length),
+    ),
+  );
+  if (spatial) {
+    const titles = { x: '长对正', y: '宽相等', z: '高平齐' };
+    const categories = { x: 'LENGTH', y: 'DEPTH', z: 'HEIGHT' } as const;
+    const involved = (points: SpatialProjectionAnalysis['unmatched']) => ({
+      viewIds: [...new Set(points.map(({ viewId }) => viewId))],
+      entityIds: points.map(({ entityId }) => entityId),
+      markers: points.slice(0, 24).map(({ viewId, position }) => ({ viewId, position })),
+    });
+    const spatialChecks: DrawingAuditCheck[] = spatial.issues.map(
+      ({ axis, detail, points }, i) => ({
+        id: `spatial-alignment-${i}`,
+        category: axis ? categories[axis] : 'VIEWS',
+        title: axis ? titles[axis] : '投影点配对',
+        severity: 'ERROR',
+        detail,
+        ...involved(points),
+      }),
+    );
+    spatialChecks.unshift({
+      id: 'spatial-points',
+      category: 'VIEWS',
+      title: '空间投影点',
+      severity: !spatial.points.length ? 'ERROR' : spatial.unmatched.length ? 'WARN' : 'PASS',
+      detail: !spatial.points.length
+        ? '缺少可配对的 V/H 投影点。'
+        : `已配对 ${spatial.points.length} 个空间点。${spatial.unmatched.length ? `${spatial.unmatched.length} 个投影点需要补齐同名点或投影对应。` : ''}`,
+      ...involved(spatial.unmatched),
+    });
+    return {
+      spatial,
+      views,
+      report: drawingAuditReport(
+        toleranceMm,
+        spatialChecks,
+        !!spatial.points.length,
+        'DESCRIPTIVE_GEOMETRY',
+      ),
+    };
+  }
   const required: ProjectionDirection[] =
     doc.editorType === 'VH_PROJECTION' ? ['V', 'H'] : ['V', 'H', 'W'];
   const byDirection = new Map(
@@ -410,22 +467,36 @@ export function inspectDrawing(doc: GeometryDocument): {
       b = byDirection.get(second);
     if (a && b) checks.push(compareProjections(doc, a, b, axis, category, title, toleranceMm));
   }
-  const errors = checks.filter(({ severity }) => severity === 'ERROR').length;
-  const warnings = checks.filter(({ severity }) => severity === 'WARN').length;
-  const status = errors ? 'FAIL' : warnings ? 'WARN' : 'PASS';
   return {
     views,
-    report: {
-      status,
-      canReconstruct3D: isOrthographic && enough && !errors,
+    report: drawingAuditReport(
       toleranceMm,
       checks,
-      summary: errors
-        ? `有 ${errors} 项问题需要修正。`
-        : warnings
-          ? `通过基础检查，有 ${warnings} 项需核对。`
-          : '已通过适用的制图检查。',
-    },
+      isOrthographic && enough,
+      isOrthographic ? 'SOLID' : undefined,
+    ),
+  };
+}
+
+function drawingAuditReport(
+  toleranceMm: number,
+  checks: DrawingAuditCheck[],
+  eligible: boolean,
+  reconstructionKind: DrawingAuditReport['reconstructionKind'],
+): DrawingAuditReport {
+  const errors = checks.filter(({ severity }) => severity === 'ERROR').length;
+  const warnings = checks.filter(({ severity }) => severity === 'WARN').length;
+  return {
+    status: errors ? 'FAIL' : warnings ? 'WARN' : 'PASS',
+    canReconstruct3D: eligible && !errors,
+    reconstructionKind,
+    toleranceMm,
+    checks,
+    summary: errors
+      ? `有 ${errors} 项问题需要修正。`
+      : warnings
+        ? `通过基础检查，有 ${warnings} 项需核对。`
+        : '已通过适用的制图检查。',
   };
 }
 

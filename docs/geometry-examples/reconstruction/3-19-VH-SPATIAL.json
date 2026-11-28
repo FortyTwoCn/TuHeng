@@ -1,0 +1,703 @@
+{
+  "schemaVersion": "tuheng.geometry/3.0.0",
+  "editorType": "VH_PROJECTION",
+  "units": "mm",
+  "coordinateSystem": "VIEW_LOCAL_WITH_SHEET_TRANSFORM",
+  "sheet": {
+    "origin": {
+      "x": 0,
+      "y": 0
+    },
+    "allowAuxiliaryViews": true
+  },
+  "auxiliarySystems": [],
+  "projectionConfig": {
+    "convention": "FIRST_ANGLE_LEFT",
+    "axes": {
+      "x": {
+        "angle": 210,
+        "scale": 1
+      },
+      "y": {
+        "angle": 330,
+        "scale": 1
+      },
+      "z": {
+        "angle": 90,
+        "scale": 1
+      }
+    },
+    "depthAngle": 45,
+    "depthScale": 0.5
+  },
+  "views": [
+    {
+      "id": "view-0",
+      "name": "V",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["x", "z"],
+      "signs": [1, 1]
+    },
+    {
+      "id": "view-1",
+      "name": "H",
+      "transform": {
+        "origin": {
+          "x": 0,
+          "y": 0
+        },
+        "xAxis": {
+          "x": -1,
+          "y": 0
+        },
+        "yAxis": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      "mapping": ["x", "y"],
+      "signs": [1, -1]
+    }
+  ],
+  "layers": [
+    {
+      "id": "stem",
+      "role": "PROBLEM_STEM"
+    },
+    {
+      "id": "answer",
+      "role": "STUDENT_ANSWER"
+    },
+    {
+      "id": "construction",
+      "role": "CONSTRUCTION"
+    }
+  ],
+  "entities": [
+    {
+      "id": "v-1",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22.82020974049058,
+        "y": 43.665926057589765
+      },
+      "name": "1'",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "v-a",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 74,
+        "y": 25
+      },
+      "name": "a'",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "v-b",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 60,
+        "y": 35.5
+      },
+      "name": "b'",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "v-c",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 44,
+        "y": 38
+      },
+      "name": "c'",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "v-d",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 26,
+        "y": 38
+      },
+      "name": "d'",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "v-e",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 52.5,
+        "y": 18.5
+      },
+      "name": "e'",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "v-n",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 13.5,
+        "y": 31
+      },
+      "name": "n'",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "v-m",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0.6199999999999992,
+        "y": 40.66
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "v-ab",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-a",
+      "endPoint": "v-b"
+    },
+    {
+      "id": "v-cd",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-c",
+      "endPoint": "v-d"
+    },
+    {
+      "id": "v-de",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-d",
+      "endPoint": "v-e"
+    },
+    {
+      "id": "v-ec",
+      "viewId": "view-0",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-e",
+      "endPoint": "v-c"
+    },
+    {
+      "id": "v-n1",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-n",
+      "endPoint": "v-1"
+    },
+    {
+      "id": "v-nm",
+      "viewId": "view-0",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "v-n",
+      "endPoint": "v-m"
+    },
+    {
+      "id": "v-1-projector",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 22.82020974049058,
+          "y": 43.665926057589765
+        },
+        {
+          "x": 22.82020974049058,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "v-a-projector",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 74,
+          "y": 25
+        },
+        {
+          "x": 74,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "v-b-projector",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 60,
+          "y": 35.5
+        },
+        {
+          "x": 60,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "v-c-projector",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 44,
+          "y": 38
+        },
+        {
+          "x": 44,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "v-d-projector",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 26,
+          "y": 38
+        },
+        {
+          "x": 26,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "v-e-projector",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 52.5,
+          "y": 18.5
+        },
+        {
+          "x": 52.5,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "v-n-projector",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 13.5,
+          "y": 31
+        },
+        {
+          "x": 13.5,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "v-cde-extension",
+      "viewId": "view-0",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 26,
+          "y": 38
+        },
+        {
+          "x": 12.75,
+          "y": 47.75
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "h-1",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 22.82020974049058,
+        "y": -18.396729470316387
+      },
+      "name": "1",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "h-a",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 74,
+        "y": -23.5
+      },
+      "name": "a",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "h-b",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 60,
+        "y": -23.5
+      },
+      "name": "b",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "h-c",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 44,
+        "y": -33
+      },
+      "name": "c",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "h-d",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 26,
+        "y": -13.5
+      },
+      "name": "d",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "h-e",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 52.5,
+        "y": -13.5
+      },
+      "name": "e",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "h-n",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 13.5,
+        "y": -27
+      },
+      "name": "n",
+      "spatial": null,
+      "labelVisible": true
+    },
+    {
+      "id": "h-m",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "point",
+      "position": {
+        "x": 0.6199999999999992,
+        "y": -27
+      },
+      "name": "",
+      "spatial": null,
+      "labelVisible": false
+    },
+    {
+      "id": "h-ab",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-a",
+      "endPoint": "h-b"
+    },
+    {
+      "id": "h-cd",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-c",
+      "endPoint": "h-d"
+    },
+    {
+      "id": "h-de",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-d",
+      "endPoint": "h-e"
+    },
+    {
+      "id": "h-ec",
+      "viewId": "view-1",
+      "layerId": "stem",
+      "lineStyle": "PROBLEM_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-e",
+      "endPoint": "h-c"
+    },
+    {
+      "id": "h-n1",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-n",
+      "endPoint": "h-1"
+    },
+    {
+      "id": "h-nm",
+      "viewId": "view-1",
+      "layerId": "answer",
+      "lineStyle": "ANSWER_VISIBLE",
+      "kind": "segment",
+      "startPoint": "h-n",
+      "endPoint": "h-m"
+    },
+    {
+      "id": "h-1-projector",
+      "viewId": "view-1",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 22.82020974049058,
+          "y": -18.396729470316387
+        },
+        {
+          "x": 22.82020974049058,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "h-a-projector",
+      "viewId": "view-1",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 74,
+          "y": -23.5
+        },
+        {
+          "x": 74,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "h-b-projector",
+      "viewId": "view-1",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 60,
+          "y": -23.5
+        },
+        {
+          "x": 60,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "h-c-projector",
+      "viewId": "view-1",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 44,
+          "y": -33
+        },
+        {
+          "x": 44,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "h-d-projector",
+      "viewId": "view-1",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 26,
+          "y": -13.5
+        },
+        {
+          "x": 26,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "h-e-projector",
+      "viewId": "view-1",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 52.5,
+          "y": -13.5
+        },
+        {
+          "x": 52.5,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    },
+    {
+      "id": "h-n-projector",
+      "viewId": "view-1",
+      "layerId": "construction",
+      "lineStyle": "CONSTRUCTION",
+      "kind": "polyline",
+      "points": [
+        {
+          "x": 13.5,
+          "y": -27
+        },
+        {
+          "x": 13.5,
+          "y": 0
+        }
+      ],
+      "fitStatus": "UNFITTED"
+    }
+  ],
+  "constraints": [],
+  "projectionGroups": [],
+  "settings": {
+    "grid": 5,
+    "tolerance": 0.05,
+    "labels": true
+  },
+  "metadata": {
+    "title": "3-19 过点 N 作一平面垂直于 △CDE 并平行于线段 AB"
+  }
+}

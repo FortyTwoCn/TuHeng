@@ -5,7 +5,7 @@ import {
   HATCH_ROW_LIMIT,
   HATCH_WORK_LIMIT,
 } from './hatch-validation';
-export { HATCH_ROW_LIMIT, HATCH_WORK_LIMIT } from './hatch-validation';
+export { HATCH_ROW_LIMIT, HATCH_WORK_LIMIT, simpleHatchPolygon } from './hatch-validation';
 import { GeometryDocument as LegacyGeometryDocument } from './geometry-v1';
 import { EditorType, geometryId as id, geometryScalar as scalar, Vec2 } from './geometry-values';
 import { ConstructionAnimationDocument, checkConstructionAnimationReferences } from './construction-animation';
