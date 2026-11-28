@@ -12,11 +12,11 @@
   gap: 4px;
   padding: 3px;
   max-width: calc(100% - 8px);
-  border: 1px solid var(--cad-axis, #638894);
+  border: 1px solid var(--cad-axis);
   border-radius: 5px;
-  color: var(--cad-ink, #253b47);
-  background: var(--cad-paper, #f8fbfc);
-  box-shadow: 0 2px 6px #172d391c;
+  color: var(--cad-ink);
+  background: var(--cad-paper);
+  box-shadow: 0 2px 6px var(--cad-shadow);
   font:
     12px/1.1 system-ui,
     sans-serif;
@@ -43,17 +43,17 @@
   border-radius: 2px;
 }
 .geometry-editor .cad-dynamic-input input:focus {
-  border-color: var(--cad-accent, #087c72);
-  outline: 1px solid var(--cad-accent, #087c72);
+  border-color: var(--cad-accent);
+  outline: 1px solid var(--cad-accent);
 }
 .geometry-editor .cad-dynamic-input button {
   pointer-events: auto;
   min-height: 30px;
   min-width: 30px;
   padding: 0;
-  color: var(--cad-accent, #087c72);
-  background: var(--cad-paper, #f8fbfc);
-  border: 1px solid var(--cad-axis, #638894);
+  color: var(--cad-accent);
+  background: var(--cad-paper);
+  border: 1px solid var(--cad-axis);
 }
 .geometry-editor .cad-dynamic-error {
   flex-basis: 100%;

@@ -66,6 +66,7 @@ AI 配置界面用例可通过 `TEST_AI_BASE_URL` 使用受控的本地测试地
 | 几何内核与教学保存   | `tests/unit/geometry*.test.ts`、`tests/integration/geometry.test.ts`                                                               | 坐标、拓扑、笔迹、曲线、绑定、历史 JSON 与服务端题干保护。            |
 | 编辑器浏览器交互     | `geometry-ux.spec.ts`、`geometry-components.spec.ts`、`geometry-pen.spec.ts`、`geometry-curves.spec.ts`、`geometry-repair.spec.ts` | 真鼠标拖动、松手前 HUD、吸附、合点、撤销、顶部动作、输入和导出。      |
 | 分步作图、审核与三维 | `tests/unit/construction-animation.test.ts`、`tests/unit/drawing-audit.test.ts`、`tests/unit/solid-reconstruction.test.ts`、`tests/e2e/geometry-milestone3.spec.ts` | 动画文件和笔顺、错误路径、投影审核、网格体积、孔道连通及桌面/手机三维联动。 |
+| 讲解工作区双主题 | [geometry-milestone6.spec.ts](../tests/e2e/geometry-milestone6.spec.ts) | 实际点按明暗切换、SVG 与图例同色、3D Canvas 像素、参考图纸、390 × 844 触控布局。 |
 | 网络与登录           | `network-login.spec.ts`                                                                                                            | 指定应用地址下的登录/刷新/退出、非法源拒绝与编辑器使用。              |
 
 表中未写目录的 `*.test.ts` 位于集成测试目录（几何通配与单元标注除外），`*.spec.ts` 和 `onboarded-teaching.ts` 位于 `tests/e2e`。用 `npm run test:e2e -- tests/e2e/文件.spec.ts` 运行针对性用例，不以单个子集代替完整套件结果。

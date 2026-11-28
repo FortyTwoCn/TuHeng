@@ -10,6 +10,7 @@ import type { useEditorChrome } from './useEditorChrome';
 import type { useEditorCommands } from './useEditorCommands';
 import type { useEditorDocumentSession } from './useEditorDocumentSession';
 import type { WorkspaceLayout, WorkspaceMode } from './modules/useWorkspaceLayout';
+import { WorkspaceModuleToggles } from './modules/WorkspaceNavigation';
 
 type Context = {
   model: ReturnType<typeof useEditorDocumentSession>;
@@ -75,6 +76,7 @@ export function EditorHeader({
       workspace={{
         mode: layout.mode,
         changeMode,
+        modules: <WorkspaceModuleToggles layout={layout} />,
         audit: layout.canAudit
           ? { open: layout.showAudit, toggle: () => layout.openAudit(!layout.showAudit) }
           : undefined,

@@ -1,5 +1,6 @@
 import { editable, setCadAppearance, type ObjectSnapType } from '@tuheng/geometry-core';
 import type { GeometryDocument, GeometryEntity } from '@tuheng/contracts';
+import { draftingInk, type EditorTheme } from './theme';
 
 export const objectSnaps: { id: ObjectSnapType; name: string }[] = [
   { id: 'endpoint', name: '端点' },
@@ -78,7 +79,7 @@ export function DrawingAppearance({
   change,
   report,
 }: {
-  theme: 'dark' | 'light';
+  theme: EditorTheme;
   initial: Appearance;
   doc: GeometryDocument;
   selected: string[];
@@ -93,15 +94,9 @@ export function DrawingAppearance({
     !readOnly &&
     selected.length === entities.length &&
     entities.every((e) => editable(doc, e, role));
-  const defaultInk = theme === 'dark' ? '#e7f1f4' : '#253b47';
+  const { ink, axis, stem } = draftingInk[theme];
   const defaultColor = (style: GeometryEntity['lineStyle']) =>
-    style.startsWith('PROBLEM')
-      ? '#4585dd'
-      : style === 'CONSTRUCTION'
-        ? theme === 'dark'
-          ? '#7198a8'
-          : '#638894'
-        : defaultInk;
+    style.startsWith('PROBLEM') ? stem : style === 'CONSTRUCTION' ? axis : ink;
   const resolve = (entity: GeometryEntity, key: keyof Appearance) =>
     entity.appearance?.[key] ??
     (key === 'color'

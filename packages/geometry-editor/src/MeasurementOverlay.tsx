@@ -85,8 +85,8 @@ export function MeasurementOverlay({
       transform={`translate(${x} ${-y})`}
       pointerEvents="none"
     >
-      <rect x={0} y={0} width={w} height={h} rx={4 / scale} fill="#f8fafcf2" />
-      <text x={7 / scale} y={18 / scale} fontSize={12 / scale} fill="#525d6b">
+      <rect x={0} y={0} width={w} height={h} rx={4 / scale} fill="var(--cad-raised)" />
+      <text x={7 / scale} y={18 / scale} fontSize={12 / scale} fill="var(--cad-text)">
         {text}
       </text>
     </g>

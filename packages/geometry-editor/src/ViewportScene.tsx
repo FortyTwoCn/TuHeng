@@ -53,8 +53,8 @@ function MarqueeOverlay({ marquee, scale }: { marquee: Marquee; scale: number })
         y={-box.y - box.height}
         width={box.width}
         height={box.height}
-        fill={crossing ? '#16a34a1a' : '#0284c71a'}
-        stroke={crossing ? '#15803d' : '#0284c7'}
+        fill={crossing ? 'var(--cad-crossing-fill)' : 'var(--cad-window-fill)'}
+        stroke={crossing ? 'var(--cad-crossing)' : 'var(--cad-window)'}
         strokeWidth={1 / scale}
         strokeDasharray={crossing ? `${5 / scale} ${3 / scale}` : undefined}
       />
@@ -138,8 +138,8 @@ export function ViewportScene({
               y={-4 / scale}
               width={8 / scale}
               height={8 / scale}
-              fill="white"
-              stroke="#0369a1"
+              fill="var(--cad-control)"
+              stroke="var(--cad-window)"
               strokeWidth={1.5 / scale}
             />
             <circle data-cad-grip={grip.key} r={12 / scale} fill="transparent">
@@ -171,7 +171,7 @@ export function ViewportScene({
           y1={-points[0].y}
           x2={lineSheet.x}
           y2={-lineSheet.y}
-          stroke={controls.appearance.color ?? 'var(--cad-accent,#087c72)'}
+          stroke={controls.appearance.color ?? 'var(--cad-accent)'}
           strokeWidth={1.4}
           vectorEffect="non-scaling-stroke"
           strokeDasharray="6 3"
@@ -195,7 +195,7 @@ export function ViewportScene({
         pointerEvents="none"
         style={{ visibility: 'hidden' }}
         fill="none"
-        stroke="var(--cad-axis,#638894)"
+        stroke="var(--cad-axis)"
         strokeWidth={1}
       >
         <rect x={-3.5} y={-3.5} width={7} height={7} />

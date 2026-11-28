@@ -49,8 +49,8 @@
     z-index: 2;
     margin: 0;
     padding: 6px 0;
-    background: #fff;
-    border-top: 1px solid #e2e8f0;
+    background: var(--cad-surface);
+    border-top: 1px solid var(--cad-line);
   }
   .geo-panel {
     top: auto;
@@ -166,9 +166,13 @@
     gap: 2px;
   }
   .cad-mode-list {
+    flex: 1 1 100%;
     gap: 0;
     margin-left: 0;
     flex-wrap: wrap;
+  }
+  .geometry-editor .cad-mode-list .cad-theme-toggle {
+    margin-inline-start: auto;
   }
   .cad-coordinate-readout {
     width: 100%;
@@ -263,6 +267,6 @@
   left: 8px;
   padding: 3px 6px;
   background: var(--cad-chrome);
-  color: var(--cad-tool-text);
+  color: var(--cad-text);
   pointer-events: none;
 }

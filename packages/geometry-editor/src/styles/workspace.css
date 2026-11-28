@@ -1,18 +1,5 @@
-/* 编辑器容器、主题以及顶栏、工具栏和状态栏。 */
+/* 编辑器容器、顶栏、工具栏和状态栏。 */
 .geometry-editor {
-  --cad-chrome: #203746;
-  --cad-rail: #293f4d;
-  --cad-line: #405966;
-  --cad-tool-text: #d5e5e8;
-  --cad-tool-muted: #a7bec5;
-  --cad-on: #62ded1;
-  --cad-paper: #f8fbfc;
-  --cad-relation: #855109;
-  --cad-grid-minor: #dfe7e9;
-  --cad-grid-major: #bfd1d4;
-  --cad-axis: #638894;
-  --cad-ink: #253b47;
-  --cad-accent: #087c72;
   position: relative;
   container-type: inline-size;
   display: grid;
@@ -26,66 +13,65 @@
   border: 1px solid var(--cad-line);
   border-radius: 10px;
   background: var(--cad-chrome);
-  color: #17212f;
+  color: var(--cad-text);
   font-family: inherit;
   box-sizing: border-box;
-}
-.geometry-editor[data-theme='dark'] {
-  --cad-paper: #152331;
-  --cad-relation: #ffd079;
-  --cad-grid-minor: #283d4b;
-  --cad-grid-major: #34505f;
-  --cad-axis: #7198a8;
-  --cad-ink: #e7f1f4;
-  --cad-accent: #60ded1;
+  scrollbar-color: var(--cad-scroll) transparent;
 }
 .geometry-editor * {
   box-sizing: border-box;
 }
-.geometry-editor button,
-.geometry-editor select {
-  min-height: 36px;
-  border: 1px solid #cbd5e1;
+.geometry-editor :is(button, select, input, textarea) {
+  border: 1px solid var(--cad-control-line);
   border-radius: 6px;
-  background: #fff;
-  color: #17212f;
+  background: var(--cad-control);
+  color: var(--cad-text);
+  margin: 0;
   padding: 5px 9px;
   font: inherit;
   font-size: 13px;
+}
+.geometry-editor :is(button, select, input) {
+  min-height: 36px;
+}
+.geometry-editor :is(button, select) {
   cursor: pointer;
   flex-shrink: 0;
 }
+.geometry-editor button:where(:hover:not(:disabled)) {
+  background: var(--cad-hover);
+}
 .geometry-editor button[aria-pressed='true'] {
-  background: #e0f2fe;
-  border-color: #0284c7;
+  color: var(--cad-accent);
+  background: var(--cad-active);
+  border-color: var(--cad-active-line);
 }
 .geometry-editor button:disabled {
   opacity: 0.48;
   cursor: not-allowed;
 }
 .geometry-editor :focus-visible {
-  outline: 2px solid #0f766e;
+  outline: 2px solid var(--cad-accent);
   outline-offset: 2px;
 }
 .geometry-editor input {
-  min-height: 36px;
   max-width: 100%;
   min-width: 0;
-  border: 1px solid #cbd5e1;
-  border-radius: 5px;
-  padding: 6px 8px;
-  font: inherit;
-  font-size: 13px;
+}
+.geometry-editor :is(input, textarea)::placeholder {
+  color: var(--cad-muted);
+  opacity: 1;
 }
 .geometry-editor input[type='checkbox'] {
   min-height: 18px;
   width: 18px;
   height: 18px;
-  accent-color: #0f766e;
+  accent-color: var(--cad-primary);
 }
 .geometry-editor label {
+  margin: 0;
   font-size: 12px;
-  color: #475569;
+  color: var(--cad-muted);
 }
 
 .geo-workspace-body {
@@ -118,7 +104,16 @@
   background: var(--cad-paper);
 }
 .geo-view > svg [data-reference-id] text {
-  fill: var(--cad-axis);
+  fill: var(--cad-axis-label);
+}
+.geometry-editor :is(.geo-view > svg, .geo-reference-viewport > svg, .geo-solid-canvas):focus {
+  outline: 1px solid var(--cad-active-line);
+  outline-offset: -1px;
+}
+.geometry-editor
+  :is(.geo-view > svg, .geo-reference-viewport > svg, .geo-solid-canvas):focus-visible {
+  outline: 2px solid var(--cad-accent);
+  outline-offset: -2px;
 }
 .geo-expanded {
   position: fixed;
@@ -143,7 +138,7 @@
 .cad-topbar,
 .cad-statusbar,
 .cad-rail {
-  color: var(--cad-tool-text);
+  color: var(--cad-text);
   background: var(--cad-chrome);
   font-size: 12px;
 }
@@ -180,7 +175,7 @@
   white-space: nowrap;
 }
 .cad-sheet-mark {
-  color: var(--cad-on);
+  color: var(--cad-accent);
   display: inline-flex;
   align-items: center;
   padding: 0 4px;
@@ -199,7 +194,7 @@
 .cad-topbar label,
 .cad-topbar select,
 .cad-topbar input {
-  color: var(--cad-tool-text);
+  color: var(--cad-text);
   margin: 0;
 }
 .cad-topbar label {
@@ -216,10 +211,9 @@
   height: 31px;
   min-height: 31px;
   padding: 3px 5px;
-  border: 1px solid var(--cad-line);
+  border: 1px solid var(--cad-control-line);
   border-radius: 4px;
-  background: #172e3b;
-  color-scheme: dark;
+  background: var(--cad-control);
 }
 .cad-topbar input[type='number'] {
   width: 53px;
@@ -246,7 +240,7 @@
   padding: 4px;
   border: 1px solid transparent;
   border-radius: 5px;
-  color: var(--cad-tool-text);
+  color: var(--cad-text);
   background: transparent;
   font-size: 11px;
   line-height: 1.15;
@@ -255,14 +249,13 @@
 }
 .geometry-editor
   :is(.cad-action, .cad-mode-toggle, .cad-rail-more, .cad-tool):hover:not(:disabled) {
-  background: #385767;
-  color: #fff;
+  background: var(--cad-hover);
 }
 .geometry-editor :is(.cad-tool, .cad-mode-toggle)[aria-pressed='true'],
 .geometry-editor .cad-rail-more[aria-expanded='true'] {
-  background: #285751;
-  color: #a6fff0;
-  border-color: #4e9f95;
+  background: var(--cad-active);
+  color: var(--cad-accent);
+  border-color: var(--cad-active-line);
 }
 .cad-action svg,
 .cad-tool svg,
@@ -311,7 +304,6 @@
   overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-width: var(--cad-rail-scrollbar, thin);
-  scrollbar-color: #647c86 transparent;
 }
 .cad-drawing-rail {
   border-right: 1px solid var(--cad-line);
@@ -326,7 +318,7 @@
   font-size: 10px;
   font-weight: 650;
   letter-spacing: 0.08em;
-  color: var(--cad-tool-muted);
+  color: var(--cad-muted);
   margin: 5px 0 2px;
   padding: 4px 1px 0;
   border-top: 1px solid var(--cad-line);
@@ -387,12 +379,12 @@
   min-width: 0;
 }
 .cad-command-state > strong {
-  color: var(--cad-on);
+  color: var(--cad-accent);
   font-size: 11px;
 }
 .cad-step-message {
   font-size: 11px;
-  color: #d2e1e3;
+  color: var(--cad-text);
   line-height: 1.4;
   min-width: 0;
 }
@@ -416,7 +408,7 @@
   display: grid;
   gap: 3px;
   margin: 0;
-  color: var(--cad-tool-text);
+  color: var(--cad-text);
   font-size: 11px;
 }
 .cad-command-setup .cad-setup-primary {
@@ -446,12 +438,12 @@
   padding-inline: 6px;
 }
 .geometry-editor .cad-steps .cad-accept {
-  border-color: #3f948d;
-  color: #a6fff0;
-  background: #24564f;
+  border-color: var(--cad-active-line);
+  color: var(--cad-accent);
+  background: var(--cad-active);
 }
 .cad-coordinate-readout {
-  color: #c4d7dc;
+  color: var(--cad-text);
   white-space: nowrap;
   font:
     11px ui-monospace,
@@ -461,7 +453,7 @@
   font-size: 10px;
   padding-left: 6px;
   border-left: 1px solid var(--cad-line);
-  color: #a8bec5;
+  color: var(--cad-muted);
 }
 .cad-mode-list {
   margin-left: auto;
@@ -476,7 +468,7 @@
 .geo-popover h4 {
   margin: 4px 0;
   font-size: 12px;
-  color: #274450;
+  color: var(--cad-text);
 }
 .geometry-editor .geo-popover .cad-tool-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -484,13 +476,13 @@
 }
 .geometry-editor .geo-popover :is(.cad-tool, .cad-action) {
   justify-content: flex-start;
-  color: #243f4b;
+  color: var(--cad-text);
   padding: 6px;
   white-space: nowrap;
 }
 .geometry-editor .geo-popover :is(.cad-tool, .cad-action):hover {
-  background: #e5f0ef;
-  color: #174c48;
+  background: var(--cad-hover);
+  color: var(--cad-accent);
 }
 .cad-choice-list {
   display: grid;

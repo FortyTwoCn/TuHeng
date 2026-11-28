@@ -25,6 +25,7 @@ export function ProgressiveStroke({
         y={box.y - pad}
         width={box.width + pad * 2}
         height={box.height + pad * 2}
+        style={{ maskType: 'alpha' }}
       >
         {cloneElement(shape, {
           className: 'geo-ink-trace',
@@ -33,7 +34,7 @@ export function ProgressiveStroke({
           // Normalize the tracing path before the viewport transform. The
           // visible stroke keeps its non-scaling width and engineering dash.
           vectorEffect: 'none',
-          stroke: 'white',
+          stroke: 'currentColor',
           strokeWidth: (width + 3) / scale,
           strokeLinecap: 'round',
           strokeDasharray: 'none',

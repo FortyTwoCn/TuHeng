@@ -40,11 +40,12 @@ async function painted(canvas: Locator) {
           .getContext('2d')!
           .getImageData(0, 0, element.width, element.height).data;
         let ink = 0;
-        for (let i = 3; i < data.length; i += 4) if (data[i] > 16) ink++;
+        for (let i = 0; i < data.length; i += 4)
+          if (data[i] < 158 && data[i + 1] < 172) ink++;
         return ink;
       }),
     )
-    .toBeGreaterThan(4000);
+    .toBeGreaterThan(700);
 }
 
 test.use({ viewport: { width: 1600, height: 1000 } });

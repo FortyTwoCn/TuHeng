@@ -3,8 +3,8 @@
   grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  color: #1d3441;
-  background: var(--geo-teaching-surface);
+  color: var(--cad-text);
+  background: var(--cad-surface);
   overflow: hidden;
 }
 .geo-reference-pane[hidden] {
@@ -17,17 +17,17 @@
   right: min(4%, 34px);
   width: min(440px, max(276px, 40%), calc(100% - 24px));
   height: min(440px, max(240px, 68%), calc(100% - 16px));
-  border: 1px solid #90a9b7;
-  border-radius: 8px;
-  box-shadow: 0 8px 28px #172e4660;
+  border: 1px solid var(--cad-control-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px var(--cad-shadow);
 }
 .geo-reference-titlebar {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 7px;
-  color: var(--cad-tool-text);
-  background: var(--cad-chrome);
+  padding: 5px 8px;
+  background: var(--cad-raised);
+  border-bottom: 1px solid var(--cad-line);
 }
 .geo-reference-pane[data-placement='floating'] .geo-reference-titlebar {
   touch-action: none;
@@ -41,7 +41,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 14px;
 }
 .geometry-editor .geo-reference-titlebar button {
   display: grid;
@@ -49,9 +49,14 @@
   width: 31px;
   min-height: 28px;
   padding: 0;
-  color: var(--cad-tool-text);
+  color: var(--cad-muted);
   background: transparent;
   border-color: var(--cad-line);
+}
+.geometry-editor .geo-reference-titlebar button:hover {
+  color: var(--cad-text);
+  background: var(--cad-hover);
+  border-color: var(--cad-control-line);
 }
 .geo-touch .geo-reference-titlebar button {
   width: 44px;
@@ -61,9 +66,12 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px 7px;
-  border-bottom: 1px solid var(--geo-teaching-border);
+  gap: 5px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--cad-line);
+}
+.geo-reference-view-tools {
+  background: var(--cad-surface);
 }
 .geo-reference-file :is(span, p) {
   font-size: 12px;
@@ -71,7 +79,7 @@
 }
 .geo-reference-file p {
   width: 100%;
-  color: #a62334;
+  color: var(--cad-danger);
   overflow-wrap: anywhere;
 }
 .geometry-editor :is(.geo-reference-file, .geo-reference-view-tools) button {
@@ -86,7 +94,7 @@
   min-width: 0;
 }
 .geo-reference-content {
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) fit-content(min(260px, 48%));
 }
 .geo-reference-viewport {
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -101,12 +109,13 @@
   background: var(--cad-paper);
 }
 .geo-reference-viewport [data-reference-id] text {
-  fill: var(--cad-axis);
+  fill: var(--cad-axis-label);
 }
 .geo-reference-coordinates {
   min-height: 19px;
-  padding: 2px 7px;
-  background: #edf3f6;
+  padding: 3px 8px;
+  background: var(--cad-inset);
+  color: var(--cad-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -114,23 +123,36 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
-  max-height: min(198px, 52%);
-  border-top: 1px solid var(--geo-teaching-border);
+  min-width: 0;
+  border-top: 1px solid var(--cad-line);
+  background: var(--cad-surface);
 }
 .geo-reference-properties {
   min-height: 0;
   overflow: auto;
-  padding: 4px 8px;
+  padding: 7px 10px;
   font-size: 12px;
 }
 .geo-reference-properties h4,
 .geo-reference-properties dl {
-  margin: 2px 0 4px;
+  margin: 0 0 5px;
+}
+.geo-reference-properties h4 {
+  font-size: 13px;
+}
+.geo-reference-properties section + section {
+  border-top: 1px solid var(--cad-line);
+  margin-top: 7px;
+  padding-top: 7px;
 }
 .geo-reference-properties dl > div {
   display: grid;
   grid-template-columns: 5em minmax(0, 1fr);
-  gap: 5px;
+  gap: 7px;
+  line-height: 1.5;
+}
+.geo-reference-properties dt {
+  color: var(--cad-muted);
 }
 .geo-reference-properties dd {
   margin: 0;
@@ -143,12 +165,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 3px 6px;
-  padding: 4px 14px 4px 7px;
-  border-top: 1px solid var(--geo-teaching-border);
+  padding: 6px 14px 6px 8px;
+  border-top: 1px solid var(--cad-line);
+  background: var(--cad-raised);
   font-size: 12px;
 }
 .geo-reference-copy small {
   flex: 0 0 100%;
+  color: var(--cad-muted);
 }
 .geo-reference-resize {
   position: absolute;
@@ -159,22 +183,28 @@
   background: linear-gradient(
     135deg,
     transparent 53%,
-    #52768b 55% 60%,
+    var(--cad-divider) 55% 60%,
     transparent 62% 71%,
-    #52768b 73% 78%,
+    var(--cad-divider) 73% 78%,
     transparent 80%
   );
   cursor: nwse-resize;
   touch-action: none;
 }
-.geometry-editor .geo-reference-chip {
+.geometry-editor button.geo-reference-chip {
   position: absolute;
   bottom: 9px;
   right: 9px;
   z-index: 10;
-  min-height: 28px;
+  min-height: 32px;
   padding: 4px 10px;
   border-radius: 99px;
-  box-shadow: 0 2px 7px #1a344332;
+  color: var(--cad-accent);
+  background: var(--cad-raised);
+  border-color: var(--cad-active-line);
+  box-shadow: 0 2px 7px var(--cad-shadow);
   font-size: 12px;
+}
+.geometry-editor button.geo-reference-chip:hover {
+  background: var(--cad-active);
 }

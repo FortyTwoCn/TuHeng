@@ -1,0 +1,86 @@
+.geo-solid-pane {
+  grid-area: solid;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  padding: 10px 12px;
+  background: var(--cad-surface);
+}
+.geo-solid-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+.geo-solid-presets {
+  gap: 2px;
+  padding: 2px;
+  background: var(--cad-inset);
+  border: 1px solid var(--cad-line);
+  border-radius: 8px;
+}
+.geometry-editor .geo-solid-presets button {
+  min-height: 28px;
+  padding: 2px 7px;
+  font-size: 12px;
+}
+.geo-solid-canvas {
+  display: block;
+  flex: 1 0 160px;
+  width: 100%;
+  min-height: 0;
+  border: 1px solid var(--cad-line);
+  border-radius: 8px;
+  background: var(--cad-inset);
+  cursor: grab;
+  touch-action: none;
+}
+.geo-solid-canvas:active {
+  cursor: grabbing;
+}
+.geo-solid-footer {
+  display: grid;
+  gap: 7px;
+}
+.geometry-editor .geo-solid-options button {
+  min-height: 32px;
+  font-size: 12px;
+}
+.geo-solid-details ul {
+  padding-inline-start: 16px;
+  margin-block: 5px 2px;
+}
+.geo-solid-placeholder {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  padding: 12px 0;
+}
+.geo-solid-message {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 268px);
+  padding: 20px 14px;
+  border: 1px solid var(--cad-line);
+  border-radius: 10px;
+  background: var(--cad-raised);
+  color: var(--cad-muted);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.geo-solid-icon {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border: 1px solid var(--cad-active-line);
+  border-radius: 10px;
+  background: var(--cad-active);
+  color: var(--cad-accent);
+}

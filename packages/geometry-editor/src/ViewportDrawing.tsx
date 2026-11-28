@@ -53,8 +53,8 @@ export function ViewportDrawing({
           cx={candidate.x}
           cy={candidate.y}
           r={7 / scale}
-          fill="#14b8a630"
-          stroke="#0f766e"
+          fill="var(--cad-drawing-fill)"
+          stroke="var(--cad-accent)"
           strokeWidth={2 / scale}
         />
       )}
@@ -64,7 +64,7 @@ export function ViewportDrawing({
         <polyline
           data-transient="preview"
           points={preview.map((p) => `${p.x},${p.y}`).join(' ')}
-          stroke={strokeAppearance?.color ?? 'var(--cad-accent,#0f766e)'}
+          stroke={strokeAppearance?.color ?? 'var(--cad-accent)'}
           strokeDasharray={strokeStyle?.strokeDasharray}
           strokeWidth={strokeStyle?.strokeWidth ?? 2}
           vectorEffect="non-scaling-stroke"
@@ -72,7 +72,14 @@ export function ViewportDrawing({
         />
       )}
       {steps.map((p, i) => (
-        <circle data-transient="step" key={i} cx={p.x} cy={p.y} r={4 / scale} fill="#d97706" />
+        <circle
+          data-transient="step"
+          key={i}
+          cx={p.x}
+          cy={p.y}
+          r={4 / scale}
+          fill="var(--cad-relation)"
+        />
       ))}
       {props.ruler?.visible && (
         <g
@@ -85,8 +92,8 @@ export function ViewportDrawing({
             y={0}
             width={props.ruler.length}
             height={5}
-            fill="#fbbf2480"
-            stroke="#b45309"
+            fill="var(--cad-warning-fill)"
+            stroke="var(--cad-relation)"
             strokeWidth={1 / scale}
           />
           {Array.from({ length: Math.floor(props.ruler.length / 5) + 1 }, (_, i) => (
@@ -96,7 +103,7 @@ export function ViewportDrawing({
               x2={i * 5}
               y1={0}
               y2={i % 2 === 0 ? 3 : 2}
-              stroke="#92400e"
+              stroke="var(--cad-relation)"
               strokeWidth={1 / scale}
             />
           ))}

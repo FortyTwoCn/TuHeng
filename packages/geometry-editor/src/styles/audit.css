@@ -1,0 +1,52 @@
+.geo-audit-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.geo-audit-pane [data-severity] {
+  color: var(--cad-success);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.geo-audit-pane [data-severity='WARN'] {
+  color: var(--cad-warning);
+}
+.geo-audit-pane :is([data-severity='ERROR'], [data-severity='FAIL'], .geo-audit-notice) {
+  color: var(--cad-danger);
+}
+.geo-audit-heading [data-severity] {
+  padding: 3px 8px;
+  border: 1px solid var(--cad-line);
+  border-radius: 99px;
+  background: var(--cad-raised);
+}
+.geo-audit-results {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.geometry-editor .geo-audit-results button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 6px;
+  width: 100%;
+  text-align: start;
+  padding: 8px;
+}
+.geo-audit-results small {
+  grid-column: 1 / -1;
+  color: var(--cad-muted);
+  line-height: 1.5;
+}
+.geo-audit-markers {
+  stroke: var(--cad-relation);
+  fill: var(--cad-warning-fill);
+}
+.geo-audit-markers text {
+  fill: var(--cad-relation);
+}

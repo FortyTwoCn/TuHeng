@@ -8,6 +8,7 @@ import { RulerControls } from './RulerControls';
 import { ObjectSnapChoices, objectSnaps } from './CadPreferences';
 import { entityNames } from './PropertyFields';
 import type { Ruler } from './types';
+import type { EditorTheme } from './theme';
 export function initialSettings(doc: GeometryDocument) {
   return {
     snapping: true,
@@ -28,7 +29,7 @@ export function initialSettings(doc: GeometryDocument) {
     selectionMode: 'replace' as 'replace' | 'add' | 'remove',
     typeFilter: '',
     touchOffset: false,
-    theme: 'dark' as 'light' | 'dark',
+    theme: 'dark' as EditorTheme,
     inputLayout: 'auto',
   };
 }
@@ -169,7 +170,7 @@ export function WorkspaceSettings({
         </select>
       </label>
       <label>
-        画布主题
+        编辑器主题
         <select
           value={settings.theme}
           onChange={(e) =>

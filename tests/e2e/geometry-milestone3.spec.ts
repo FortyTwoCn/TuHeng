@@ -6,7 +6,10 @@ import { loadGeometryDocument, serializeGeometryDocument } from '@tuheng/geometr
 import { prepareLogin } from './identity-login';
 import { choose, closePanels } from './editor-controls';
 import { at } from './editor-fixture';
-import { captureCadReconstruction } from './cad-reconstruction-evidence';
+import {
+  captureCadReconstruction,
+  freezeConstructionFrame as freeze,
+} from './cad-reconstruction-evidence';
 
 const base = 'docs/geometry-examples/construction/THREE-VIEW-CONSTRUCTION';
 const read = (suffix: string) => readFileSync(base + suffix, 'utf8');
@@ -51,15 +54,6 @@ async function shot(page: Page, info: TestInfo, name: string) {
     animations: 'allow',
     scale: 'css',
   });
-}
-
-async function freeze(view: Locator, time: number) {
-  await view.locator('[data-construction-play-key]').evaluate((element, timeMs) => {
-    for (const animation of element.getAnimations({ subtree: true })) {
-      animation.pause();
-      animation.currentTime = timeMs;
-    }
-  }, time);
 }
 
 async function sampleGuide(view: Locator, guide: Locator, fraction: number) {

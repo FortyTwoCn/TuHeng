@@ -87,13 +87,14 @@ export function ConstructionOverlays({
           >
             <circle
               r={5 / scale}
-              fill={point.kind === 'SPECIAL' ? '#e88016' : '#15a56c'}
+              className="geo-construction-focus-dot"
               stroke="var(--cad-paper)"
               strokeWidth={1.8 / scale}
             />
             {point.label && (
               <text
-                fill="var(--geo-animation-ink)"
+                className="geo-construction-focus-label"
+                strokeWidth={2.5 / scale}
                 fontSize={12 / scale}
                 transform={`translate(${8 / scale} ${6 / scale}) scale(1 -1)`}
               >

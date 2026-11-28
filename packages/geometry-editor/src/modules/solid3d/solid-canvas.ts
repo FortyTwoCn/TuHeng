@@ -7,10 +7,13 @@ import {
   type SolidCamera,
 } from './scene-camera';
 import type { LinkedFace } from './useSolidPreview';
+import type { EditorTheme } from '../../theme';
+import { paintSceneBackground, sceneColors } from './scene-theme';
 
 type ScreenFace = { index: number; points: ScreenPoint[]; depth: number; front: boolean };
 type DrawOptions = {
   camera: SolidCamera;
+  theme: EditorTheme;
   transparent: boolean;
   wireframe: boolean;
   highlighted: ReadonlySet<number>;
@@ -60,7 +63,9 @@ export function paintSolid(
   featureKeys: ReadonlySet<string>,
   options: DrawOptions,
 ) {
-  context.clearRect(0, 0, width, height);
+  const { theme } = options;
+  const colors = sceneColors[theme].solid;
+  paintSceneBackground(context, width, height, theme);
   const { toward, at } = sceneProjection(solid.bounds, options.camera, width, height);
   const points = solid.vertices.map(at);
   const faces: ScreenFace[] = [];
@@ -89,10 +94,11 @@ export function paintSolid(
     const highlighted = options.highlighted.has(index);
     if (options.wireframe && !highlighted) continue;
     const shade = Math.max(0, dot(solid.normals[index], light));
-    const opacity = options.wireframe ? 0.15 : options.transparent ? (face.front ? 0.26 : 0.13) : 1;
+    const opacity = options.wireframe ? 0.15 : options.transparent ? (face.front ? 0.29 : 0.15) : 1;
+    const lightness = colors.lightness + shade * colors.lightRange;
     context.fillStyle = highlighted
-      ? `rgba(2, 156, 170, ${opacity})`
-      : `hsla(${face.front ? 198 : 216}, 47%, ${43 + shade * 36}%, ${opacity})`;
+      ? `hsl(${colors.highlight} / ${opacity})`
+      : `hsl(${face.front ? 198 : 216} 47% ${lightness}% / ${opacity})`;
     context.beginPath();
     context.moveTo(a.x, a.y);
     context.lineTo(b.x, b.y);
@@ -100,12 +106,13 @@ export function paintSolid(
     context.closePath();
     context.fill();
     if (!options.transparent && !options.wireframe) {
+      // A small overlap seals antialiasing gaps between opaque triangles against dark paper.
       context.strokeStyle = context.fillStyle;
-      context.lineWidth = 0.45;
+      context.lineWidth = 1.25;
       context.stroke();
     }
     if (!options.wireframe) {
-      context.strokeStyle = options.transparent ? '#21485fa0' : '#1b3b4f';
+      context.strokeStyle = options.transparent ? colors.translucentEdge : colors.edge;
       context.lineWidth = options.transparent ? 1 : 1.3;
       solid.triangles[index].forEach((from, i, triangle) => {
         const key = edgeKey(from, triangle[(i + 1) % 3]);
@@ -117,7 +124,7 @@ export function paintSolid(
     }
   }
   if (options.wireframe) {
-    context.strokeStyle = '#284e65';
+    context.strokeStyle = colors.wire;
     context.lineWidth = 1.5;
     for (const [a, b] of features) line(points[a], points[b]);
   }

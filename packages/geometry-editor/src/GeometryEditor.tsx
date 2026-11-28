@@ -21,6 +21,7 @@ import { useEditorCommands } from './useEditorCommands';
 import { EditorHeader, EditorFooter } from './EditorChromeControls';
 import { workspaceShortcuts } from './workspace-shortcuts';
 import type { DrawingTextKind } from './DrawingFiles';
+import { draftingThemeStyle } from './theme';
 import './styles.css';
 
 export interface GeometryEditorHandle {
@@ -263,6 +264,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
         data-workspace-mode={layout.mode}
         data-input-layout={settings.inputLayout}
         data-theme={settings.theme}
+        style={draftingThemeStyle(settings.theme)}
         onPointerUp={(event) => {
           // 混合输入先完成画布手势，再更新工具栏尺寸。
           if (event.target instanceof Element && event.target.closest('.geo-view > svg'))
@@ -305,6 +307,7 @@ export const GeometryEditor = forwardRef<GeometryEditorHandle, GeometryEditorPro
           commands={commands}
           layout={layout}
           features={features}
+          theme={settings.theme}
           readOnly={readOnly}
           loadReference={() => files.actions.loadReference?.()}
           copyReference={copyReference}

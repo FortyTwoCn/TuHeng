@@ -1,7 +1,9 @@
-/* 先应用工作区与面板基础样式，最后调整响应式布局。 */
+@import './styles/theme.css';
 @import './styles/workspace.css';
 @import './styles/panels.css';
-@import './styles/responsive.css';
 @import './styles/teaching.css';
+@import './styles/audit.css';
+@import './styles/solid.css';
 @import './styles/workspace-modules.css';
 @import './styles/reference.css';
+@import './styles/responsive.css';

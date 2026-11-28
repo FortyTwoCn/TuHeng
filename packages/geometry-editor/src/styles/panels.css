@@ -9,10 +9,10 @@
   max-height: 65vh;
   overflow: auto;
   padding: 8px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--cad-control-line);
   border-radius: 10px;
-  background: white;
-  box-shadow: 0 8px 30px #17212f24;
+  background: var(--cad-surface);
+  box-shadow: 0 8px 30px var(--cad-shadow);
 }
 .geo-popover button {
   text-align: left;
@@ -21,13 +21,13 @@
   width: min(400px, calc(100vw - 32px));
   max-height: 85dvh;
   padding: 18px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--cad-control-line);
   border-radius: 10px;
-  background: #fff;
-  color: #17212f;
+  background: var(--cad-surface);
+  color: var(--cad-text);
 }
 .geo-dxf-dialog::backdrop {
-  background: #17212f66;
+  background: var(--cad-backdrop);
 }
 .geo-dxf-dialog h3 {
   margin: 0 0 12px;
@@ -46,9 +46,6 @@
 .geo-dxf-actions {
   justify-content: flex-end;
 }
-.geo-dxf-dialog [role='alert'] {
-  color: #9f1239;
-}
 .geo-panel {
   position: absolute;
   right: 10px;
@@ -57,11 +54,11 @@
   width: min(320px, calc(100% - 20px));
   z-index: 90;
   overflow: auto;
-  background: #fff;
-  border: 1px solid #cbd5e1;
+  background: var(--cad-surface);
+  border: 1px solid var(--cad-control-line);
   border-radius: 10px;
   padding: 12px;
-  box-shadow: 0 8px 30px #17212f25;
+  box-shadow: 0 8px 30px var(--cad-shadow);
 }
 .geo-panel > label {
   display: flex;
@@ -131,10 +128,10 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--cad-control-line);
   border-radius: 10px;
-  background: #fffffff7;
-  box-shadow: 0 6px 22px #17212f22;
+  background: var(--cad-surface);
+  box-shadow: 0 6px 22px var(--cad-shadow);
   padding: 9px;
 }
 .geo-card-details {
@@ -157,7 +154,7 @@
   margin: 5px 0;
 }
 .geo-property-summary {
-  color: #64748b;
+  color: var(--cad-muted);
 }
 .geo-compact-summary {
   display: block;
@@ -205,14 +202,15 @@
 }
 .geo-recovery > .geo-toolbar {
   width: fit-content;
-  background: #fffffff2;
+  background: var(--cad-raised);
   border-radius: 6px;
   padding: 3px;
 }
 .geo-snap {
   padding: 8px;
-  background: #fff8e6;
-  border: 1px solid #e5d7ac;
+  color: var(--cad-warning);
+  background: var(--cad-warning-bg);
+  border: 1px solid var(--cad-warning-line);
   border-radius: 6px;
   display: flex;
   gap: 5px;
@@ -237,9 +235,9 @@
   top: 30px;
   right: 8px;
   z-index: 55;
-  background: #f0fdfa;
-  color: #0f645f;
-  border: 1px solid #99d5cb;
+  background: var(--cad-active);
+  color: var(--cad-accent);
+  border: 1px solid var(--cad-active-line);
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 12px;
@@ -264,8 +262,8 @@
   gap: 6px;
   max-height: min(180px, 25dvh);
   overflow: auto;
-  background: #fff;
-  border-top: 1px solid #a5c6d9;
+  background: var(--cad-surface);
+  border-top: 1px solid var(--cad-line);
   padding: 5px 8px;
 }
 .geo-operation-panel p {
@@ -301,7 +299,7 @@
   padding: 0 !important;
   overflow: hidden;
 }
-.geometry-editor [role='alert'] {
-  color: #9f1239;
+.geometry-editor :where([role='alert']) {
+  color: var(--cad-danger);
   font-size: 12px;
 }

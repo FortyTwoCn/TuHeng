@@ -11,12 +11,14 @@ import { SolidPreviewModule } from './modules/solid3d/SolidPreviewModule';
 import type { useEditorCommands } from './useEditorCommands';
 import type { WorkspaceLayout } from './modules/useWorkspaceLayout';
 import type { useWorkspaceFeatures } from './modules/useWorkspaceFeatures';
+import type { EditorTheme } from './theme';
 
 export function EditorWorkspaceBody({
   viewport,
   commands,
   layout,
   features,
+  theme,
   readOnly,
   loadReference,
   copyReference,
@@ -25,6 +27,7 @@ export function EditorWorkspaceBody({
   commands: ReturnType<typeof useEditorCommands>;
   layout: WorkspaceLayout;
   features: ReturnType<typeof useWorkspaceFeatures>;
+  theme: EditorTheme;
   readOnly: boolean;
   loadReference: () => void;
   copyReference: (doc: GeometryDocument, ids: string[]) => void;
@@ -86,6 +89,7 @@ export function EditorWorkspaceBody({
           solid={
             layout.showSolid && (
               <SolidPreviewModule
+                theme={theme}
                 scene={solid.scene}
                 build={solid.build}
                 generate={features.generateSolid}

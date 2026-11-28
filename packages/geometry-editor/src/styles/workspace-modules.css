@@ -1,25 +1,57 @@
 .cad-teaching-actions,
-.cad-workspace-mode {
+.cad-workspace-mode,
+.geo-workspace-module-toggles {
   display: flex;
   align-items: center;
-  gap: 2px;
 }
 .cad-teaching-actions {
-  padding-inline-end: 5px;
+  gap: 5px;
+  padding-inline-end: 6px;
   border-inline-end: 1px solid var(--cad-line);
 }
-.geometry-editor .cad-workspace-mode button {
-  min-height: 32px;
-  padding: 4px 8px;
-  color: var(--cad-tool-text);
-  background: transparent;
+.cad-workspace-mode,
+.geo-workspace-module-toggles,
+.geo-teaching-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--cad-line);
+  border-radius: 8px;
+  background: var(--cad-inset);
+}
+.geometry-editor
+  :is(.cad-workspace-mode, .geo-workspace-module-toggles, .geo-teaching-tabs)
+  button {
+  min-height: 28px;
+  padding: 3px 8px;
   border-color: transparent;
+  color: var(--cad-muted);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 550;
   white-space: nowrap;
 }
-.geometry-editor .cad-teaching-actions button[aria-pressed='true'] {
-  color: #affff2;
-  background: #285751;
-  border-color: #4e9f95;
+.geometry-editor
+  :is(.cad-workspace-mode, .geo-workspace-module-toggles, .geo-teaching-tabs)
+  button:hover {
+  color: var(--cad-text);
+  background: var(--cad-hover);
+}
+.geometry-editor
+  :is(.cad-workspace-mode, .geo-workspace-module-toggles, .geo-teaching-tabs)
+  button[aria-pressed='true'] {
+  color: var(--cad-accent);
+  background: var(--cad-active);
+  border-color: var(--cad-active-line);
+  font-weight: 650;
+}
+.geometry-editor .geo-teaching-tabs button {
+  flex: 1 1 0;
+}
+.geometry-editor .cad-teaching-actions > button[aria-pressed='true'] {
+  color: var(--cad-accent);
+  background: var(--cad-active);
+  border-color: var(--cad-active-line);
 }
 @container (min-width: 1100px) {
   .cad-view-actions .cad-teaching-actions .cad-action span {
@@ -31,39 +63,50 @@
 }
 .geo-workspace-shell {
   display: grid;
-  grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr);
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  background: var(--geo-teaching-surface);
+  background: var(--cad-surface);
 }
 .geo-workspace-tabs {
   grid-row: 1;
   display: none;
+  gap: 3px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--cad-line);
+  background: var(--cad-raised);
 }
-.geo-workspace-module-toggles {
-  grid-row: 2;
-  justify-content: flex-start;
+.geometry-editor .geo-workspace-tabs button {
+  flex: 1 0 auto;
+  min-height: 33px;
+  padding-inline: 6px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+  white-space: nowrap;
 }
-.geo-workspace-module-toggles,
-.geo-workspace-tabs {
-  padding: 3px 8px;
-  border-radius: 0;
-  border-bottom: 1px solid var(--geo-teaching-border);
+.geometry-editor .geo-workspace-tabs button:hover {
+  background: var(--cad-hover);
 }
-.geometry-editor .geo-workspace-module-toggles button {
-  flex: initial;
-  min-height: 27px;
-  padding-block: 2px;
+.geometry-editor .geo-workspace-tabs button[aria-pressed='true'] {
+  border-color: var(--cad-active-line);
+  background: var(--cad-active);
+  font-weight: 650;
 }
 .geo-workspace-content {
+  --geo-sidebar-width: clamp(224px, 19cqi, 270px);
   position: relative;
-  grid-row: 3;
+  grid-row: 2;
   display: grid;
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   overflow: hidden;
 }
 .geo-workspace-shell[data-reference-docked='true'] .geo-workspace-content {
-  grid-template-columns: minmax(0, var(--geo-split-main)) 12px minmax(0, var(--geo-split-reference));
+  --geo-sidebar-width: clamp(208px, 17cqi, 248px);
+  grid-template-columns: minmax(0, var(--geo-split-main)) 8px minmax(0, var(--geo-split-reference));
 }
 .geo-teaching-layout {
   display: grid;
@@ -72,16 +115,16 @@
   min-width: 0;
   min-height: 0;
 }
-.geo-teaching-layout[data-has-sidebar='true'] {
-  grid-template-columns: minmax(200px, 236px) minmax(0, 1fr);
+.geo-teaching-layout:where([data-has-sidebar='true']) {
+  grid-template-columns: var(--geo-sidebar-width) minmax(0, 1fr);
   grid-template-areas: 'sidebar sheet';
 }
-.geo-teaching-layout[data-has-solid='true'] {
-  grid-template-columns: minmax(0, var(--geo-split)) 12px minmax(0, var(--geo-split-solid));
+.geo-teaching-layout:where([data-has-solid='true']) {
+  grid-template-columns: minmax(0, var(--geo-split)) 8px minmax(0, var(--geo-split-solid));
   grid-template-areas: 'sheet separator solid';
 }
-.geo-teaching-layout[data-has-sidebar='true'][data-has-solid='true'] {
-  grid-template-columns: minmax(184px, 216px) minmax(0, var(--geo-split)) 12px minmax(
+.geo-teaching-layout:where([data-has-sidebar='true'][data-has-solid='true']) {
+  grid-template-columns: var(--geo-sidebar-width) minmax(0, var(--geo-split)) 8px minmax(
       0,
       var(--geo-split-solid)
     );
@@ -99,25 +142,30 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  border-inline-end: 1px solid var(--geo-teaching-border);
+  border-inline-end: 1px solid var(--cad-line);
+  background: var(--cad-surface);
   scrollbar-width: thin;
 }
 .geo-workspace-divider {
   display: grid;
   place-items: center;
   cursor: col-resize;
-  background: #e5edf1;
-  border-inline: 1px solid #d3e1e9;
+  background: var(--cad-inset);
+  border-inline: 1px solid var(--cad-line);
   touch-action: none;
 }
 .geo-teaching-layout > .geo-workspace-divider {
   grid-area: separator;
 }
+.geo-workspace-divider:is(:hover, :focus-visible) {
+  background: var(--cad-active);
+}
 .geo-workspace-divider::after {
   content: '';
-  width: 4px;
-  height: 29px;
-  border-inline: 1px solid #7d99a7;
+  width: 2px;
+  height: 26px;
+  border-radius: 2px;
+  background: var(--cad-divider);
 }
 @container (max-width: 1000px) {
   .geo-workspace-body[data-workspace-pane]:not([data-workspace-pane='sheet']) {
@@ -126,7 +174,7 @@
   .geo-workspace-body[data-workspace-pane]:not([data-workspace-pane='sheet']) .cad-rail {
     display: none;
   }
-  .geo-workspace-module-toggles,
+  .cad-teaching-actions .geo-workspace-module-toggles,
   .geo-workspace-divider,
   .geo-workspace-shell[data-pane='reference'] .geo-teaching-layout,
   .geo-workspace-shell:not([data-pane='reference']) .geo-reference-pane[data-placement='docked'],
@@ -165,8 +213,8 @@
 }
 @container (max-width: 560px) {
   .cad-teaching-actions {
-    gap: 0;
-    padding-inline-end: 2px;
+    gap: 2px;
+    padding-inline-end: 3px;
   }
   .geometry-editor .cad-workspace-mode button {
     padding-inline: 4px;

@@ -59,9 +59,9 @@ export const EntityShape = memo(function EntityShape({
   // DXF 会把缺省墨色记录为 RGB。参考图把这种缺省颜色映射到当前纸面主题。
   const color = e.appearance?.color?.toLowerCase();
   if (!color || (inspectOnly && color === semanticLineStyles[e.lineStyle].stroke)) {
-    if (e.lineStyle.startsWith('ANSWER')) appearance.stroke = 'var(--cad-ink,#253b47)';
-    if (e.lineStyle === 'CONSTRUCTION') appearance.stroke = 'var(--cad-axis,#638894)';
-    if (e.lineStyle.startsWith('PROBLEM')) appearance.stroke = 'var(--cad-stem,#4585dd)';
+    if (e.lineStyle.startsWith('ANSWER')) appearance.stroke = 'var(--cad-ink)';
+    if (e.lineStyle === 'CONSTRUCTION') appearance.stroke = 'var(--cad-axis)';
+    if (e.lineStyle.startsWith('PROBLEM')) appearance.stroke = 'var(--cad-stem)';
   }
   if (animationVisual) Object.assign(appearance, constructionInk(e, animationVisual.visual, scale));
   const style = {
@@ -74,7 +74,7 @@ export const EntityShape = memo(function EntityShape({
     style.stroke = 'var(--cad-accent)';
     style.strokeWidth += 1.2;
   }
-  if (inspectOnly && selected) style.stroke = 'var(--cad-accent,#0f766e)';
+  if (inspectOnly && selected) style.stroke = 'var(--cad-accent)';
   const trace = (shape: ReactElement<SVGProps<SVGElement>>) =>
     animationVisual?.timing && box ? (
       <ProgressiveStroke
@@ -230,7 +230,7 @@ export const EntityShape = memo(function EntityShape({
       <title>{e.id}</title>
       {shape}
       {selected && !inspectOnly && (
-        <g data-transient="handles" stroke="#0f766e" fill="#ffffff80">
+        <g data-transient="handles" stroke="var(--cad-accent)" fill="var(--cad-control)">
           {(e.kind === 'point'
             ? [e.position]
             : e.kind === 'segment'

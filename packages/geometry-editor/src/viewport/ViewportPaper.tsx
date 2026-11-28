@@ -55,7 +55,7 @@ export function ViewportPaper({
           markerUnits="userSpaceOnUse"
           orient="auto"
         >
-          <path d="M0 0 L10 5 L0 10 Z" fill="#0f766e" />
+          <path d="M0 0 L10 5 L0 10 Z" fill="var(--cad-accent)" />
         </marker>
         <pattern
           id={gridId}
@@ -69,7 +69,7 @@ export function ViewportPaper({
           <path
             d={`M ${minor} 0 L 0 0 0 ${minor}`}
             fill="none"
-            stroke="var(--cad-grid-minor,#dfe7e9)"
+            stroke="var(--cad-grid-minor)"
             strokeWidth={1 / scale}
           />
         </pattern>
@@ -86,18 +86,12 @@ export function ViewportPaper({
           <path
             d={`M ${major} 0 L 0 0 0 ${major}`}
             fill="none"
-            stroke="var(--cad-grid-major,#bfd1d4)"
+            stroke="var(--cad-grid-major)"
             strokeWidth={1.6 / scale}
           />
         </pattern>
       </defs>
-      <rect
-        x={box.x}
-        y={box.y}
-        width={box.width}
-        height={box.height}
-        fill="var(--cad-paper,#f8fbfc)"
-      />
+      <rect x={box.x} y={box.y} width={box.width} height={box.height} fill="var(--cad-paper)" />
       {props.grid && (
         <rect
           aria-hidden="true"
@@ -123,7 +117,7 @@ export function ViewportPaper({
                 key={name}
                 data-projection-face={name}
                 aria-label={`${name} ${label}`}
-                fill="var(--cad-axis,#638894)"
+                fill="var(--cad-axis-label)"
                 transform={`translate(${box.x + 10 / scale} ${y}) scale(1 -1)`}
                 fontSize={12 / scale}
                 pointerEvents="none"
@@ -143,10 +137,10 @@ export function ViewportPaper({
                   cx={r.anchor.x}
                   cy={r.anchor.y}
                   r={(selected ? 4 : 2) / scale}
-                  fill="var(--cad-axis,#638894)"
+                  fill="var(--cad-axis)"
                 />
                 <text
-                  fill="var(--cad-axis,#638894)"
+                  fill="var(--cad-axis-label)"
                   transform={`translate(${r.anchor.x + 3 / scale} ${r.anchor.y - 12 / scale}) scale(1 -1)`}
                   fontSize={11 / scale}
                 >
@@ -172,13 +166,11 @@ export function ViewportPaper({
               data-reference-id={key}
               data-axis-id={axis?.id}
               stroke={
-                selected
-                  ? '#0f766e'
+                selected || axis?.owner === 'STUDENT'
+                  ? 'var(--cad-accent)'
                   : axis
-                    ? axis.owner === 'STUDENT'
-                      ? '#0f766e'
-                      : '#2563eb'
-                    : 'var(--cad-axis,#638894)'
+                    ? 'var(--cad-stem)'
+                    : 'var(--cad-axis)'
               }
               fill="none"
             >
@@ -204,7 +196,7 @@ export function ViewportPaper({
               )}
               <text
                 transform={`translate(${tip.x + 3 / scale} ${tip.y + 3 / scale}) scale(1 -1)`}
-                fill="currentColor"
+                fill="var(--cad-axis-label)"
                 stroke="none"
                 fontSize={11 / scale}
               >
@@ -236,18 +228,19 @@ export function ViewportPaper({
                 x2={a.x + n.x * 12}
                 y2={a.y + n.y * 12}
                 markerEnd={`url(#${gridId}-arrow)`}
-                stroke="#0f766e"
+                stroke="var(--cad-accent)"
                 vectorEffect="non-scaling-stroke"
               />
               <polygon
                 points={points.map((p) => `${p.x},${p.y}`).join(' ')}
-                fill="#14b8a630"
-                stroke="#0f766e"
+                fill="var(--cad-drawing-fill)"
+                stroke="var(--cad-accent)"
                 vectorEffect="non-scaling-stroke"
               />
               <text
                 transform={`translate(${a.x + n.x * 15} ${a.y + n.y * 15}) scale(1 -1)`}
                 fontSize={14 / scale}
+                fill="var(--cad-accent)"
               >
                 {axisDraft.name} → {axisDraft.viewName}
               </text>

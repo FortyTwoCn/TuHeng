@@ -31,6 +31,7 @@
 - [四类旧版几何文档](geometry-examples/)是兼容性测试输入，不能因版本较旧而删除。
 - [贯通孔三视图与独立动画](geometry-examples/construction/)用于练习投影传递、笔顺、擦除和三维预览。[Chromium 截图与里程碑验收](evidence/cad-animation/README.md)
 - [3-19 两面投影](geometry-examples/reconstruction/3-19-VH-SPATIAL.json)和 [7-24 完整三视图](geometry-examples/reconstruction/7-24-THREE-VIEW-COMPLETE.json)可直接导入编辑器，分别预览空间点线面与带盲槽、耳板及贯穿孔的组合体。[双引擎和工作区 Chromium 验收](evidence/cad-modular-3d/README.md)
+- 讲解工作区的亮色、暗色、三维预览及手机界面由生产 Chromium 截取。[讲解模式双主题验收](evidence/cad-teaching-ui/README.md)
 - [统一图纸与换面轴](geometry-examples/v2/)、[参考关系与合点](geometry-examples/ux-v2/)、[曲线](geometry-examples/curves/)、[电子笔方向校正](geometry-examples/pen-direction/)可用于核对导出数据；笔迹样本与验证统计文件的用途见几何契约。
 - [教学管理当前截图](images/organization-ui-20261119/)展示实际开发页面；其中 `before-*` 为改动前记录，`reference.png` 为生成的设计参考，不能当作运行结果。
 - [学校详情与身份验证截图](images/school-details-20261119/)展示本次桌面、平板和手机实际页面；`reauth-edge-before.png` 记录修复前重复的密码显示按钮，其余为修复后的页面。

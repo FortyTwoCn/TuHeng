@@ -39,6 +39,7 @@ import { WorkspaceAction } from './WorkspaceAction';
 import { CommandParameters, CommandSetup } from './CommandParameters';
 import type { ConstructionFileActions } from './modules/animation/AnimationNarrationModule';
 import type { WorkspaceMode } from './modules/useWorkspaceLayout';
+import type { EditorTheme } from './theme';
 
 interface TopbarProps {
   title: string;
@@ -54,6 +55,7 @@ interface TopbarProps {
   workspace: {
     mode: WorkspaceMode;
     changeMode: (mode: WorkspaceMode) => void;
+    modules: ReactNode;
     audit?: { open: boolean; toggle: () => void };
     reference?: { open: boolean; toggle: () => void };
   };
@@ -161,6 +163,7 @@ export function WorkspaceTopbar(p: TopbarProps) {
               讲解
             </button>
           </div>
+          {p.workspace.modules}
           {p.workspace.audit && (
             <WorkspaceAction
               label="格式审核"
@@ -275,7 +278,7 @@ interface StatusProps {
   tracking: boolean;
   toggleTracking: () => void;
   openSettings: () => void;
-  theme: 'light' | 'dark';
+  theme: EditorTheme;
   toggleTheme: () => void;
   cursorStatusRef: RefObject<HTMLOutputElement | null>;
 }
@@ -423,6 +426,7 @@ export function WorkspaceStatus({ cursorStatusRef, ...p }: StatusProps) {
           <WorkspaceAction label="视图/设置" icon={Settings2} onClick={p.openSettings} />
           <WorkspaceAction
             label={p.theme === 'dark' ? '切换浅色画布' : '切换深色画布'}
+            className="cad-theme-toggle"
             icon={p.theme === 'dark' ? Sun : Moon}
             onClick={p.toggleTheme}
           />

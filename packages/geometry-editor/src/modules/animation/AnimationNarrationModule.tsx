@@ -66,38 +66,43 @@ export function AnimationNarrationModule({
         <>
           <div className="geo-construction-copy" aria-live="polite">
             <div className="geo-construction-progress">
-              {phase && (
-                <span>
-                  {phase.order + 1} · {phase.title}
-                </span>
-              )}
-              <span>
+              {phase && <span className="geo-construction-stage">{phase.title}</span>}
+              <span className="geo-construction-count">
                 {String(index + 1).padStart(2, '0')} /{' '}
                 {String(animation.steps.length).padStart(2, '0')}
               </span>
             </div>
+            <progress
+              className="geo-construction-progress-track"
+              aria-label="作图步骤进度"
+              value={index + 1}
+              max={animation.steps.length}
+            />
             <h3>{step.title}</h3>
             <p className="geo-construction-narration">{step.narration}</p>
           </div>
-          <div className="geo-teaching-controls">
+          <div className="geo-construction-playback" role="group" aria-label="步骤播放">
             <button type="button" disabled={!index} onClick={() => jump(index - 1)}>
               上一步
             </button>
+            <button type="button" className="geo-teaching-primary" onClick={togglePlay}>
+              {playing ? '暂停' : '自动播放'}
+            </button>
             <button
               type="button"
-              className="geo-teaching-primary"
               disabled={index === animation.steps.length - 1}
               onClick={() => jump(index + 1)}
             >
               下一步
             </button>
-            <button type="button" onClick={togglePlay}>
-              {playing ? '暂停' : '自动播放'}
-            </button>
           </div>
           <label className="geo-construction-select">
             选择作图步骤
-            <select value={index} onChange={(event) => jump(Number(event.target.value))}>
+            <select
+              value={index}
+              title={step.title}
+              onChange={(event) => jump(Number(event.target.value))}
+            >
               {animation.steps.map((item, i) => (
                 <option key={item.id} value={i}>
                   第 {i + 1} 步 · {item.title}
@@ -105,7 +110,7 @@ export function AnimationNarrationModule({
               ))}
             </select>
           </label>
-          <div className="geo-teaching-controls">
+          <div className="geo-construction-settings">
             <label className="geo-construction-speed">
               播放速度
               <select
@@ -121,7 +126,7 @@ export function AnimationNarrationModule({
               作图线
             </button>
           </div>
-          <button type="button" onClick={() => jump(index)}>
+          <button type="button" className="geo-construction-replay" onClick={() => jump(index)}>
             重新播放本步动画
           </button>
         </>
